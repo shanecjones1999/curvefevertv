@@ -1,0 +1,128 @@
+.host-lobby-container {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  padding: 20px 0;
+}
+
+.room-code-display {
+  text-align: center;
+  margin: 32px 0;
+  padding: 32px;
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.2), rgba(118, 75, 162, 0.2));
+  border-radius: 16px;
+}
+
+.room-code-label {
+  font-size: 18px;
+  opacity: 0.8;
+  margin-bottom: 8px;
+}
+
+.room-code {
+  font-size: 72px;
+  font-weight: 800;
+  letter-spacing: 16px;
+  margin: 16px 0;
+  text-shadow: 2px 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.room-code-hint {
+  font-size: 16px;
+  opacity: 0.7;
+  margin-top: 8px;
+}
+
+.connection-status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 24px;
+  font-size: 14px;
+  opacity: 0.8;
+}
+
+.status-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #ff4444;
+  animation: pulse 2s infinite;
+}
+
+.status-dot.connected {
+  background: #44ff44;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.players-section {
+  margin: 32px 0;
+}
+
+.waiting-text {
+  text-align: center;
+  opacity: 0.7;
+  padding: 32px;
+  font-style: italic;
+}
+
+.players-list {
+  list-style: none;
+  padding: 0;
+  margin: 16px 0;
+}
+
+.player-item {
+  background: rgba(255, 255, 255, 0.05);
+  padding: 16px 20px;
+  border-radius: 12px;
+  margin-bottom: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: all 0.3s ease;
+}
+
+.player-item:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.player-name {
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.player-info {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.player-score {
+  font-size: 16px;
+  opacity: 0.8;
+}
+
+.player-status {
+  font-size: 12px;
+}
+
+@media (max-width: 768px) {
+  .room-code {
+    font-size: 56px;
+    letter-spacing: 12px;
+  }
+
+  .player-name {
+    font-size: 18px;
+  }
+}

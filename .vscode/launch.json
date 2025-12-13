@@ -5,13 +5,33 @@
             "name": "Python Debugger: FastAPI",
             "type": "python",
             "request": "launch",
-            "program": "${workspaceFolder}/backend/venv/bin/uvicorn",
+            "module": "uvicorn",
             "args": [
-                "backend.app.main:app",
+                "app.main:app",
                 "--reload"
             ],
+            "cwd": "${workspaceFolder}/backend",
             "console": "integratedTerminal",
             "justMyCode": true
         }
     ]
 }
+
+
+// {
+//     "version": "0.2.0",
+//     "configurations": [
+//         {
+//             "name": "Python Debugger: FastAPI",
+//             "type": "python",
+//             "request": "launch",
+//             "program": "${workspaceFolder}/backend/venv/bin/uvicorn",
+//             "args": [
+//                 "backend.app.main:app",
+//                 "--reload"
+//             ],
+//             "console": "integratedTerminal",
+//             "justMyCode": true
+//         }
+//     ]
+// }

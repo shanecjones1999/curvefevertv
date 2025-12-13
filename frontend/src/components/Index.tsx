@@ -28,6 +28,7 @@ const Index: React.FC = () => {
 
             const data = await response.json();
             const gameId = data.room_code;
+            const jwtToken = data.token;
 
             navigate(`/game/${gameId}`);
         } catch (err) {

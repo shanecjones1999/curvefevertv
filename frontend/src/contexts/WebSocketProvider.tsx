@@ -2,6 +2,7 @@
 import React, { useRef, useState, useEffect } from "react";
 import { WebSocketContext } from "./WebSocketContext";
 import type { WebSocketMessage } from "../types/WebSocketMessage";
+import { io, Socket } from "socket.io-client";
 
 interface WebSocketProviderProps {
     url: string;
@@ -14,50 +15,54 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
     jwt,
     children,
 }) => {
-    const wsRef = useRef<WebSocket | null>(null);
+    const socketRef = useRef<Socket | null>(null);
     const [lastMessage, setLastMessage] = useState<WebSocketMessage | null>(
         null
     );
     const [connected, setConnected] = useState(false);
 
     useEffect(() => {
-        // Only attempt connection if we have a valid url and jwt
-        if (!url || !jwt) return;
+        // Create Socket.IO connection
+        const socket = io(url, {
+            auth: {
+                token: jwt, // pass token on initial handshake
+            },
+            transports: ["websocket"], // force WebSocket transport
+        });
 
-        const ws = new WebSocket(url);
-        wsRef.current = ws;
+        socketRef.current = socket;
 
-        ws.onopen = () => {
+        socket.on("connect", () => {
             setConnected(true);
-            ws.send(JSON.stringify({ type: "auth", token: jwt }));
-        };
+            console.log("Connected to Socket.IO server:", socket.id);
+        });
 
-        ws.onmessage = (e) => {
-            setLastMessage(JSON.parse(e.data));
-            console.log("WebSocket message received:", e.data);
-        };
-        ws.onclose = () => setConnected(false);
-        ws.onerror = (err) => console.error("WebSocket error:", err);
+        socket.on("disconnect", () => {
+            setConnected(false);
+            console.log("Disconnected from Socket.IO server");
+        });
+
+        socket.on("message", (msg: WebSocketMessage) => {
+            setLastMessage(msg);
+        });
+
+        socket.on("connect_error", (err) => {
+            console.error("Socket.IO connection error:", err);
+        });
 
         return () => {
-            // Close socket on unmount if it's still open or connecting
-            if (
-                ws.readyState === WebSocket.OPEN ||
-                ws.readyState === WebSocket.CONNECTING
-            ) {
-                ws.close();
-            }
+            socket.disconnect();
         };
-    }, [url, jwt]); // Reconnect automatically if url or jwt changes
+    }, [url, jwt]);
 
-    const send = (data: WebSocketMessage) => {
-        if (wsRef.current?.readyState === WebSocket.OPEN) {
-            wsRef.current.send(JSON.stringify(data));
+    const send = (msg: WebSocketMessage) => {
+        if (socketRef.current?.connected) {
+            socketRef.current.emit("message", msg);
         }
     };
 
     return (
-        <WebSocketContext.Provider value={{ send, lastMessage, connected }}>
+        <WebSocketContext.Provider value={{ connected, lastMessage, send }}>
             {children}
         </WebSocketContext.Provider>
     );

@@ -17,7 +17,7 @@ const GameScreen: React.FC = () => {
     if (!gameId) return <div>Error: no game ID</div>;
     if (!token) return <div>Missing auth token</div>;
 
-    const wsUrl = `${import.meta.env.VITE_WS_URI}/ws/${gameId}`;
+    const wsUrl = `${import.meta.env.VITE_WS_URI}`;
 
     return (
         <WebSocketProvider url={wsUrl} jwt={token}>

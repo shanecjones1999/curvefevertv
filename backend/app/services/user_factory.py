@@ -1,5 +1,6 @@
 from app.services.jwt_service import JwtService
 from app.models.host import Host
+from app.models.player import Player
 import uuid
 
 class UserFactory:
@@ -10,3 +11,8 @@ class UserFactory:
         host_id = str(uuid.uuid4())
         host = Host(uuid=host_id, room_code=room_code)
         return host
+    
+    def create_player(self, room_code: str, name: str) -> Player:
+        player_id = str(uuid.uuid4())
+        player = Player(uuid=player_id, room_code=room_code, name=name)
+        return player

@@ -5,13 +5,14 @@ import HostLobby from "./HostLobby";
 import PlayerLobby from "./PlayerLobby";
 import { AuthContext } from "../contexts/AuthContext";
 import { WebSocketProvider } from "../contexts/WebSocketProvider";
+import { UserContext } from "../contexts/UserContext";
 
 const GameScreen: React.FC = () => {
     const { gameId } = useParams<{ gameId: string }>();
     const { token } = useContext(AuthContext);
 
     const queryParams = new URLSearchParams(window.location.search);
-    const role = queryParams.get("role");
+    const role = useContext(UserContext).role;
     const playerName = queryParams.get("name") || "";
 
     if (!gameId) return <div>Error: no game ID</div>;

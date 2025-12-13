@@ -34,6 +34,7 @@ const Index: React.FC = () => {
             const userId = data.auth.user_id;
             const role = data.auth.user_role; // "host"
             const roomCode = data.room_code;
+            const name = null;
 
             // 1️⃣ Store JWT
             setToken(jwtToken);
@@ -43,6 +44,7 @@ const Index: React.FC = () => {
                 role,
                 userId,
                 roomCode,
+                name,
             });
 
             // 3️⃣ Navigate
@@ -55,17 +57,50 @@ const Index: React.FC = () => {
         }
     };
 
-    const handlePlayer = () => {
+    const handlePlayer = async () => {
         if (!name || !roomCode) return alert("Enter your name and room code");
 
-        // Players usually get userId/JWT after joining via websocket or API
-        setUser({
-            role: "player",
-            userId: null,
-            roomCode,
-        });
+        setLoading(true);
 
-        navigate(`/game/${roomCode}`);
+        try {
+            const response = await fetch(
+                `${import.meta.env.VITE_BACKEND_URI}/games/${roomCode}/players`,
+                {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ name }), // send player name to backend
+                }
+            );
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.detail || "Failed to join game");
+            }
+
+            const data = await response.json();
+            const jwtToken = data.auth.token;
+            const userId = data.auth.user_id;
+            const role = data.auth.user_role; // "player"
+
+            // 1️⃣ Store JWT
+            setToken(jwtToken);
+
+            // 2️⃣ Store user info
+            setUser({
+                role,
+                userId,
+                roomCode,
+                name,
+            });
+
+            // 3️⃣ Navigate to game
+            navigate(`/game/${roomCode}`);
+        } catch (err: any) {
+            console.error(err);
+            alert(err.message || "Error joining game");
+        } finally {
+            setLoading(false);
+        }
     };
 
     return (

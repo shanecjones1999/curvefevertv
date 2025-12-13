@@ -21,6 +21,9 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
     const [connected, setConnected] = useState(false);
 
     useEffect(() => {
+        // Only attempt connection if we have a valid url and jwt
+        if (!url || !jwt) return;
+
         const ws = new WebSocket(url);
         wsRef.current = ws;
 
@@ -28,12 +31,24 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
             setConnected(true);
             ws.send(JSON.stringify({ type: "auth", token: jwt }));
         };
-        ws.onmessage = (e) => setLastMessage(JSON.parse(e.data));
-        ws.onclose = () => setConnected(false);
-        ws.onerror = (err) => console.error(err);
 
-        return () => ws.close();
-    }, [url, jwt]);
+        ws.onmessage = (e) => {
+            setLastMessage(JSON.parse(e.data));
+            console.log("WebSocket message received:", e.data);
+        };
+        ws.onclose = () => setConnected(false);
+        ws.onerror = (err) => console.error("WebSocket error:", err);
+
+        return () => {
+            // Close socket on unmount if it's still open or connecting
+            if (
+                ws.readyState === WebSocket.OPEN ||
+                ws.readyState === WebSocket.CONNECTING
+            ) {
+                ws.close();
+            }
+        };
+    }, [url, jwt]); // Reconnect automatically if url or jwt changes
 
     const send = (data: WebSocketMessage) => {
         if (wsRef.current?.readyState === WebSocket.OPEN) {

@@ -1,9 +1,15 @@
 // src/components/Index.tsx
-import React, { useState } from "react";
+import React, { useState, useContext } from "react";
 import { useNavigate } from "react-router-dom";
+import { AuthContext } from "../contexts/AuthContext";
+import { UserContext } from "../contexts/UserContext";
 
 const Index: React.FC = () => {
     const navigate = useNavigate();
+
+    const { setToken } = useContext(AuthContext);
+    const { setUser } = useContext(UserContext);
+
     const [name, setName] = useState<string>("");
     const [roomCode, setRoomCode] = useState<string>("");
     const [loading, setLoading] = useState<boolean>(false);
@@ -15,22 +21,32 @@ const Index: React.FC = () => {
                 `${import.meta.env.VITE_BACKEND_URI}/games`,
                 {
                     method: "POST",
-                    headers: {
-                        "Content-Type": "application/json",
-                    },
+                    headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ user_type: "host" }),
                 }
             );
 
-            if (!response.ok) {
-                throw new Error("Failed to create room");
-            }
+            if (!response.ok) throw new Error("Failed to create room");
 
             const data = await response.json();
-            const gameId = data.room_code;
-            const jwtToken = data.token;
 
-            navigate(`/game/${gameId}`);
+            const jwtToken = data.auth.token;
+            const userId = data.auth.user_id;
+            const role = data.auth.user_role; // "host"
+            const roomCode = data.room_code;
+
+            // 1️⃣ Store JWT
+            setToken(jwtToken);
+
+            // 2️⃣ Store user info
+            setUser({
+                role,
+                userId,
+                roomCode,
+            });
+
+            // 3️⃣ Navigate
+            navigate(`/game/${roomCode}`);
         } catch (err) {
             console.error(err);
             alert("Error creating room");
@@ -41,7 +57,15 @@ const Index: React.FC = () => {
 
     const handlePlayer = () => {
         if (!name || !roomCode) return alert("Enter your name and room code");
-        navigate(`/game/${roomCode}?role=player&name=${name}`);
+
+        // Players usually get userId/JWT after joining via websocket or API
+        setUser({
+            role: "player",
+            userId: null,
+            roomCode,
+        });
+
+        navigate(`/game/${roomCode}`);
     };
 
     return (

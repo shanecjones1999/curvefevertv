@@ -2,7 +2,7 @@ import jwt
 import uuid
 import time
 from typing import Optional, Dict, Any
-from config import SECRET_KEY
+from app.config.config import SECRET_KEY
 
 class JwtService:
     def __init__(
@@ -17,42 +17,19 @@ class JwtService:
     # Public API
     # --------------------
 
-    def create_host_token(self, room_code: str) -> Dict[str, str]:
-        host_id = str(uuid.uuid4())
+    def create_user_token(self, room_code: str, user_role: str, user_id: str) -> Dict[str, str]:
 
         payload = self._base_payload(
             room_code=room_code,
-            user_role="host",
+            user_role=user_role,
+            user_id=user_id,
         )
-        payload["host_id"] = host_id
-
         token = self._encode(payload)
         return {
             "token": token,
-            "host_id": host_id,
-        }
-
-    def create_player_token(
-        self,
-        room_code: str,
-        name: str,
-        player_id: Optional[str] = None,
-    ) -> Dict[str, str]:
-        player_id = player_id or str(uuid.uuid4())
-
-        payload = self._base_payload(
-            room_code=room_code,
-            user_role="player",
-        )
-        payload.update({
-            "player_id": player_id,
-            "name": name,
-        })
-
-        token = self._encode(payload)
-        return {
-            "token": token,
-            "player_id": player_id,
+            "room_code": room_code,
+            "user_role": user_role,
+            "user_id": user_id,
         }
 
     def verify_token(self, token: str) -> Dict[str, Any]:
@@ -73,11 +50,11 @@ class JwtService:
     # Internal Helpers
     # --------------------
 
-    def _base_payload(self, room_code: str, user_role: str) -> Dict[str, Any]:
+    def _base_payload(self, room_code: str, user_role: str, user_id: str) -> Dict[str, Any]:
         return {
-            "sub": "curvefever",
             "user_role": user_role,
             "room_code": room_code,
+            "user_id": user_id,
             "iat": int(time.time()),
         }
 

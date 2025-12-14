@@ -1,51 +1,65 @@
-import React, { useState, useContext } from "react";
-import { AuthContext } from "../contexts/AuthContext";
+import React, { useEffect, useState, useContext } from "react";
 import { UserContext } from "../contexts/UserContext";
+import { io, Socket } from "socket.io-client";
 
-interface HostLobbyProps {
-    gameId: string;
+interface PlayerJoinedData {
+    name: string;
 }
 
-const HostLobby: React.FC<HostLobbyProps> = ({ gameId }) => {
+const HostLobby: React.FC = () => {
     const [players, setPlayers] = useState<string[]>([]);
+    const [connected, setConnected] = useState(false);
+    const [socket, setSocket] = useState<Socket | null>(null);
 
-    const { token } = useContext(AuthContext);
-    const { role, userId, roomCode } = useContext(UserContext);
+    const roomCode = useContext(UserContext).roomCode;
 
-    const startGame = () => console.log("Start game for", gameId);
+    useEffect(() => {
+        // Create the socket connection
+        const newSocket = io(import.meta.env.VITE_WS_URI); // Replace with your server URL
+        setSocket(newSocket);
+
+        newSocket.on("connect", () => {
+            console.log("Connected to server");
+            setConnected(true);
+            newSocket.emit("join_room", { room: roomCode });
+        });
+
+        newSocket.on("disconnect", () => {
+            console.log("Disconnected from server");
+            setConnected(false);
+        });
+
+        // Listen for player_joined events
+        newSocket.on("player_joined", (data: PlayerJoinedData) => {
+            console.log("Player joined:", data.name);
+            setPlayers((prev) => [...prev, data.name]);
+        });
+
+        // Clean up on unmount
+        return () => {
+            newSocket.disconnect();
+        };
+    }, []);
+
+    const startGame = () => {
+        if (socket) {
+            socket.emit("start_game", {});
+        }
+    };
 
     return (
         <div>
-            <h1>Host Lobby</h1>
+            <h2>Host Lobby</h2>
+            <p>Status: {connected ? "Connected" : "Disconnected"}</p>
 
-            <p>
-                <strong>Game ID:</strong> {gameId}
-            </p>
-            <p>
-                <strong>User Role:</strong> {role ?? "unknown"}
-            </p>
-            <p>
-                <strong>User ID:</strong> {userId ?? "unknown"}
-            </p>
-            <p>
-                <strong>Room Code:</strong> {roomCode ?? "unknown"}
-            </p>
-
-            <p>
-                <strong>JWT Token:</strong>
-            </p>
-            <pre style={{ maxWidth: 600, overflow: "auto" }}>
-                {token ?? "Not set"}
-            </pre>
-
-            <h2>Players:</h2>
+            <h3>Players:</h3>
             <ul>
-                {players.map((p, i) => (
-                    <li key={i}>{p}</li>
+                {players.map((p) => (
+                    <li key={p}>{p}</li>
                 ))}
             </ul>
 
-            <button onClick={startGame} disabled={players.length < 1}>
+            <button onClick={startGame} disabled={!connected}>
                 Start Game
             </button>
         </div>

@@ -9,6 +9,7 @@ type UserState = {
     role: UserRole | null;
     userId: string | null;
     roomCode: string | null;
+    name: string | null;
 };
 
 const loadInitialUser = (): UserState => {
@@ -16,9 +17,9 @@ const loadInitialUser = (): UserState => {
         const raw = localStorage.getItem(UserStorageKey);
         return raw
             ? JSON.parse(raw)
-            : { role: null, userId: null, roomCode: null };
+            : { role: null, userId: null, roomCode: null, name: null };
     } catch {
-        return { role: null, userId: null, roomCode: null };
+        return { role: null, userId: null, roomCode: null, name: null };
     }
 };
 
@@ -30,7 +31,7 @@ const UserProvider: React.FC<{ children: React.ReactNode }> = ({
     const setUser = (user: UserState) => {
         setUserState(user);
 
-        if (user.role || user.userId || user.roomCode) {
+        if (user.role || user.userId || user.roomCode || user.name) {
             localStorage.setItem(UserStorageKey, JSON.stringify(user));
         } else {
             localStorage.removeItem(UserStorageKey);

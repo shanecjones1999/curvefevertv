@@ -1,5 +1,7 @@
 # backend/app/socketio_events.py
 import socketio
+import random
+import string
 
 # You can import your game manager / other services here if needed
 from services.game_manager import GameManager
@@ -20,8 +22,9 @@ def register_socketio_events(sio: socketio.AsyncServer):
     async def join_room(sid, data):
         room = data.get("room")
         if room:
-            sio.enter_room(sid, room)
-            await sio.emit("message", {"message": f"{sid} joined {room}"}, room=room)
+            name = "".join(random.choices(string.ascii_uppercase, k=4))
+            await sio.enter_room(sid, room)
+            await sio.emit( "player_joined", {"player_id": name, "name": name}, room=room )
             print(f"[Socket.IO] {sid} joined room {room}")
 
     @sio.event

@@ -4,30 +4,26 @@ import { useParams } from "react-router-dom";
 import HostLobby from "./HostLobby";
 import PlayerLobby from "./PlayerLobby";
 import { AuthContext } from "../contexts/AuthContext";
-import { WebSocketProvider } from "../contexts/WebSocketProvider";
 import { UserContext } from "../contexts/UserContext";
 
 const GameScreen: React.FC = () => {
     const { gameId } = useParams<{ gameId: string }>();
     const { token } = useContext(AuthContext);
 
-    const queryParams = new URLSearchParams(window.location.search);
     const role = useContext(UserContext).role;
-    const playerName = queryParams.get("name") || "";
+    const playerName = useContext(UserContext).name || "";
 
     if (!gameId) return <div>Error: no game ID</div>;
     if (!token) return <div>Missing auth token</div>;
 
-    const wsUrl = `${import.meta.env.VITE_WS_URI}`;
-
     return (
-        <WebSocketProvider url={wsUrl} jwt={token}>
+        <div>
             {role === "host" ? (
-                <HostLobby gameId={gameId} />
+                <HostLobby />
             ) : (
                 <PlayerLobby gameId={gameId} playerName={playerName} />
             )}
-        </WebSocketProvider>
+        </div>
     );
 };
 

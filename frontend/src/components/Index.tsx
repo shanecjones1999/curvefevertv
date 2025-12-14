@@ -36,10 +36,8 @@ const Index: React.FC = () => {
             const roomCode = data.room_code;
             const name = null;
 
-            // 1️⃣ Store JWT
             setToken(jwtToken);
 
-            // 2️⃣ Store user info
             setUser({
                 role,
                 userId,
@@ -47,7 +45,6 @@ const Index: React.FC = () => {
                 name,
             });
 
-            // 3️⃣ Navigate
             navigate(`/game/${roomCode}`);
         } catch (err) {
             console.error(err);
@@ -82,10 +79,8 @@ const Index: React.FC = () => {
             const userId = data.auth.user_id;
             const role = data.auth.user_role; // "player"
 
-            // 1️⃣ Store JWT
             setToken(jwtToken);
 
-            // 2️⃣ Store user info
             setUser({
                 role,
                 userId,

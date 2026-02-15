@@ -52,7 +52,7 @@ Host Screen (Game Renderer)
 
 ## Frontend (Host Screen)
 - React  
-- HTML5 Canvas OR Phaser  
+- Phaser  
 - Socket.IO client  
 
 ## Frontend (Phone Controllers)
@@ -257,9 +257,8 @@ Each player:
     - Own trail (excluding recent points)  
     - Boundaries  
 
-For MVP:
-- Naive O(n²) collision check is fine  
-- Optimize later with spatial hashing  
+For MVP:  
+- Spatial hashing  
 
 ---
 

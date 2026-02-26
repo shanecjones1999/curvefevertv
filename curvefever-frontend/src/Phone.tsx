@@ -1,10 +1,46 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import socket from "./socket";
 
+const PLAYER_SESSION_KEY = "curvefever:playerSession";
+
+type PlayerSession = {
+    roomCode: string;
+    name: string;
+    playerId: string;
+};
+
+type JoinRoomResponse = {
+    ok: boolean;
+    player?: {
+        id: string;
+        name: string;
+    };
+    error?: string;
+};
+
+function getStoredPlayerSession(): PlayerSession | null {
+    const raw = localStorage.getItem(PLAYER_SESSION_KEY);
+    if (!raw) return null;
+
+    try {
+        const parsed = JSON.parse(raw) as Partial<PlayerSession>;
+        if (!parsed.roomCode || !parsed.name || !parsed.playerId) return null;
+        return {
+            roomCode: parsed.roomCode.toUpperCase(),
+            name: parsed.name,
+            playerId: parsed.playerId,
+        };
+    } catch {
+        return null;
+    }
+}
+
 export default function Phone() {
-    const [roomCode, setRoomCode] = useState("");
-    const [name, setName] = useState("Player");
+    const storedSession = useMemo(() => getStoredPlayerSession(), []);
+    const [roomCode, setRoomCode] = useState(storedSession?.roomCode ?? "");
+    const [name, setName] = useState(storedSession?.name ?? "Player");
     const [joined, setJoined] = useState(false);
+    const playerIdRef = useRef<string | null>(storedSession?.playerId ?? null);
     const pressRef = useRef<{ left: boolean; right: boolean }>({
         left: false,
         right: false,
@@ -12,14 +48,67 @@ export default function Phone() {
     const intervalRef = useRef<number | null>(null);
 
     useEffect(() => {
+        const rejoinFromSession = () => {
+            if (storedSession && playerIdRef.current) {
+                socket.emit(
+                    "rejoinRoom",
+                    {
+                        roomCode: storedSession.roomCode,
+                        playerId: playerIdRef.current,
+                        name: storedSession.name,
+                    },
+                    (res: JoinRoomResponse) => {
+                        if (res?.ok && res.player?.id) {
+                            playerIdRef.current = res.player.id;
+                            setJoined(true);
+                            localStorage.setItem(
+                                PLAYER_SESSION_KEY,
+                                JSON.stringify({
+                                    roomCode: storedSession.roomCode,
+                                    name: res.player.name ?? storedSession.name,
+                                    playerId: res.player.id,
+                                }),
+                            );
+                        } else {
+                            playerIdRef.current = null;
+                            setJoined(false);
+                            localStorage.removeItem(PLAYER_SESSION_KEY);
+                        }
+                    },
+                );
+            } else if (localStorage.getItem(PLAYER_SESSION_KEY)) {
+                playerIdRef.current = null;
+                localStorage.removeItem(PLAYER_SESSION_KEY);
+            }
+        };
+
+        socket.on("connect", rejoinFromSession);
+        rejoinFromSession();
+
         return () => {
             if (intervalRef.current) window.clearInterval(intervalRef.current);
+            socket.off("connect", rejoinFromSession);
         };
-    }, []);
+    }, [storedSession]);
 
     function handleJoin() {
-        socket.emit("joinRoom", { roomCode, name }, (res: any) => {
-            if (res?.ok) setJoined(true);
+        socket.emit("joinRoom", { roomCode, name }, (res: JoinRoomResponse) => {
+            if (res?.ok && res.player?.id) {
+                playerIdRef.current = res.player.id;
+                setJoined(true);
+                localStorage.setItem(
+                    PLAYER_SESSION_KEY,
+                    JSON.stringify({
+                        roomCode: roomCode.toUpperCase(),
+                        name,
+                        playerId: res.player.id,
+                    }),
+                );
+            } else {
+                playerIdRef.current = null;
+                setJoined(false);
+                localStorage.removeItem(PLAYER_SESSION_KEY);
+            }
         });
     }
 

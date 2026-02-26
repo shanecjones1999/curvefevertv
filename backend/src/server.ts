@@ -12,6 +12,14 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: "*" } });
 
+function emitLobbyUpdate(roomCode: string) {
+    const room = getRoom(roomCode);
+    if (!room) return;
+    io.to(room.code).emit("lobbyUpdate", {
+        players: Array.from(room.players.values()),
+    });
+}
+
 app.get("/", (_req, res) => res.send("Curvefever backend running"));
 
 io.on("connection", (socket) => {
@@ -24,8 +32,26 @@ io.on("connection", (socket) => {
         cb?.({ roomCode: room.code });
     });
 
+    socket.on("reconnectHost", (data: { roomCode: string }, cb) => {
+        const roomCode = data?.roomCode?.toUpperCase();
+        if (!roomCode) return cb?.({ ok: false, error: "Room code required" });
+        const room = getRoom(roomCode);
+        if (!room) return cb?.({ ok: false, error: "Room not found" });
+
+        room.hostSocketId = socket.id;
+        socket.join(room.code);
+
+        cb?.({
+            ok: true,
+            roomCode: room.code,
+            players: Array.from(room.players.values()),
+            state: room.state,
+        });
+    });
+
     socket.on("joinRoom", (data: { roomCode: string; name: string }, cb) => {
-        const room = getRoom(data.roomCode);
+        const roomCode = data.roomCode?.toUpperCase();
+        const room = roomCode ? getRoom(roomCode) : null;
         if (!room) return cb?.({ ok: false, error: "Room not found" });
 
         const player: Player = {
@@ -41,10 +67,44 @@ io.on("connection", (socket) => {
             trail: [],
         };
 
-        joinRoom(data.roomCode, player);
-        socket.join(data.roomCode);
+        joinRoom(room.code, player);
+        socket.join(room.code);
         cb?.({ ok: true, player });
         io.to(room.code).emit("playerJoined", { player });
+        emitLobbyUpdate(room.code);
+    });
+
+    socket.on(
+        "rejoinRoom",
+        (data: { roomCode: string; playerId: string; name?: string }, cb) => {
+            const roomCode = data?.roomCode?.toUpperCase();
+            if (!roomCode || !data?.playerId)
+                return cb?.({ ok: false, error: "roomCode and playerId required" });
+
+            const room = getRoom(roomCode);
+            if (!room) return cb?.({ ok: false, error: "Room not found" });
+
+            const existingPlayer = room.players.get(data.playerId);
+            if (!existingPlayer)
+                return cb?.({ ok: false, error: "Player not found in room" });
+
+            existingPlayer.socketId = socket.id;
+            if (typeof data.name === "string" && data.name.trim()) {
+                existingPlayer.name = data.name.trim();
+            }
+            socket.join(room.code);
+
+            cb?.({ ok: true, player: existingPlayer, state: room.state });
+            emitLobbyUpdate(room.code);
+        },
+    );
+
+    socket.on("requestLobbyState", (data: { roomCode: string }, cb) => {
+        const roomCode = data?.roomCode?.toUpperCase();
+        if (!roomCode) return cb?.({ ok: false, error: "Room code required" });
+        const room = getRoom(roomCode);
+        if (!room) return cb?.({ ok: false, error: "Room not found" });
+        cb?.({ ok: true, players: Array.from(room.players.values()), state: room.state });
     });
 
     socket.on("input", (payload: InputPayload) => {
@@ -64,7 +124,8 @@ io.on("connection", (socket) => {
     });
 
     socket.on("startGame", (data: { roomCode: string }, cb) => {
-        const room = getRoom(data.roomCode);
+        const roomCode = data?.roomCode?.toUpperCase();
+        const room = roomCode ? getRoom(roomCode) : null;
         if (!room) return cb?.({ ok: false, error: "Room not found" });
         if (room.hostSocketId !== socket.id)
             return cb?.({ ok: false, error: "Not host" });

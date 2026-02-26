@@ -1,0 +1,37 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Dependencies
+node_modules/
+backend/node_modules/
+curvefever-frontend/node_modules/
+
+# Build output
+dist/
+backend/dist/
+curvefever-frontend/dist/
+curvefever-frontend/dist-ssr/
+shared-types/*.js
+shared-types/*.js.map
+
+# Environment/local config
+.env
+.env.*
+*.local
+
+# Editor/OS files
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?

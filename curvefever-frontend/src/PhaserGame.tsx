@@ -61,19 +61,6 @@ class CurvefeverScene extends Phaser.Scene {
         // Do not call updatePlayers here; let React effect call it after scene is ready
     }
 
-    // Store trail and gap state per player
-    playerTrail: Map<
-        string,
-        {
-            points: Array<{ x: number; y: number }>;
-            distance: number;
-            gapActive: boolean;
-            gapStart: number;
-            gapInterval: number;
-            gapLength: number;
-        }
-    > = new Map();
-
     updatePlayers(players: Player[] = []) {
         if (!this.add) return;
         this.players = Array.isArray(players) ? players : [];
@@ -81,57 +68,9 @@ class CurvefeverScene extends Phaser.Scene {
         const height = this.sys.game.config.height as number;
 
         this.players.forEach((p, i) => {
-            // Trail/gap state
-            let state = this.playerTrail.get(p.id);
-            if (!state) {
-                // Randomize gap interval/length for each player
-                state = {
-                    points: [],
-                    distance: 0,
-                    gapActive: false,
-                    gapStart: 0,
-                    gapInterval: 200 + Math.random() * 200, // px
-                    gapLength: 40 + Math.random() * 40, // px
-                };
-                this.playerTrail.set(p.id, state);
-            }
-
             // Calculate wrapped position
             let x = ((p.x % width) + width) % width;
             let y = ((p.y % height) + height) % height;
-
-            // Distance from last trail point
-            const last = state.points.length
-                ? state.points[state.points.length - 1]
-                : null;
-            const dx = last ? x - last.x : 0;
-            const dy = last ? y - last.y : 0;
-            const dist = last ? Math.sqrt(dx * dx + dy * dy) : 0;
-            state.distance += dist;
-
-            // Gap logic: start gap after gapInterval, resume after gapLength
-            if (!state.gapActive && state.distance > state.gapInterval) {
-                state.gapActive = true;
-                state.gapStart = state.distance;
-            }
-            if (
-                state.gapActive &&
-                state.distance > state.gapStart + state.gapLength
-            ) {
-                state.gapActive = false;
-                state.gapInterval = 200 + Math.random() * 200;
-                state.gapLength = 40 + Math.random() * 40;
-                state.distance = 0;
-            }
-
-            // Add trail point if not in gap
-            if (!state.gapActive) {
-                if (!last || dist > 2) {
-                    state.points.push({ x, y });
-                    // Limit trail length
-                    if (state.points.length > 600) state.points.shift();
-                }
-            }
 
             // Draw trail
             let trailG = this.playerSprites.get(p.id + "_trail");
@@ -149,11 +88,13 @@ class CurvefeverScene extends Phaser.Scene {
                 Phaser.Display.Color.HexStringToColor(color).color,
                 1,
             );
-            if (state.points.length > 1) {
+            const segments = Array.isArray(p.trail) ? p.trail : [];
+            for (const segment of segments) {
+                if (!Array.isArray(segment) || segment.length < 2) continue;
                 trailG.beginPath();
-                trailG.moveTo(state.points[0].x, state.points[0].y);
-                for (let j = 1; j < state.points.length; j++) {
-                    trailG.lineTo(state.points[j].x, state.points[j].y);
+                trailG.moveTo(segment[0].x, segment[0].y);
+                for (let j = 1; j < segment.length; j++) {
+                    trailG.lineTo(segment[j].x, segment[j].y);
                 }
                 trailG.strokePath();
             }

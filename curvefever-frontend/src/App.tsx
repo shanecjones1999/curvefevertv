@@ -17,8 +17,13 @@ function App() {
         localStorage.setItem(ROLE_KEY, nextRole);
     }
 
-    if (role === "host") return <Host />;
-    if (role === "phone") return <Phone />;
+    function clearRole() {
+        setRole("none");
+        localStorage.removeItem(ROLE_KEY);
+    }
+
+    if (role === "host") return <Host onLeave={clearRole} />;
+    if (role === "phone") return <Phone onLeave={clearRole} />;
 
     return (
         <div style={{ padding: 24 }}>

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import socket from "./socket";
+import { EVENTS } from "../../shared-types/events";
 
 const PLAYER_SESSION_KEY = "curvefever:playerSession";
 
@@ -35,11 +36,13 @@ function getStoredPlayerSession(): PlayerSession | null {
     }
 }
 
-export default function Phone() {
+type Props = { onLeave: () => void };
+
+export default function Phone({ onLeave }: Props) {
     const storedSession = useMemo(() => getStoredPlayerSession(), []);
     const [roomCode, setRoomCode] = useState(storedSession?.roomCode ?? "");
     const [name, setName] = useState(storedSession?.name ?? "Player");
-    const [joined, setJoined] = useState(false);
+    const [joined, setJoined] = useState(!!storedSession);
     const playerIdRef = useRef<string | null>(storedSession?.playerId ?? null);
     const pressRef = useRef<{ left: boolean; right: boolean }>({
         left: false,
@@ -85,31 +88,46 @@ export default function Phone() {
         socket.on("connect", rejoinFromSession);
         rejoinFromSession();
 
+        // if the host deletes the room, the client should depart too
+        const handleRoomClosed = () => {
+            alert("Room has been closed by the host.");
+            playerIdRef.current = null;
+            setJoined(false);
+            localStorage.removeItem(PLAYER_SESSION_KEY);
+            onLeave();
+        };
+        socket.on(EVENTS.ROOM_CLOSED, handleRoomClosed);
+
         return () => {
             if (intervalRef.current) window.clearInterval(intervalRef.current);
             socket.off("connect", rejoinFromSession);
+            socket.off(EVENTS.ROOM_CLOSED, handleRoomClosed);
         };
     }, [storedSession]);
 
     function handleJoin() {
-        socket.emit("joinRoom", { roomCode, name }, (res: JoinRoomResponse) => {
-            if (res?.ok && res.player?.id) {
-                playerIdRef.current = res.player.id;
-                setJoined(true);
-                localStorage.setItem(
-                    PLAYER_SESSION_KEY,
-                    JSON.stringify({
-                        roomCode: roomCode.toUpperCase(),
-                        name,
-                        playerId: res.player.id,
-                    }),
-                );
-            } else {
-                playerIdRef.current = null;
-                setJoined(false);
-                localStorage.removeItem(PLAYER_SESSION_KEY);
-            }
-        });
+        socket.emit(
+            EVENTS.JOIN_ROOM,
+            { roomCode, name },
+            (res: JoinRoomResponse) => {
+                if (res?.ok && res.player?.id) {
+                    playerIdRef.current = res.player.id;
+                    setJoined(true);
+                    localStorage.setItem(
+                        PLAYER_SESSION_KEY,
+                        JSON.stringify({
+                            roomCode: roomCode.toUpperCase(),
+                            name,
+                            playerId: res.player.id,
+                        }),
+                    );
+                } else {
+                    playerIdRef.current = null;
+                    setJoined(false);
+                    localStorage.removeItem(PLAYER_SESSION_KEY);
+                }
+            },
+        );
     }
 
     function startSendingInput() {
@@ -205,6 +223,37 @@ export default function Phone() {
                             }}
                         >
                             Stop
+                        </button>
+                        <button
+                            style={{ marginLeft: 12 }}
+                            onClick={() => {
+                                if (
+                                    window.confirm(
+                                        "Are you sure you want to leave the game?",
+                                    )
+                                ) {
+                                    // clean up and notify server
+                                    pressRef.current.left = false;
+                                    pressRef.current.right = false;
+                                    stopSendingInput();
+                                    if (playerIdRef.current && roomCode) {
+                                        socket.emit(
+                                            EVENTS.LEAVE_ROOM,
+                                            {
+                                                roomCode,
+                                                playerId: playerIdRef.current,
+                                            },
+                                            () => {},
+                                        );
+                                    }
+                                    playerIdRef.current = null;
+                                    setJoined(false);
+                                    localStorage.removeItem(PLAYER_SESSION_KEY);
+                                    onLeave();
+                                }
+                            }}
+                        >
+                            Leave game
                         </button>
                     </div>
                 </div>

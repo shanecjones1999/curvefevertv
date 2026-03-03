@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import socket from "./socket";
+import { EVENTS } from "../../shared-types/events";
 import type { Player } from "../../shared-types/types";
 import PhaserGame from "./PhaserGame";
 
@@ -18,12 +19,22 @@ type StartGameResponse = {
     error?: string;
 };
 
-export default function Host() {
-    const [roomCode, setRoomCode] = useState<string | null>(null);
+type Props = { onLeave: () => void };
+
+export default function Host({ onLeave }: Props) {
+    const [roomCode, setRoomCode] = useState<string | null>(() => {
+        const raw = localStorage.getItem(HOST_SESSION_KEY);
+        if (!raw) return null;
+        try {
+            const session = JSON.parse(raw) as { roomCode?: string };
+            return session.roomCode ?? null;
+        } catch {
+            return null;
+        }
+    });
     const [players, setPlayers] = useState<Player[]>([]);
     const [playing, setPlaying] = useState(false);
     const [startError, setStartError] = useState<string | null>(null);
-
     useEffect(() => {
         const reconnectFromSession = () => {
             const rawSession = localStorage.getItem(HOST_SESSION_KEY);
@@ -37,7 +48,9 @@ export default function Host() {
                     (res: ReconnectHostResponse) => {
                         if (res?.ok) {
                             setRoomCode(
-                                (res.roomCode ?? session.roomCode ?? null) as string | null,
+                                (res.roomCode ?? session.roomCode ?? null) as
+                                    | string
+                                    | null,
                             );
                             if (Array.isArray(res.players)) {
                                 setPlayers(res.players);
@@ -45,7 +58,10 @@ export default function Host() {
                             setPlaying(res.state === "playing");
                         } else {
                             localStorage.removeItem(HOST_SESSION_KEY);
-                            setStartError(res?.error ?? "Unable to reconnect host session");
+                            setStartError(
+                                res?.error ??
+                                    "Unable to reconnect host session",
+                            );
                         }
                     },
                 );
@@ -118,6 +134,32 @@ export default function Host() {
                 <span style={{ marginLeft: 12 }}>
                     {roomCode ? `Room: ${roomCode}` : "No room"}
                 </span>
+                {roomCode && (
+                    <button
+                        style={{ marginLeft: 12 }}
+                        onClick={() => {
+                            if (
+                                window.confirm(
+                                    "End session and leave the room?",
+                                )
+                            ) {
+                                // tell server to delete the room
+                                socket.emit(
+                                    EVENTS.LEAVE_ROOM,
+                                    { roomCode },
+                                    () => {},
+                                );
+                                localStorage.removeItem(HOST_SESSION_KEY);
+                                setRoomCode(null);
+                                setPlayers([]);
+                                setPlaying(false);
+                                onLeave();
+                            }
+                        }}
+                    >
+                        Leave room
+                    </button>
+                )}
             </div>
 
             <div style={{ marginTop: 16 }}>

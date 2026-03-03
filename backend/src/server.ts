@@ -2,7 +2,7 @@ import express from "express";
 import http from "http";
 import { Server } from "socket.io";
 import crypto from "crypto";
-import { createRoom, getRoom, joinRoom } from "./rooms";
+import { createRoom, getRoom, joinRoom, leaveRoom, deleteRoom } from "./rooms";
 import { startGameLoop, stopGameLoop } from "./gameLoop";
 import { Player, InputPayload } from "../../shared-types/types";
 
@@ -79,7 +79,10 @@ io.on("connection", (socket) => {
         (data: { roomCode: string; playerId: string; name?: string }, cb) => {
             const roomCode = data?.roomCode?.toUpperCase();
             if (!roomCode || !data?.playerId)
-                return cb?.({ ok: false, error: "roomCode and playerId required" });
+                return cb?.({
+                    ok: false,
+                    error: "roomCode and playerId required",
+                });
 
             const room = getRoom(roomCode);
             if (!room) return cb?.({ ok: false, error: "Room not found" });
@@ -104,7 +107,11 @@ io.on("connection", (socket) => {
         if (!roomCode) return cb?.({ ok: false, error: "Room code required" });
         const room = getRoom(roomCode);
         if (!room) return cb?.({ ok: false, error: "Room not found" });
-        cb?.({ ok: true, players: Array.from(room.players.values()), state: room.state });
+        cb?.({
+            ok: true,
+            players: Array.from(room.players.values()),
+            state: room.state,
+        });
     });
 
     socket.on("input", (payload: InputPayload) => {
@@ -136,9 +143,65 @@ io.on("connection", (socket) => {
         cb?.({ ok: true });
     });
 
+    // allow clients to explicitly leave a room (player or host)
+    socket.on(
+        "leaveRoom",
+        (data: { roomCode: string; playerId?: string }, cb) => {
+            const roomCode = data?.roomCode?.toUpperCase();
+            if (!roomCode)
+                return cb?.({ ok: false, error: "Room code required" });
+
+            const room = getRoom(roomCode);
+            if (!room) return cb?.({ ok: false, error: "Room not found" });
+
+            if (data.playerId) {
+                // regular player leaving
+                const updated = leaveRoom(roomCode, data.playerId);
+                if (!updated)
+                    return cb?.({ ok: false, error: "Failed to leave room" });
+                socket.leave(room.code);
+                emitLobbyUpdate(roomCode);
+                return cb?.({ ok: true });
+            }
+
+            // host is leaving; destroy the room entirely
+            const success = deleteRoom(roomCode);
+            if (success) {
+                io.to(roomCode).emit("roomClosed");
+            }
+            socket.leave(roomCode);
+            return cb?.({ ok: true });
+        },
+    );
+
     socket.on("disconnect", () => {
         console.log("socket disconnect", socket.id);
-        // leave handling omitted (simple for MVP)
+        // when a socket drops we remove it from any player lists, but we do
+        // *not* destroy the room when the host temporarily disconnects. this
+        // allows the host to refresh and reattach using the reconnectHost flow
+        // without ending the session for everyone.
+
+        for (const room of Array.from(io.sockets.adapter.rooms.keys())) {
+            const r = getRoom(room);
+            if (!r) continue;
+
+            // if the host happened to disconnect, leave the room alone; the
+            // reconnectHost handler will update the socket id when they come
+            // back. we could mark r.hostSocketId = "" here but it's not
+            // strictly necessary.
+            if (r.hostSocketId === socket.id) {
+                continue;
+            }
+
+            // remove any player matching this socket id
+            for (const p of r.players.values()) {
+                if (p.socketId === socket.id) {
+                    leaveRoom(r.code, p.id);
+                    emitLobbyUpdate(r.code);
+                    break;
+                }
+            }
+        }
     });
 });
 

@@ -4,6 +4,7 @@ export const EVENTS = {
     CREATE_ROOM: "createRoom",
     JOIN_ROOM: "joinRoom",
     START_GAME: "startGame",
+    LEAVE_ROOM: "leaveRoom",
 
     // Server -> Client
     ROOM_CREATED: "roomCreated",
@@ -12,4 +13,5 @@ export const EVENTS = {
     GAME_STATE: "gameState",
     PLAYER_DIED: "playerDied",
     ROUND_OVER: "roundOver",
+    ROOM_CLOSED: "roomClosed",
 } as const;

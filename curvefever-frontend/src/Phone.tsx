@@ -105,6 +105,38 @@ export default function Phone({ onLeave }: Props) {
         };
     }, [storedSession]);
 
+    useEffect(() => {
+        if (!joined) return;
+
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === "ArrowLeft") {
+                e.preventDefault();
+                handleLeftDown();
+            } else if (e.key === "ArrowRight") {
+                e.preventDefault();
+                handleRightDown();
+            }
+        };
+
+        const handleKeyUp = (e: KeyboardEvent) => {
+            if (e.key === "ArrowLeft") {
+                e.preventDefault();
+                handleLeftUp();
+            } else if (e.key === "ArrowRight") {
+                e.preventDefault();
+                handleRightUp();
+            }
+        };
+
+        window.addEventListener("keydown", handleKeyDown);
+        window.addEventListener("keyup", handleKeyUp);
+
+        return () => {
+            window.removeEventListener("keydown", handleKeyDown);
+            window.removeEventListener("keyup", handleKeyUp);
+        };
+    }, [joined]);
+
     function handleJoin() {
         socket.emit(
             EVENTS.JOIN_ROOM,

@@ -6,6 +6,8 @@ const TICK_RATE = 60;
 const MS_PER_TICK = 1000 / TICK_RATE;
 
 const runningLoops = new Map<string, NodeJS.Timeout>();
+const restartGracePeriod = 30; // ticks to prevent immediate re-collision after restart
+const restartGraceMap = new Map<string, number>();
 
 function ensureTrailSegment(p: Player) {
     if (!Array.isArray(p.trail) || p.trail.length === 0) {
@@ -136,7 +138,9 @@ function movePlayer(p: Player, width: number, height: number) {
             : wrappedY - oldY < -height / 2
               ? wrappedY - oldY + height
               : wrappedY - oldY;
-    const dist = Math.sqrt(wrappedDeltaX * wrappedDeltaX + wrappedDeltaY * wrappedDeltaY);
+    const dist = Math.sqrt(
+        wrappedDeltaX * wrappedDeltaX + wrappedDeltaY * wrappedDeltaY,
+    );
     p.distanceSinceLastGap += dist;
 
     // Gap logic
@@ -195,12 +199,95 @@ function buildGameState(roomCode: string): GameState | null {
     return { tick: Date.now(), players };
 }
 
+function distanceToLineSegment(
+    px: number,
+    py: number,
+    x1: number,
+    y1: number,
+    x2: number,
+    y2: number,
+): number {
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    const lenSq = dx * dx + dy * dy;
+    if (lenSq === 0)
+        return Math.sqrt((px - x1) * (px - x1) + (py - y1) * (py - y1));
+    const t = Math.max(
+        0,
+        Math.min(1, ((px - x1) * dx + (py - y1) * dy) / lenSq),
+    );
+    const closestX = x1 + t * dx;
+    const closestY = y1 + t * dy;
+    const distX = px - closestX;
+    const distY = py - closestY;
+    return Math.sqrt(distX * distX + distY * distY);
+}
+
+function checkCollisions(
+    players: Player[],
+    skipGraceTickCount: number,
+): boolean {
+    // Skip collision check during grace period after round restart
+    if (skipGraceTickCount > 0) return false;
+
+    const collisionRadius = 5;
+
+    for (let i = 0; i < players.length; i++) {
+        const p = players[i];
+        if (!p.alive) continue;
+
+        // Check player-to-player collision
+        for (let j = i + 1; j < players.length; j++) {
+            const other = players[j];
+            if (!other.alive) continue;
+            const dx = p.x - other.x;
+            const dy = p.y - other.y;
+            const distSq = dx * dx + dy * dy;
+            // Players collide if they're within 10px of each other
+            if (distSq < 100) {
+                return true;
+            }
+        }
+
+        // Check collision with opponent trails only (not own trail)
+        for (const otherPlayer of players) {
+            if (otherPlayer.id === p.id) continue; // Skip own trails entirely
+            if (!Array.isArray(otherPlayer.trail)) continue;
+
+            for (let segIdx = 0; segIdx < otherPlayer.trail.length; segIdx++) {
+                const segment = otherPlayer.trail[segIdx];
+                if (!Array.isArray(segment) || segment.length === 0) continue;
+
+                for (let i = 0; i < segment.length - 1; i++) {
+                    const pt1 = segment[i];
+                    const pt2 = segment[i + 1];
+                    if (!pt1 || !pt2) continue;
+
+                    const dist = distanceToLineSegment(
+                        p.x,
+                        p.y,
+                        pt1.x,
+                        pt1.y,
+                        pt2.x,
+                        pt2.y,
+                    );
+                    if (dist < collisionRadius) {
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+    return false;
+}
+
 export function startGameLoop(roomCode: string, io: Server) {
     if (runningLoops.has(roomCode)) return;
 
     // Assume 800x600 for now; could be made dynamic
     const width = 800;
     const height = 600;
+    restartGraceMap.set(roomCode, 0);
 
     const tick = () => {
         const room = getRoom(roomCode);
@@ -209,6 +296,31 @@ export function startGameLoop(roomCode: string, io: Server) {
         for (const p of room.players.values()) {
             if (!p.alive) continue;
             movePlayer(p, width, height);
+        }
+
+        // Decrement grace period counter
+        let graceTicksRemaining = restartGraceMap.get(roomCode) ?? 0;
+        if (graceTicksRemaining > 0) {
+            graceTicksRemaining--;
+            restartGraceMap.set(roomCode, graceTicksRemaining);
+        }
+
+        // Check for collisions and restart round if detected
+        const players = Array.from(room.players.values());
+        if (checkCollisions(players, graceTicksRemaining)) {
+            for (const p of players) {
+                p.alive = true;
+                p.x = Math.random() * width;
+                p.y = Math.random() * height;
+                p.direction = Math.random() * Math.PI * 2;
+                p.trail = [[]];
+                p.distanceSinceLastGap = 0;
+                p.gapInterval = 200 + Math.random() * 200;
+                p.gapLength = 40 + Math.random() * 40;
+                p.inGap = false;
+            }
+            restartGraceMap.set(roomCode, restartGracePeriod);
+            io.to(roomCode).emit("roundRestart");
         }
 
         const state = buildGameState(roomCode);

@@ -88,6 +88,9 @@ export default function Host({ onLeave }: Props) {
             if (state && Array.isArray(state.players))
                 setPlayers(state.players);
         });
+        socket.on(EVENTS.ROUND_RESTART, () => {
+            // Silently restart, game state updates automatically
+        });
         socket.on("connect", reconnectFromSession);
         reconnectFromSession();
 
@@ -97,6 +100,7 @@ export default function Host({ onLeave }: Props) {
             socket.off("lobbyUpdate");
             socket.off("startGame");
             socket.off("gameState");
+            socket.off(EVENTS.ROUND_RESTART);
             socket.off("connect", reconnectFromSession);
         };
     }, []);

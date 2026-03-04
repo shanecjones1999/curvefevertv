@@ -128,12 +128,18 @@ export default function Phone({ onLeave }: Props) {
             }
         };
 
+        const handleRoundRestart = () => {
+            // Silently restart, game state updates automatically
+        };
+
         window.addEventListener("keydown", handleKeyDown);
         window.addEventListener("keyup", handleKeyUp);
+        socket.on(EVENTS.ROUND_RESTART, handleRoundRestart);
 
         return () => {
             window.removeEventListener("keydown", handleKeyDown);
             window.removeEventListener("keyup", handleKeyUp);
+            socket.off(EVENTS.ROUND_RESTART, handleRoundRestart);
         };
     }, [joined]);
 

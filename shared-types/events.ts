@@ -14,4 +14,5 @@ export const EVENTS = {
     PLAYER_DIED: "playerDied",
     ROUND_OVER: "roundOver",
     ROOM_CLOSED: "roomClosed",
+    ROUND_RESTART: "roundRestart",
 } as const;

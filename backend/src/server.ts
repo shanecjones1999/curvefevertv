@@ -122,7 +122,7 @@ io.on("connection", (socket) => {
             for (const p of r.players.values()) {
                 if (p.socketId === socket.id) {
                     // simple turning logic
-                    const turnRate = 0.08;
+                    const turnRate = 0.12;
                     if (payload.turnLeft) p.direction -= turnRate;
                     if (payload.turnRight) p.direction += turnRate;
                 }

@@ -127,6 +127,9 @@ export default function Host({ onLeave }: Props) {
     return (
         <div style={{ padding: 16 }}>
             <h2>Host</h2>
+            <button onClick={onLeave} style={{ marginBottom: 12 }}>
+                Change Role
+            </button>
             <div>
                 <button onClick={handleCreateRoom} disabled={!!roomCode}>
                     Create Room

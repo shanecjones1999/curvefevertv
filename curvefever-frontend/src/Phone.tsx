@@ -188,6 +188,9 @@ export default function Phone({ onLeave }: Props) {
                         />
                     </div>
                     <button onClick={handleJoin}>Join</button>
+                    <button onClick={onLeave} style={{ marginLeft: 12 }}>
+                        Back
+                    </button>
                 </div>
             ) : (
                 <div>

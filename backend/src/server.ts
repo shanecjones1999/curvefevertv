@@ -5,7 +5,7 @@ import crypto from "crypto";
 import dotenv from "dotenv";
 import { createRoom, getRoom, joinRoom, leaveRoom, deleteRoom } from "./rooms";
 import { startGameLoop, stopGameLoop } from "./gameLoop";
-import { Player, InputPayload } from "../../shared-types/types";
+import { Player, InputPayload } from "./types";
 
 dotenv.config();
 

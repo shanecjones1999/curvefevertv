@@ -1,6 +1,6 @@
 import { Server } from "socket.io";
 import { getRoom } from "./rooms";
-import { GameState, Player } from "../../shared-types/types";
+import { GameState, Player } from "./types";
 
 const TICK_RATE = 60;
 const MS_PER_TICK = 1000 / TICK_RATE;

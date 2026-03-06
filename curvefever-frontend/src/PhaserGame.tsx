@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import Phaser from "phaser";
-import type { Player } from "../../shared-types/types";
+import type { Player } from "./types";
 
 interface PhaserGameProps {
     players: Player[];

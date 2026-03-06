@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import socket from "./socket";
-import { EVENTS } from "../../shared-types/events";
+import { EVENTS } from "../../shared-types/events.ts";
 import type { Player } from "../../shared-types/types";
 import PhaserGame from "./PhaserGame";
 

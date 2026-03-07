@@ -1,6 +1,6 @@
-import React, { useEffect, useRef } from "react";
+import { useEffect, useRef } from "react";
 import Phaser from "phaser";
-import type { Player } from "../../shared-types/types";
+import type { Player } from "./types";
 
 interface PhaserGameProps {
     players: Player[];
@@ -48,7 +48,9 @@ class CurvefeverScene extends Phaser.Scene {
         const players = Array.isArray(this.players) ? this.players : [];
         players.forEach((p, i) => {
             const g = this.add.graphics();
-            g.fillStyle(p.color || PLAYER_COLORS[i % PLAYER_COLORS.length], 1);
+            // Convert color string to number for Phaser
+            const colorHex = p.color || PLAYER_COLORS[i % PLAYER_COLORS.length];
+            g.fillStyle(parseInt(colorHex.replace("#", ""), 16), 1);
             g.fillCircle(0, 0, 8);
             g.x = p.x;
             g.y = p.y;

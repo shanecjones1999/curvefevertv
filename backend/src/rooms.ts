@@ -1,4 +1,4 @@
-import { Room, Player } from "../../shared-types/types";
+import { Room, Player } from "./types";
 
 const rooms = new Map<string, Room>();
 

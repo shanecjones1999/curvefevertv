@@ -2,15 +2,19 @@ import express from "express";
 import http from "http";
 import { Server } from "socket.io";
 import crypto from "crypto";
+import dotenv from "dotenv";
 import { createRoom, getRoom, joinRoom, leaveRoom, deleteRoom } from "./rooms";
 import { startGameLoop, stopGameLoop } from "./gameLoop";
-import { Player, InputPayload } from "../../shared-types/types";
+import { Player, InputPayload } from "./types";
+
+dotenv.config();
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 3001;
+const CORS_ORIGIN = process.env.CORS_ORIGIN ?? "*";
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: "*" } });
+const io = new Server(server, { cors: { origin: CORS_ORIGIN } });
 
 function emitLobbyUpdate(roomCode: string) {
     const room = getRoom(roomCode);
@@ -205,4 +209,7 @@ io.on("connection", (socket) => {
     });
 });
 
-server.listen(PORT, () => console.log(`Server listening on ${PORT}`));
+server.listen(PORT, () => {
+    console.log(`Server listening on port ${PORT}`);
+    console.log(`CORS origin: ${CORS_ORIGIN}`);
+});

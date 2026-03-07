@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import socket from "./socket";
-import { EVENTS } from "../../shared-types/events";
+import { EVENTS } from "./events";
 
 const PLAYER_SESSION_KEY = "curvefever:playerSession";
 

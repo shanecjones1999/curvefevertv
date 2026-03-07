@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import socket from "./socket";
-import { EVENTS } from "../../shared-types/events";
-import type { Player } from "../../shared-types/types";
+import { EVENTS } from "./events";
+import type { Player } from "./types";
 import PhaserGame from "./PhaserGame";
 
 const HOST_SESSION_KEY = "curvefever:hostSession";

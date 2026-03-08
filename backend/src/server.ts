@@ -48,9 +48,7 @@ app.get("/debug", (_req, res) => {
     }));
     res.json({ rooms });
 });
-debugger;
 io.on("connection", (socket) => {
-    debugger;
     console.log("socket connected", socket.id);
     console.log("[DEBUG] Socket connected, waiting for createRoom event...");
 

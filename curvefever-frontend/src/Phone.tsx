@@ -42,7 +42,8 @@ export default function Phone({ onLeave }: Props) {
     const storedSession = useMemo(() => getStoredPlayerSession(), []);
     const [roomCode, setRoomCode] = useState(storedSession?.roomCode ?? "");
     const [name, setName] = useState(storedSession?.name ?? "Player");
-    const [joined, setJoined] = useState(!!storedSession);
+    const [joined, setJoined] = useState(false);
+    const [isRejoining, setIsRejoining] = useState(!!storedSession);
     const playerIdRef = useRef<string | null>(storedSession?.playerId ?? null);
     const pressRef = useRef<{ left: boolean; right: boolean }>({
         left: false,
@@ -52,47 +53,79 @@ export default function Phone({ onLeave }: Props) {
 
     useEffect(() => {
         const rejoinFromSession = () => {
-            if (storedSession && playerIdRef.current) {
-                socket.emit(
-                    "rejoinRoom",
-                    {
-                        roomCode: storedSession.roomCode,
-                        playerId: playerIdRef.current,
-                        name: storedSession.name,
-                    },
-                    (res: JoinRoomResponse) => {
-                        if (res?.ok && res.player?.id) {
-                            playerIdRef.current = res.player.id;
-                            setJoined(true);
-                            localStorage.setItem(
-                                PLAYER_SESSION_KEY,
-                                JSON.stringify({
-                                    roomCode: storedSession.roomCode,
-                                    name: res.player.name ?? storedSession.name,
-                                    playerId: res.player.id,
-                                }),
-                            );
-                        } else {
-                            playerIdRef.current = null;
-                            setJoined(false);
-                            localStorage.removeItem(PLAYER_SESSION_KEY);
-                        }
-                    },
-                );
-            } else if (localStorage.getItem(PLAYER_SESSION_KEY)) {
-                playerIdRef.current = null;
-                localStorage.removeItem(PLAYER_SESSION_KEY);
+            // Only attempt rejoin if we have a stored session with a valid player ID
+            if (!storedSession || !playerIdRef.current) {
+                setIsRejoining(false);
+                // Clean up any orphaned session data
+                if (localStorage.getItem(PLAYER_SESSION_KEY)) {
+                    playerIdRef.current = null;
+                    localStorage.removeItem(PLAYER_SESSION_KEY);
+                }
+                return;
             }
+
+            console.log(
+                "[Phone] Attempting to rejoin room",
+                storedSession.roomCode,
+                "as player",
+                playerIdRef.current,
+            );
+
+            socket.emit(
+                "rejoinRoom",
+                {
+                    roomCode: storedSession.roomCode,
+                    playerId: playerIdRef.current,
+                    name: storedSession.name,
+                },
+                (res: JoinRoomResponse) => {
+                    console.log("[Phone] rejoinRoom response:", res);
+                    if (res?.ok && res.player?.id) {
+                        console.log("[Phone] Successfully rejoined room");
+                        playerIdRef.current = res.player.id;
+                        setJoined(true);
+                        setIsRejoining(false);
+                        localStorage.setItem(
+                            PLAYER_SESSION_KEY,
+                            JSON.stringify({
+                                roomCode: storedSession.roomCode,
+                                name: res.player.name ?? storedSession.name,
+                                playerId: res.player.id,
+                            }),
+                        );
+                    } else {
+                        console.log(
+                            "[Phone] Rejoin failed:",
+                            res?.error ?? "Unknown error",
+                        );
+                        playerIdRef.current = null;
+                        setJoined(false);
+                        setIsRejoining(false);
+                        localStorage.removeItem(PLAYER_SESSION_KEY);
+                    }
+                },
+            );
         };
 
+        // Set up listener for socket connection
         socket.on("connect", rejoinFromSession);
-        rejoinFromSession();
+
+        // Try to rejoin immediately if socket is already connected
+        if (socket.connected) {
+            console.log("[Phone] Socket already connected, attempting rejoin");
+            rejoinFromSession();
+        } else {
+            console.log(
+                "[Phone] Socket not connected yet, waiting for connection event",
+            );
+        }
 
         // if the host deletes the room, the client should depart too
         const handleRoomClosed = () => {
             alert("Room has been closed by the host.");
             playerIdRef.current = null;
             setJoined(false);
+            setIsRejoining(false);
             localStorage.removeItem(PLAYER_SESSION_KEY);
             onLeave();
         };
@@ -103,7 +136,7 @@ export default function Phone({ onLeave }: Props) {
             socket.off("connect", rejoinFromSession);
             socket.off(EVENTS.ROOM_CLOSED, handleRoomClosed);
         };
-    }, [storedSession]);
+    }, [storedSession, onLeave]);
 
     useEffect(() => {
         if (!joined) return;
@@ -202,6 +235,16 @@ export default function Phone({ onLeave }: Props) {
 
     function handleRightUp() {
         pressRef.current.right = false;
+    }
+
+    // Show a loading state while attempting to rejoin
+    if (isRejoining) {
+        return (
+            <div style={{ padding: 16 }}>
+                <h2>Phone Controller</h2>
+                <p>Reconnecting to room...</p>
+            </div>
+        );
     }
 
     return (

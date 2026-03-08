@@ -1,7 +1,7 @@
 export interface Player {
     id: string;
     name: string;
-    socketId: string;
+    socketId: string | null;
     color?: string;
     alive: boolean;
     x: number;

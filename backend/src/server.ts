@@ -3,7 +3,14 @@ import http from "http";
 import { Server } from "socket.io";
 import crypto from "crypto";
 import dotenv from "dotenv";
-import { createRoom, getRoom, joinRoom, leaveRoom, deleteRoom } from "./rooms";
+import {
+    createRoom,
+    getRoom,
+    joinRoom,
+    leaveRoom,
+    deleteRoom,
+    listRooms,
+} from "./rooms";
 import { startGameLoop, stopGameLoop } from "./gameLoop";
 import { Player, InputPayload } from "./types";
 
@@ -15,6 +22,7 @@ const CORS_ORIGIN = process.env.CORS_ORIGIN ?? "*";
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: CORS_ORIGIN } });
+console.log("Socket.IO initialized");
 
 function emitLobbyUpdate(roomCode: string) {
     const room = getRoom(roomCode);
@@ -26,11 +34,28 @@ function emitLobbyUpdate(roomCode: string) {
 
 app.get("/", (_req, res) => res.send("Curvefever backend running"));
 
+app.get("/debug", (_req, res) => {
+    const rooms = listRooms().map((r) => ({
+        code: r.code,
+        hostSocketId: r.hostSocketId,
+        players: Array.from(r.players.entries()).map(([id, p]) => ({
+            id,
+            name: p.name,
+            socketId: p.socketId,
+            alive: p.alive,
+        })),
+        state: r.state,
+    }));
+    res.json({ rooms });
+});
 io.on("connection", (socket) => {
     console.log("socket connected", socket.id);
+    console.log("[DEBUG] Socket connected, waiting for createRoom event...");
 
     socket.on("createRoom", (_data, cb) => {
+        console.log("[DEBUG] createRoom event received!");
         const room = createRoom(socket.id);
+        console.log("[DEBUG] Room created:", room.code);
         // join socket to room
         socket.join(room.code);
         cb?.({ roomCode: room.code });
@@ -73,6 +98,9 @@ io.on("connection", (socket) => {
 
         joinRoom(room.code, player);
         socket.join(room.code);
+        console.log(
+            `[joinRoom] Added player ${player.id} to room ${room.code}`,
+        );
         cb?.({ ok: true, player });
         io.to(room.code).emit("playerJoined", { player });
         emitLobbyUpdate(room.code);
@@ -82,19 +110,38 @@ io.on("connection", (socket) => {
         "rejoinRoom",
         (data: { roomCode: string; playerId: string; name?: string }, cb) => {
             const roomCode = data?.roomCode?.toUpperCase();
-            if (!roomCode || !data?.playerId)
+            console.log(
+                `[rejoinRoom] Attempt for player ${data?.playerId} in room ${roomCode}`,
+            );
+
+            if (!roomCode || !data?.playerId) {
+                console.log(
+                    `[rejoinRoom] Invalid request: missing roomCode or playerId`,
+                );
                 return cb?.({
                     ok: false,
                     error: "roomCode and playerId required",
                 });
+            }
 
             const room = getRoom(roomCode);
-            if (!room) return cb?.({ ok: false, error: "Room not found" });
+            if (!room) {
+                console.log(`[rejoinRoom] Room not found: ${roomCode}`);
+                return cb?.({ ok: false, error: "Room not found" });
+            }
 
             const existingPlayer = room.players.get(data.playerId);
-            if (!existingPlayer)
+            if (!existingPlayer) {
+                console.log(
+                    `[rejoinRoom] Player not found in room: ${data.playerId} in ${roomCode}. Players in room:`,
+                    Array.from(room.players.keys()),
+                );
                 return cb?.({ ok: false, error: "Player not found in room" });
+            }
 
+            console.log(
+                `[rejoinRoom] Successfully rejoining player ${data.playerId} (${existingPlayer.name}) to room ${roomCode}`,
+            );
             existingPlayer.socketId = socket.id;
             if (typeof data.name === "string" && data.name.trim()) {
                 existingPlayer.name = data.name.trim();
@@ -194,14 +241,21 @@ io.on("connection", (socket) => {
             // back. we could mark r.hostSocketId = "" here but it's not
             // strictly necessary.
             if (r.hostSocketId === socket.id) {
+                console.log(
+                    `[disconnect] Host disconnected from room ${r.code}`,
+                );
                 continue;
             }
 
-            // remove any player matching this socket id
+            // For players: instead of removing them entirely, just disconnect their socket
+            // This allows them to rejoin later without losing their place in the room
             for (const p of r.players.values()) {
                 if (p.socketId === socket.id) {
-                    leaveRoom(r.code, p.id);
-                    emitLobbyUpdate(r.code);
+                    console.log(
+                        `[disconnect] Player ${p.id} (${p.name}) disconnected from room ${r.code}`,
+                    );
+                    p.socketId = null; // Mark as disconnected but keep in room
+                    emitLobbyUpdate(r.code); // Update lobby to show disconnected state
                     break;
                 }
             }

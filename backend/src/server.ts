@@ -263,7 +263,12 @@ io.on("connection", (socket) => {
     });
 });
 
-server.listen(PORT, () => {
+server.listen(PORT, "0.0.0.0", () => {
     console.log(`Server listening on port ${PORT}`);
     console.log(`CORS origin: ${CORS_ORIGIN}`);
 });
+
+// server.listen(PORT, () => {
+// console.log(Server listening on port ${PORT});
+// console.log(CORS origin: ${CORS_ORIGIN});
+// });

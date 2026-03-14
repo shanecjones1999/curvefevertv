@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import styles from "./Phone.module.css";
 import socket from "./socket";
 import { EVENTS } from "./events";
 
@@ -268,8 +269,10 @@ export default function Phone({ onLeave }: Props) {
                             onChange={(e) => setName(e.target.value)}
                         />
                     </div>
-                    <button onClick={handleJoin}>Join</button>
-                    <button onClick={onLeave} style={{ marginLeft: 12 }}>
+                    <button className={styles.button} onClick={handleJoin}>
+                        Join
+                    </button>
+                    <button className={styles.button} onClick={onLeave}>
                         Back
                     </button>
                 </div>
@@ -278,28 +281,29 @@ export default function Phone({ onLeave }: Props) {
                     <p>
                         Joined room {roomCode} as {name}
                     </p>
-                    <div style={{ display: "flex", gap: 12 }}>
+                    <div className={styles["button-row"]}>
                         <button
+                            className={styles.button}
                             onMouseDown={handleLeftDown}
                             onMouseUp={handleLeftUp}
                             onTouchStart={handleLeftDown}
                             onTouchEnd={handleLeftUp}
-                            style={{ padding: 24 }}
                         >
                             Turn Left
                         </button>
                         <button
+                            className={styles.button}
                             onMouseDown={handleRightDown}
                             onMouseUp={handleRightUp}
                             onTouchStart={handleRightDown}
                             onTouchEnd={handleRightUp}
-                            style={{ padding: 24 }}
                         >
                             Turn Right
                         </button>
                     </div>
                     <div style={{ marginTop: 12 }}>
                         <button
+                            className={styles.button}
                             onClick={() => {
                                 pressRef.current.left = false;
                                 pressRef.current.right = false;
@@ -309,7 +313,7 @@ export default function Phone({ onLeave }: Props) {
                             Stop
                         </button>
                         <button
-                            style={{ marginLeft: 12 }}
+                            className={styles.button}
                             onClick={() => {
                                 if (
                                     window.confirm(

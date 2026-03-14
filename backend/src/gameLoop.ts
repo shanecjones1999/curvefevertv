@@ -10,6 +10,9 @@ const runningLoops = new Map<string, NodeJS.Timeout>();
 const restartGracePeriod = 30; // ticks to prevent immediate re-collision after restart
 const restartGraceMap = new Map<string, number>();
 
+// Track how much trail data we've already sent per player so we only send deltas
+const lastSentTrail = new Map<string, { segments: number; points: number }>();
+
 function ensureTrailSegment(p: Player) {
     if (!Array.isArray(p.trail) || p.trail.length === 0) {
         p.trail = [[]];
@@ -170,34 +173,94 @@ function movePlayer(p: Player, width: number, height: number) {
                 width,
                 height,
             );
-        } else if (dist > 2) {
+        } else if (dist > 0.5) {
             appendTrailPoint(p, p.x, p.y);
         }
     }
 }
 
+// Tick counter for periodic full-state sync
+let tickCounter = 0;
+const FULL_SYNC_INTERVAL = 120; // send full trail every ~2 seconds at 60fps
+
+function getDeltaTrail(
+    playerId: string,
+    trail: Array<Array<{ x: number; y: number }>>,
+): { delta: Array<Array<{ x: number; y: number }>>; continues: boolean } {
+    const last = lastSentTrail.get(playerId);
+    if (!last) {
+        // First time: send everything
+        lastSentTrail.set(playerId, {
+            segments: trail.length,
+            points: trail.length > 0 ? trail[trail.length - 1].length : 0,
+        });
+        return { delta: trail, continues: false };
+    }
+
+    const delta: Array<Array<{ x: number; y: number }>> = [];
+    // Track whether the first entry in delta is a continuation of the
+    // last segment the client already has (true) vs a brand-new segment
+    // that should NOT be merged into the previous one (false).
+    let continues = false;
+
+    for (let s = last.segments - 1; s < trail.length; s++) {
+        if (s < 0) continue;
+        const seg = trail[s];
+        if (!seg) continue;
+        if (s === last.segments - 1) {
+            // Partial segment: only new points
+            const startIdx = last.points;
+            if (startIdx < seg.length) {
+                delta.push(seg.slice(startIdx));
+                continues = true; // these points extend the existing segment
+            }
+        } else {
+            // Entirely new segment (gap boundary)
+            delta.push(seg);
+        }
+    }
+
+    lastSentTrail.set(playerId, {
+        segments: trail.length,
+        points: trail.length > 0 ? trail[trail.length - 1].length : 0,
+    });
+
+    return { delta, continues };
+}
+
 function buildGameState(roomCode: string): GameState | null {
     const room = getRoom(roomCode);
     if (!room) return null;
-    const players = Array.from(room.players.values()).map((p) => ({
-        id: p.id,
-        name: p.name,
-        score: p.score ?? 0,
-        socketId: p.socketId,
-        color: p.color,
-        alive: p.alive,
-        x: p.x,
-        y: p.y,
-        direction: p.direction,
-        speed: p.speed,
-        // Only send trail and gap state to host
-        trail: p.trail,
-        distanceSinceLastGap: p.distanceSinceLastGap,
-        gapInterval: p.gapInterval,
-        gapLength: p.gapLength,
-        inGap: p.inGap,
-        gapStartDistance: p.gapStartDistance,
-    }));
+
+    const isFullSync = tickCounter % FULL_SYNC_INTERVAL === 0;
+
+    const players = Array.from(room.players.values()).map((p) => {
+        const trail = p.trail ?? [];
+        let trailData: Array<Array<{ x: number; y: number }>>;
+        let trailDeltaContinues = false;
+        if (isFullSync) {
+            trailData = trail;
+        } else {
+            const result = getDeltaTrail(p.id, trail);
+            trailData = result.delta;
+            trailDeltaContinues = result.continues;
+        }
+        return {
+            id: p.id,
+            name: p.name,
+            score: p.score ?? 0,
+            socketId: p.socketId,
+            color: p.color,
+            alive: p.alive,
+            x: p.x,
+            y: p.y,
+            direction: p.direction,
+            speed: p.speed,
+            trail: trailData,
+            trailFull: isFullSync,
+            trailDeltaContinues,
+        };
+    });
     return {
         tick: Date.now(),
         arena: {
@@ -317,6 +380,8 @@ function restartRound(players: Player[]) {
         p.gapInterval = 200 + Math.random() * 200;
         p.gapLength = 40 + Math.random() * 40;
         p.inGap = false;
+        // Reset delta trail tracking so next emit sends fresh state
+        lastSentTrail.delete(p.id);
     }
 }
 
@@ -329,8 +394,12 @@ export function startGameLoop(roomCode: string, io: Server) {
         const room = getRoom(roomCode);
         if (!room) return;
 
+        const turnRate = 0.04;
         for (const p of room.players.values()) {
             if (!p.alive) continue;
+            // Apply pending input (set by the "input" socket handler)
+            if ((p as any).__inputLeft) p.direction -= turnRate;
+            if ((p as any).__inputRight) p.direction += turnRate;
             movePlayer(p, GAME_WIDTH, GAME_HEIGHT);
         }
 
@@ -375,14 +444,19 @@ export function startGameLoop(roomCode: string, io: Server) {
             }
         }
 
+        tickCounter++;
         const state = buildGameState(roomCode);
         if (state) {
-            io.to(roomCode).emit("gameState", state);
+            io.to(roomCode).volatile.emit("gameState", state);
         }
     };
 
     const handle = setInterval(tick, MS_PER_TICK);
     runningLoops.set(roomCode, handle);
+}
+
+export function cleanupPlayerTrailTracking(playerId: string) {
+    lastSentTrail.delete(playerId);
 }
 
 export function stopGameLoop(roomCode: string) {

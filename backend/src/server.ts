@@ -11,9 +11,23 @@ import {
     deleteRoom,
     listRooms,
 } from "./rooms";
-import { startGameLoop, stopGameLoop } from "./gameLoop";
+import {
+    startGameLoop,
+    stopGameLoop,
+    cleanupPlayerTrailTracking,
+} from "./gameLoop";
+
+// Alias for use inside socket handlers
+const lastSentTrailCleanup = (playerId: string) =>
+    cleanupPlayerTrailTracking(playerId);
 import { Player, InputPayload } from "./types";
 import { GAME_HEIGHT, GAME_WIDTH } from "./config";
+
+// Fast lookup: socketId → { roomCode, playerId } for O(1) input routing
+const socketPlayerMap = new Map<
+    string,
+    { roomCode: string; playerId: string }
+>();
 
 dotenv.config();
 
@@ -98,6 +112,26 @@ io.on("connection", (socket) => {
         const room = roomCode ? getRoom(roomCode) : null;
         if (!room) return cb?.({ ok: false, error: "Room not found" });
 
+        // Prevent ghost players: if this socket already has a player in this
+        // room (e.g. from a stale session), reuse it instead of creating a new one.
+        const existingMapping = socketPlayerMap.get(socket.id);
+        if (existingMapping && existingMapping.roomCode === room.code) {
+            const existing = room.players.get(existingMapping.playerId);
+            if (existing) {
+                return cb?.({ ok: true, player: existing });
+            }
+        }
+
+        // Also clean up any disconnected player with the same name to avoid
+        // duplicates when a player's rejoin failed and they manually re-joined.
+        for (const [pid, p] of room.players.entries()) {
+            if (p.name === data.name && p.socketId === null) {
+                room.players.delete(pid);
+                lastSentTrailCleanup(pid);
+                break;
+            }
+        }
+
         const player: Player = {
             id: crypto.randomUUID(),
             name: data.name,
@@ -114,6 +148,10 @@ io.on("connection", (socket) => {
 
         joinRoom(room.code, player);
         socket.join(room.code);
+        socketPlayerMap.set(socket.id, {
+            roomCode: room.code,
+            playerId: player.id,
+        });
         console.log(
             `[joinRoom] Added player ${player.id} to room ${room.code}`,
         );
@@ -158,7 +196,18 @@ io.on("connection", (socket) => {
             console.log(
                 `[rejoinRoom] Successfully rejoining player ${data.playerId} (${existingPlayer.name}) to room ${roomCode}`,
             );
+            // Clean up stale socketPlayerMap entry for the old socket ID
+            if (
+                existingPlayer.socketId &&
+                existingPlayer.socketId !== socket.id
+            ) {
+                socketPlayerMap.delete(existingPlayer.socketId);
+            }
             existingPlayer.socketId = socket.id;
+            socketPlayerMap.set(socket.id, {
+                roomCode: room.code,
+                playerId: data.playerId,
+            });
             if (typeof data.name === "string" && data.name.trim()) {
                 existingPlayer.name = data.name.trim();
             }
@@ -186,19 +235,16 @@ io.on("connection", (socket) => {
     });
 
     socket.on("input", (payload: InputPayload) => {
-        // find player and update direction based on input
-        for (const room of Array.from(io.sockets.adapter.rooms.keys())) {
-            const r = getRoom(room);
-            if (!r) continue;
-            for (const p of r.players.values()) {
-                if (p.socketId === socket.id) {
-                    // simple turning logic
-                    const turnRate = 0.12;
-                    if (payload.turnLeft) p.direction -= turnRate;
-                    if (payload.turnRight) p.direction += turnRate;
-                }
-            }
-        }
+        const mapping = socketPlayerMap.get(socket.id);
+        if (!mapping) return;
+        const room = getRoom(mapping.roomCode);
+        if (!room) return;
+        const p = room.players.get(mapping.playerId);
+        if (!p) return;
+        // Store current input state rather than immediately mutating direction.
+        // The game loop will apply turning at the correct tick rate.
+        (p as any).__inputLeft = !!payload.turnLeft;
+        (p as any).__inputRight = !!payload.turnRight;
     });
 
     socket.on("startGame", (data: { roomCode: string }, cb) => {
@@ -242,6 +288,7 @@ io.on("connection", (socket) => {
                 if (!updated)
                     return cb?.({ ok: false, error: "Failed to leave room" });
                 socket.leave(room.code);
+                socketPlayerMap.delete(socket.id);
                 emitLobbyUpdate(roomCode);
                 return cb?.({ ok: true });
             }
@@ -258,6 +305,7 @@ io.on("connection", (socket) => {
 
     socket.on("disconnect", () => {
         console.log("socket disconnect", socket.id);
+        socketPlayerMap.delete(socket.id);
         // when a socket drops we remove it from any player lists, but we do
         // *not* destroy the room when the host temporarily disconnects. this
         // allows the host to refresh and reattach using the reconnectHost flow

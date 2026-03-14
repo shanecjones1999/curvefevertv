@@ -236,26 +236,25 @@ export default function Host({ onLeave }: Props) {
                     )}
                 </div>
 
-                <section className="panel inset-panel">
-                    <h3 className="section-title">
-                        Players ({players.length})
-                    </h3>
-                    <ul className="player-list">
-                        {players.length === 0 && (
-                            <li className="player-row player-empty">
-                                Waiting for players to join...
-                            </li>
-                        )}
-                        {players.map((p) => (
-                            <li key={p.id} className="player-row">
-                                <span>{p.name}</span>
-                                <span className={p.alive ? "alive" : "dead"}>
-                                    {p.alive ? "Ready" : "Eliminated"}
-                                </span>
-                            </li>
-                        ))}
-                    </ul>
-                </section>
+                {!playing && (
+                    <section className="panel inset-panel">
+                        <h3 className="section-title">
+                            Players ({players.length})
+                        </h3>
+                        <ul className="player-list">
+                            {players.length === 0 && (
+                                <li className="player-row player-empty">
+                                    Waiting for players to join...
+                                </li>
+                            )}
+                            {players.map((player) => (
+                                <li key={player.id} className="player-row">
+                                    <span>{player.name}</span>
+                                </li>
+                            ))}
+                        </ul>
+                    </section>
+                )}
 
                 <div className="panel-row panel-row-bottom">
                     <button
@@ -277,10 +276,23 @@ export default function Host({ onLeave }: Props) {
                             <ul className="player-list">
                                 {leaderboard.map((player, index) => (
                                     <li key={player.id} className="player-row">
-                                        <span>
+                                        <span className="leaderboard-player-name">
                                             {index + 1}. {player.name}
                                         </span>
-                                        <span>{player.score} pts</span>
+                                        <span className="leaderboard-player-meta">
+                                            <span>{player.score} pts · </span>
+                                            <span
+                                                className={
+                                                    player.alive
+                                                        ? "alive"
+                                                        : "dead"
+                                                }
+                                            >
+                                                {player.alive
+                                                    ? "Alive"
+                                                    : "Eliminated"}
+                                            </span>
+                                        </span>
                                     </li>
                                 ))}
                             </ul>

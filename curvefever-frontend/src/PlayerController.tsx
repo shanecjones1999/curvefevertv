@@ -52,18 +52,29 @@ export default function PlayerController({ onLeave }: Props) {
         left: false,
         right: false,
     });
-    const intervalRef = useRef<number | null>(null);
 
-    const startSendingInput = useCallback(() => {
-        if (intervalRef.current) return;
-        intervalRef.current = window.setInterval(() => {
-            const payload = {
-                turnLeft: pressRef.current.left,
-                turnRight: pressRef.current.right,
-            };
-            socket.emit("input", payload);
-        }, 50);
+    const emitInput = useCallback(() => {
+        socket.volatile.emit("input", {
+            turnLeft: pressRef.current.left,
+            turnRight: pressRef.current.right,
+        });
     }, []);
+
+    // Keep-alive: send current state periodically so the server stays in sync
+    // even if an event-based emit was dropped (volatile).
+    const intervalRef = useRef<number | null>(null);
+    useEffect(() => {
+        if (!joined) return;
+        intervalRef.current = window.setInterval(() => {
+            emitInput();
+        }, 100);
+        return () => {
+            if (intervalRef.current) {
+                window.clearInterval(intervalRef.current);
+                intervalRef.current = null;
+            }
+        };
+    }, [joined, emitInput]);
 
     const stopSendingInput = useCallback(() => {
         if (intervalRef.current) {
@@ -73,22 +84,28 @@ export default function PlayerController({ onLeave }: Props) {
     }, []);
 
     const handleLeftDown = useCallback(() => {
+        if (pressRef.current.left) return;
         pressRef.current.left = true;
-        startSendingInput();
-    }, [startSendingInput]);
+        emitInput();
+    }, [emitInput]);
 
     const handleLeftUp = useCallback(() => {
+        if (!pressRef.current.left) return;
         pressRef.current.left = false;
-    }, []);
+        emitInput();
+    }, [emitInput]);
 
     const handleRightDown = useCallback(() => {
+        if (pressRef.current.right) return;
         pressRef.current.right = true;
-        startSendingInput();
-    }, [startSendingInput]);
+        emitInput();
+    }, [emitInput]);
 
     const handleRightUp = useCallback(() => {
+        if (!pressRef.current.right) return;
         pressRef.current.right = false;
-    }, []);
+        emitInput();
+    }, [emitInput]);
 
     useEffect(() => {
         let rejoinTimeoutId: number | null = null;

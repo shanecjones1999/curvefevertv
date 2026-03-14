@@ -121,12 +121,65 @@ export default function Host({ onLeave }: Props) {
         });
         socket.on(
             "gameState",
-            (state?: { players?: Player[]; arena?: GameConfig }) => {
+            (state?: {
+                players?: Player[];
+                arena?: GameConfig;
+                trailFull?: boolean;
+            }) => {
                 if (state?.arena) {
                     applyGameConfig(state.arena);
                 }
                 if (state && Array.isArray(state.players)) {
-                    setPlayers(state.players);
+                    setPlayers((prev) => {
+                        // Check if the server sent a full trail sync or a delta
+                        const isFullSync = state.players!.some(
+                            (p: any) => p.trailFull,
+                        );
+                        if (isFullSync) {
+                            return state.players!;
+                        }
+                        // Merge delta trails onto existing player data
+                        return state.players!.map((incoming: any) => {
+                            const existing = prev.find(
+                                (p) => p.id === incoming.id,
+                            );
+                            if (!existing || !existing.trail)
+                                return incoming as Player;
+                            // Append delta trail segments
+                            const mergedTrail = [...existing.trail];
+                            const deltaTrail = incoming.trail ?? [];
+                            const continues = !!incoming.trailDeltaContinues;
+                            if (deltaTrail.length > 0) {
+                                let startIdx = 0;
+                                if (
+                                    continues &&
+                                    mergedTrail.length > 0 &&
+                                    deltaTrail[0]
+                                ) {
+                                    // First delta chunk extends the current segment
+                                    const lastSeg =
+                                        mergedTrail[mergedTrail.length - 1];
+                                    mergedTrail[mergedTrail.length - 1] = [
+                                        ...lastSeg,
+                                        ...deltaTrail[0],
+                                    ];
+                                    startIdx = 1;
+                                }
+                                // Remaining entries are brand-new segments (after gaps)
+                                for (
+                                    let i = startIdx;
+                                    i < deltaTrail.length;
+                                    i++
+                                ) {
+                                    mergedTrail.push(deltaTrail[i]);
+                                }
+                            }
+                            return {
+                                ...incoming,
+                                trail: mergedTrail,
+                            } as Player;
+                        });
+                    });
                 }
             },
         );

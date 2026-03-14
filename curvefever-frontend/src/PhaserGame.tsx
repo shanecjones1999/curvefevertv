@@ -71,8 +71,8 @@ class CurvefeverScene extends Phaser.Scene {
 
         this.players.forEach((p, i) => {
             // Calculate wrapped position
-            let x = ((p.x % width) + width) % width;
-            let y = ((p.y % height) + height) % height;
+            const x = ((p.x % width) + width) % width;
+            const y = ((p.y % height) + height) % height;
 
             // Draw trail
             let trailG = this.playerSprites.get(p.id + "_trail");

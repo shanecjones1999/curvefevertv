@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import Phaser from "phaser";
 import type { Player } from "./types";
+import { DEFAULT_GAME_HEIGHT, DEFAULT_GAME_WIDTH } from "./gameConfig";
 
 interface PhaserGameProps {
     players: Player[];
@@ -123,8 +124,8 @@ class CurvefeverScene extends Phaser.Scene {
 
 export default function PhaserGame({
     players,
-    width = 800,
-    height = 600,
+    width = DEFAULT_GAME_WIDTH,
+    height = DEFAULT_GAME_HEIGHT,
     className,
 }: PhaserGameProps) {
     const gameRef = useRef<HTMLDivElement>(null);

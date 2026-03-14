@@ -129,76 +129,105 @@ export default function Host({ onLeave }: Props) {
     }
 
     return (
-        <div style={{ padding: 16 }}>
-            <h2>Host</h2>
-            <button onClick={onLeave} style={{ marginBottom: 12 }}>
-                Change Role
-            </button>
-            <div>
-                <button onClick={handleCreateRoom} disabled={!!roomCode}>
-                    Create Room
-                </button>
-                <span style={{ marginLeft: 12 }}>
-                    {roomCode ? `Room: ${roomCode}` : "No room"}
-                </span>
-                {roomCode && (
+        <main className="page-shell">
+            <section className="panel host-panel">
+                <div className="panel-header">
+                    <div>
+                        <p className="eyebrow">Host Console</p>
+                        <h2 className="title title-small">
+                            Game Control Center
+                        </h2>
+                    </div>
                     <button
-                        style={{ marginLeft: 12 }}
-                        onClick={() => {
-                            if (
-                                window.confirm(
-                                    "End session and leave the room?",
-                                )
-                            ) {
-                                // tell server to delete the room
-                                socket.emit(
-                                    EVENTS.LEAVE_ROOM,
-                                    { roomCode },
-                                    () => {},
-                                );
-                                localStorage.removeItem(HOST_SESSION_KEY);
-                                setRoomCode(null);
-                                setPlayers([]);
-                                setPlaying(false);
-                                onLeave();
-                            }
-                        }}
+                        className="ui-button ui-button-ghost"
+                        onClick={onLeave}
                     >
-                        Leave room
+                        Change Role
                     </button>
-                )}
-            </div>
+                </div>
 
-            <div style={{ marginTop: 16 }}>
-                <h3>Players</h3>
-                <ul>
-                    {players.map((p) => (
-                        <li key={p.id}>
-                            {p.name} {p.alive ? "" : "(dead)"}
-                        </li>
-                    ))}
-                </ul>
-            </div>
+                <div className="panel-row">
+                    <button
+                        className="ui-button"
+                        onClick={handleCreateRoom}
+                        disabled={!!roomCode}
+                    >
+                        Create Room
+                    </button>
+                    <div className="status-pill">
+                        {roomCode ? `Room ${roomCode}` : "No active room"}
+                    </div>
+                    {roomCode && (
+                        <button
+                            className="ui-button ui-button-danger"
+                            onClick={() => {
+                                if (
+                                    window.confirm(
+                                        "End session and leave the room?",
+                                    )
+                                ) {
+                                    socket.emit(
+                                        EVENTS.LEAVE_ROOM,
+                                        { roomCode },
+                                        () => {},
+                                    );
+                                    localStorage.removeItem(HOST_SESSION_KEY);
+                                    setRoomCode(null);
+                                    setPlayers([]);
+                                    setPlaying(false);
+                                    onLeave();
+                                }
+                            }}
+                        >
+                            Leave Room
+                        </button>
+                    )}
+                </div>
 
-            <div style={{ marginTop: 16 }}>
-                <button
-                    onClick={handleStartGame}
-                    disabled={playing || players.length < 2}
-                >
-                    Start Game
-                </button>
-                {startError && (
-                    <div style={{ marginTop: 8, color: "#ff8080" }}>
-                        {startError}
+                <section className="panel inset-panel">
+                    <h3 className="section-title">
+                        Players ({players.length})
+                    </h3>
+                    <ul className="player-list">
+                        {players.length === 0 && (
+                            <li className="player-row player-empty">
+                                Waiting for players to join...
+                            </li>
+                        )}
+                        {players.map((p) => (
+                            <li key={p.id} className="player-row">
+                                <span>{p.name}</span>
+                                <span className={p.alive ? "alive" : "dead"}>
+                                    {p.alive ? "Ready" : "Eliminated"}
+                                </span>
+                            </li>
+                        ))}
+                    </ul>
+                </section>
+
+                <div className="panel-row panel-row-bottom">
+                    <button
+                        className="ui-button"
+                        onClick={handleStartGame}
+                        disabled={playing || players.length < 2}
+                    >
+                        {playing ? "Game Running" : "Start Game"}
+                    </button>
+                    {startError && (
+                        <div className="error-text">{startError}</div>
+                    )}
+                </div>
+
+                {playing && (
+                    <div className="game-stage">
+                        <PhaserGame
+                            players={players}
+                            width={1280}
+                            height={720}
+                        />
                     </div>
                 )}
-            </div>
-
-            {playing && (
-                <div style={{ marginTop: 24 }}>
-                    <PhaserGame players={players} width={800} height={600} />
-                </div>
-            )}
-        </div>
+            </section>
+        </main>
     );
 }

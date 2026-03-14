@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import styles from "./PlayerController.module.css";
 import socket from "./socket";
 import { EVENTS } from "./events";
 
 const PLAYER_SESSION_KEY = "curvefever:playerSession";
+const REJOIN_TIMEOUT_MS = 7000;
 
 type PlayerSession = {
     roomCode: string;
@@ -45,6 +46,7 @@ export default function PlayerController({ onLeave }: Props) {
     const [name, setName] = useState(storedSession?.name ?? "Player");
     const [joined, setJoined] = useState(false);
     const [isRejoining, setIsRejoining] = useState(!!storedSession);
+    const [rejoinError, setRejoinError] = useState<string | null>(null);
     const playerIdRef = useRef<string | null>(storedSession?.playerId ?? null);
     const pressRef = useRef<{ left: boolean; right: boolean }>({
         left: false,
@@ -52,7 +54,71 @@ export default function PlayerController({ onLeave }: Props) {
     });
     const intervalRef = useRef<number | null>(null);
 
+    const startSendingInput = useCallback(() => {
+        if (intervalRef.current) return;
+        intervalRef.current = window.setInterval(() => {
+            const payload = {
+                turnLeft: pressRef.current.left,
+                turnRight: pressRef.current.right,
+            };
+            socket.emit("input", payload);
+        }, 50);
+    }, []);
+
+    const stopSendingInput = useCallback(() => {
+        if (intervalRef.current) {
+            window.clearInterval(intervalRef.current);
+            intervalRef.current = null;
+        }
+    }, []);
+
+    const handleLeftDown = useCallback(() => {
+        pressRef.current.left = true;
+        startSendingInput();
+    }, [startSendingInput]);
+
+    const handleLeftUp = useCallback(() => {
+        pressRef.current.left = false;
+    }, []);
+
+    const handleRightDown = useCallback(() => {
+        pressRef.current.right = true;
+        startSendingInput();
+    }, [startSendingInput]);
+
+    const handleRightUp = useCallback(() => {
+        pressRef.current.right = false;
+    }, []);
+
     useEffect(() => {
+        let rejoinTimeoutId: number | null = null;
+        let rejoinResolved = false;
+
+        const clearRejoinTimeout = () => {
+            if (rejoinTimeoutId !== null) {
+                window.clearTimeout(rejoinTimeoutId);
+                rejoinTimeoutId = null;
+            }
+        };
+
+        const failRejoin = (message: string) => {
+            if (rejoinResolved) return;
+            rejoinResolved = true;
+            clearRejoinTimeout();
+            playerIdRef.current = null;
+            setJoined(false);
+            setIsRejoining(false);
+            setRejoinError(message);
+            localStorage.removeItem(PLAYER_SESSION_KEY);
+        };
+
+        const armRejoinTimeout = () => {
+            clearRejoinTimeout();
+            rejoinTimeoutId = window.setTimeout(() => {
+                failRejoin("Could not reconnect. Please rejoin the room.");
+            }, REJOIN_TIMEOUT_MS);
+        };
+
         const rejoinFromSession = () => {
             // Only attempt rejoin if we have a stored session with a valid player ID
             if (!storedSession || !playerIdRef.current) {
@@ -64,6 +130,8 @@ export default function PlayerController({ onLeave }: Props) {
                 }
                 return;
             }
+
+            armRejoinTimeout();
 
             console.log(
                 "[PlayerController] Attempting to rejoin room",
@@ -80,14 +148,18 @@ export default function PlayerController({ onLeave }: Props) {
                     name: storedSession.name,
                 },
                 (res: JoinRoomResponse) => {
+                    clearRejoinTimeout();
+                    if (rejoinResolved) return;
                     console.log("[PlayerController] rejoinRoom response:", res);
                     if (res?.ok && res.player?.id) {
                         console.log(
                             "[PlayerController] Successfully rejoined room",
                         );
+                        rejoinResolved = true;
                         playerIdRef.current = res.player.id;
                         setJoined(true);
                         setIsRejoining(false);
+                        setRejoinError(null);
                         localStorage.setItem(
                             PLAYER_SESSION_KEY,
                             JSON.stringify({
@@ -101,17 +173,23 @@ export default function PlayerController({ onLeave }: Props) {
                             "[PlayerController] Rejoin failed:",
                             res?.error ?? "Unknown error",
                         );
-                        playerIdRef.current = null;
-                        setJoined(false);
-                        setIsRejoining(false);
-                        localStorage.removeItem(PLAYER_SESSION_KEY);
+                        failRejoin(
+                            res?.error ??
+                                "Could not reconnect. Please rejoin the room.",
+                        );
                     }
                 },
             );
         };
 
         // Set up listener for socket connection
+        const handleDisconnect = () => {
+            if (!rejoinResolved) {
+                armRejoinTimeout();
+            }
+        };
         socket.on("connect", rejoinFromSession);
+        socket.on("disconnect", handleDisconnect);
 
         // Try to rejoin immediately if socket is already connected
         if (socket.connected) {
@@ -120,6 +198,7 @@ export default function PlayerController({ onLeave }: Props) {
             );
             rejoinFromSession();
         } else {
+            armRejoinTimeout();
             console.log(
                 "[PlayerController] Socket not connected yet, waiting for connection event",
             );
@@ -137,11 +216,13 @@ export default function PlayerController({ onLeave }: Props) {
         socket.on(EVENTS.ROOM_CLOSED, handleRoomClosed);
 
         return () => {
-            if (intervalRef.current) window.clearInterval(intervalRef.current);
+            clearRejoinTimeout();
+            stopSendingInput();
             socket.off("connect", rejoinFromSession);
+            socket.off("disconnect", handleDisconnect);
             socket.off(EVENTS.ROOM_CLOSED, handleRoomClosed);
         };
-    }, [storedSession, onLeave]);
+    }, [storedSession, onLeave, stopSendingInput]);
 
     useEffect(() => {
         if (!joined) return;
@@ -179,7 +260,7 @@ export default function PlayerController({ onLeave }: Props) {
             window.removeEventListener("keyup", handleKeyUp);
             socket.off(EVENTS.ROUND_RESTART, handleRoundRestart);
         };
-    }, [joined]);
+    }, [joined, handleLeftDown, handleLeftUp, handleRightDown, handleRightUp]);
 
     function handleJoin() {
         socket.emit(
@@ -189,6 +270,7 @@ export default function PlayerController({ onLeave }: Props) {
                 if (res?.ok && res.player?.id) {
                     playerIdRef.current = res.player.id;
                     setJoined(true);
+                    setRejoinError(null);
                     localStorage.setItem(
                         PLAYER_SESSION_KEY,
                         JSON.stringify({
@@ -200,146 +282,144 @@ export default function PlayerController({ onLeave }: Props) {
                 } else {
                     playerIdRef.current = null;
                     setJoined(false);
+                    setRejoinError(res?.error ?? "Unable to join room.");
                     localStorage.removeItem(PLAYER_SESSION_KEY);
                 }
             },
         );
     }
 
-    function startSendingInput() {
-        if (intervalRef.current) return;
-        intervalRef.current = window.setInterval(() => {
-            const payload = {
-                turnLeft: pressRef.current.left,
-                turnRight: pressRef.current.right,
-            };
-            socket.emit("input", payload);
-        }, 50);
-    }
-
-    function stopSendingInput() {
-        if (intervalRef.current) {
-            window.clearInterval(intervalRef.current);
-            intervalRef.current = null;
-        }
-    }
-
-    function handleLeftDown() {
-        pressRef.current.left = true;
-        startSendingInput();
-    }
-
-    function handleLeftUp() {
-        pressRef.current.left = false;
-    }
-
-    function handleRightDown() {
-        pressRef.current.right = true;
-        startSendingInput();
-    }
-
-    function handleRightUp() {
-        pressRef.current.right = false;
-    }
-
     // Show a loading state while attempting to rejoin
     if (isRejoining) {
         return (
-            <div style={{ padding: 16 }}>
-                <h2>Player Controller</h2>
-                <p>Reconnecting to room...</p>
-            </div>
+            <main className="page-shell">
+                <section className="panel controller-panel">
+                    <p className="eyebrow">Controller</p>
+                    <h2 className="title title-small">Reconnecting...</h2>
+                    <p className="subtitle">
+                        Restoring your previous game session.
+                    </p>
+                </section>
+            </main>
         );
     }
 
     return (
-        <div style={{ padding: 16 }}>
-            <h2>Player Controller</h2>
-            {!joined ? (
-                <div>
+        <main className="page-shell">
+            <section className="panel controller-panel">
+                <div className="panel-header">
                     <div>
-                        <label>Room Code: </label>
-                        <input
-                            value={roomCode}
-                            onChange={(e) =>
-                                setRoomCode(e.target.value.toUpperCase())
-                            }
-                        />
+                        <p className="eyebrow">Mobile Console</p>
+                        <h2 className="title title-small">Player Controller</h2>
                     </div>
-                    <div>
-                        <label>Name: </label>
-                        <input
-                            value={name}
-                            onChange={(e) => setName(e.target.value)}
-                        />
-                    </div>
-                    <button className={styles.button} onClick={handleJoin}>
-                        Join
-                    </button>
-                    <button className={styles.button} onClick={onLeave}>
-                        Back
+                    <button
+                        className="ui-button ui-button-ghost"
+                        onClick={onLeave}
+                    >
+                        Change Role
                     </button>
                 </div>
-            ) : (
-                <div>
-                    <p>
-                        Joined room {roomCode} as {name}
-                    </p>
-                    <div className={styles["button-row"]}>
-                        <button
-                            className={styles.button}
-                            onMouseDown={handleLeftDown}
-                            onMouseUp={handleLeftUp}
-                            onTouchStart={handleLeftDown}
-                            onTouchEnd={handleLeftUp}
-                        >
-                            Turn Left
-                        </button>
-                        <button
-                            className={styles.button}
-                            onMouseDown={handleRightDown}
-                            onMouseUp={handleRightUp}
-                            onTouchStart={handleRightDown}
-                            onTouchEnd={handleRightUp}
-                        >
-                            Turn Right
-                        </button>
-                    </div>
-                    <div style={{ marginTop: 12 }}>
-                        <button
-                            className={styles.button}
-                            onClick={() => {
-                                if (
-                                    window.confirm(
-                                        "Are you sure you want to leave the game?",
-                                    )
-                                ) {
-                                    // clean up and notify server
-                                    pressRef.current.left = false;
-                                    pressRef.current.right = false;
-                                    stopSendingInput();
-                                    if (playerIdRef.current && roomCode) {
-                                        socket.emit(
-                                            EVENTS.LEAVE_ROOM,
-                                            {
-                                                roomCode,
-                                                playerId: playerIdRef.current,
-                                            },
-                                            () => {},
-                                        );
-                                    }
-                                    playerIdRef.current = null;
-                                    setJoined(false);
-                                    localStorage.removeItem(PLAYER_SESSION_KEY);
-                                    onLeave();
+
+                {!joined ? (
+                    <div className="form-grid">
+                        <div className="field-group">
+                            <label htmlFor="room-code">Room Code</label>
+                            <input
+                                id="room-code"
+                                className="ui-input"
+                                value={roomCode}
+                                onChange={(e) =>
+                                    setRoomCode(e.target.value.toUpperCase())
                                 }
-                            }}
-                        >
-                            Leave game
-                        </button>
+                                maxLength={6}
+                                placeholder="ABCD12"
+                            />
+                        </div>
+                        <div className="field-group">
+                            <label htmlFor="player-name">Name</label>
+                            <input
+                                id="player-name"
+                                className="ui-input"
+                                value={name}
+                                onChange={(e) => setName(e.target.value)}
+                                maxLength={16}
+                                placeholder="Player"
+                            />
+                        </div>
+
+                        <div className="panel-row">
+                            <button className="ui-button" onClick={handleJoin}>
+                                Join Room
+                            </button>
+                        </div>
+                        {rejoinError && (
+                            <div className="error-text">{rejoinError}</div>
+                        )}
                     </div>
-                </div>
-            )}
-        </div>
+                ) : (
+                    <div className={styles.controllerLive}>
+                        <p className="status-pill controller-status-pill">
+                            Joined room {roomCode} as {name}
+                        </p>
+                        <div className={styles["button-row"]}>
+                            <button
+                                className={styles.button}
+                                onMouseDown={handleLeftDown}
+                                onMouseUp={handleLeftUp}
+                                onTouchStart={handleLeftDown}
+                                onTouchEnd={handleLeftUp}
+                            >
+                                Turn Left
+                            </button>
+                            <button
+                                className={styles.button}
+                                onMouseDown={handleRightDown}
+                                onMouseUp={handleRightUp}
+                                onTouchStart={handleRightDown}
+                                onTouchEnd={handleRightUp}
+                            >
+                                Turn Right
+                            </button>
+                        </div>
+                        <div className={styles.leaveWrap}>
+                            <button
+                                className="ui-button ui-button-danger"
+                                onClick={() => {
+                                    if (
+                                        window.confirm(
+                                            "Are you sure you want to leave the game?",
+                                        )
+                                    ) {
+                                        // clean up and notify server
+                                        pressRef.current.left = false;
+                                        pressRef.current.right = false;
+                                        stopSendingInput();
+                                        if (playerIdRef.current && roomCode) {
+                                            socket.emit(
+                                                EVENTS.LEAVE_ROOM,
+                                                {
+                                                    roomCode,
+                                                    playerId:
+                                                        playerIdRef.current,
+                                                },
+                                                () => {},
+                                            );
+                                        }
+                                        playerIdRef.current = null;
+                                        setJoined(false);
+                                        localStorage.removeItem(
+                                            PLAYER_SESSION_KEY,
+                                        );
+                                        onLeave();
+                                    }
+                                }}
+                            >
+                                Leave Game
+                            </button>
+                        </div>
+                    </div>
+                )}
+            </section>
+        </main>
     );
 }

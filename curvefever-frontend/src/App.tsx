@@ -26,15 +26,29 @@ function App() {
     if (role === "phone") return <PlayerController onLeave={clearRole} />;
 
     return (
-        <div style={{ padding: 24 }}>
-            <h1>Curvefever — Select Role</h1>
-            <div style={{ display: "flex", gap: 12 }}>
-                <button onClick={() => selectRole("host")}>Host (TV)</button>
-                <button onClick={() => selectRole("phone")}>
-                    Phone (Controller)
-                </button>
-            </div>
-        </div>
+        <main className="page-shell">
+            <section className="panel role-panel">
+                <p className="eyebrow">Curvefever TV</p>
+                <h1 className="title">Select Your Role</h1>
+                <p className="subtitle">
+                    Host on the big screen or use your phone as a controller.
+                </p>
+                <div className="role-grid">
+                    <button
+                        className="ui-button"
+                        onClick={() => selectRole("host")}
+                    >
+                        Host Display
+                    </button>
+                    <button
+                        className="ui-button ui-button-secondary"
+                        onClick={() => selectRole("phone")}
+                    >
+                        Phone Controller
+                    </button>
+                </div>
+            </section>
+        </main>
     );
 }
 

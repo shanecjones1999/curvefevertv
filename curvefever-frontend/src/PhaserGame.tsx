@@ -6,6 +6,7 @@ interface PhaserGameProps {
     players: Player[];
     width?: number;
     height?: number;
+    className?: string;
 }
 
 const PLAYER_COLORS = [
@@ -124,6 +125,7 @@ export default function PhaserGame({
     players,
     width = 800,
     height = 600,
+    className,
 }: PhaserGameProps) {
     const gameRef = useRef<HTMLDivElement>(null);
     const phaserRef = useRef<Phaser.Game | null>(null);
@@ -134,7 +136,6 @@ export default function PhaserGame({
         if (phaserRef.current) return;
 
         const scene = new CurvefeverScene();
-        scene.players = Array.isArray(players) ? players : [];
         sceneRef.current = scene;
         const config: Phaser.Types.Core.GameConfig = {
             type: Phaser.AUTO,
@@ -144,13 +145,19 @@ export default function PhaserGame({
             scene,
             physics: { default: "arcade" },
             backgroundColor: "#222",
+            scale: {
+                mode: Phaser.Scale.FIT,
+                autoCenter: Phaser.Scale.CENTER_BOTH,
+                width,
+                height,
+            },
         };
         phaserRef.current = new Phaser.Game(config);
         return () => {
             phaserRef.current?.destroy(true);
             phaserRef.current = null;
         };
-    }, []);
+    }, [width, height]);
 
     useEffect(() => {
         // Only update players if scene and playerSprites are ready
@@ -159,5 +166,9 @@ export default function PhaserGame({
         }
     }, [players]);
 
-    return <div ref={gameRef} style={{ width, height }} />;
+    return (
+        <div className={`phaser-shell ${className ?? ""}`.trim()}>
+            <div ref={gameRef} className="phaser-host" />
+        </div>
+    );
 }

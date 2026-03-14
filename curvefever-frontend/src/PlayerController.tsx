@@ -4,6 +4,7 @@ import socket from "./socket";
 import { EVENTS } from "./events";
 
 const PLAYER_SESSION_KEY = "curvefever:playerSession";
+const REJOIN_TIMEOUT_MS = 7000;
 
 type PlayerSession = {
     roomCode: string;
@@ -45,6 +46,7 @@ export default function PlayerController({ onLeave }: Props) {
     const [name, setName] = useState(storedSession?.name ?? "Player");
     const [joined, setJoined] = useState(false);
     const [isRejoining, setIsRejoining] = useState(!!storedSession);
+    const [rejoinError, setRejoinError] = useState<string | null>(null);
     const playerIdRef = useRef<string | null>(storedSession?.playerId ?? null);
     const pressRef = useRef<{ left: boolean; right: boolean }>({
         left: false,
@@ -89,6 +91,34 @@ export default function PlayerController({ onLeave }: Props) {
     }, []);
 
     useEffect(() => {
+        let rejoinTimeoutId: number | null = null;
+        let rejoinResolved = false;
+
+        const clearRejoinTimeout = () => {
+            if (rejoinTimeoutId !== null) {
+                window.clearTimeout(rejoinTimeoutId);
+                rejoinTimeoutId = null;
+            }
+        };
+
+        const failRejoin = (message: string) => {
+            if (rejoinResolved) return;
+            rejoinResolved = true;
+            clearRejoinTimeout();
+            playerIdRef.current = null;
+            setJoined(false);
+            setIsRejoining(false);
+            setRejoinError(message);
+            localStorage.removeItem(PLAYER_SESSION_KEY);
+        };
+
+        const armRejoinTimeout = () => {
+            clearRejoinTimeout();
+            rejoinTimeoutId = window.setTimeout(() => {
+                failRejoin("Could not reconnect. Please rejoin the room.");
+            }, REJOIN_TIMEOUT_MS);
+        };
+
         const rejoinFromSession = () => {
             // Only attempt rejoin if we have a stored session with a valid player ID
             if (!storedSession || !playerIdRef.current) {
@@ -100,6 +130,8 @@ export default function PlayerController({ onLeave }: Props) {
                 }
                 return;
             }
+
+            armRejoinTimeout();
 
             console.log(
                 "[PlayerController] Attempting to rejoin room",
@@ -116,14 +148,18 @@ export default function PlayerController({ onLeave }: Props) {
                     name: storedSession.name,
                 },
                 (res: JoinRoomResponse) => {
+                    clearRejoinTimeout();
+                    if (rejoinResolved) return;
                     console.log("[PlayerController] rejoinRoom response:", res);
                     if (res?.ok && res.player?.id) {
                         console.log(
                             "[PlayerController] Successfully rejoined room",
                         );
+                        rejoinResolved = true;
                         playerIdRef.current = res.player.id;
                         setJoined(true);
                         setIsRejoining(false);
+                        setRejoinError(null);
                         localStorage.setItem(
                             PLAYER_SESSION_KEY,
                             JSON.stringify({
@@ -137,17 +173,23 @@ export default function PlayerController({ onLeave }: Props) {
                             "[PlayerController] Rejoin failed:",
                             res?.error ?? "Unknown error",
                         );
-                        playerIdRef.current = null;
-                        setJoined(false);
-                        setIsRejoining(false);
-                        localStorage.removeItem(PLAYER_SESSION_KEY);
+                        failRejoin(
+                            res?.error ??
+                                "Could not reconnect. Please rejoin the room.",
+                        );
                     }
                 },
             );
         };
 
         // Set up listener for socket connection
+        const handleDisconnect = () => {
+            if (!rejoinResolved) {
+                armRejoinTimeout();
+            }
+        };
         socket.on("connect", rejoinFromSession);
+        socket.on("disconnect", handleDisconnect);
 
         // Try to rejoin immediately if socket is already connected
         if (socket.connected) {
@@ -156,6 +198,7 @@ export default function PlayerController({ onLeave }: Props) {
             );
             rejoinFromSession();
         } else {
+            armRejoinTimeout();
             console.log(
                 "[PlayerController] Socket not connected yet, waiting for connection event",
             );
@@ -173,8 +216,10 @@ export default function PlayerController({ onLeave }: Props) {
         socket.on(EVENTS.ROOM_CLOSED, handleRoomClosed);
 
         return () => {
+            clearRejoinTimeout();
             stopSendingInput();
             socket.off("connect", rejoinFromSession);
+            socket.off("disconnect", handleDisconnect);
             socket.off(EVENTS.ROOM_CLOSED, handleRoomClosed);
         };
     }, [storedSession, onLeave, stopSendingInput]);
@@ -225,6 +270,7 @@ export default function PlayerController({ onLeave }: Props) {
                 if (res?.ok && res.player?.id) {
                     playerIdRef.current = res.player.id;
                     setJoined(true);
+                    setRejoinError(null);
                     localStorage.setItem(
                         PLAYER_SESSION_KEY,
                         JSON.stringify({
@@ -236,6 +282,7 @@ export default function PlayerController({ onLeave }: Props) {
                 } else {
                     playerIdRef.current = null;
                     setJoined(false);
+                    setRejoinError(res?.error ?? "Unable to join room.");
                     localStorage.removeItem(PLAYER_SESSION_KEY);
                 }
             },
@@ -305,6 +352,9 @@ export default function PlayerController({ onLeave }: Props) {
                                 Join Room
                             </button>
                         </div>
+                        {rejoinError && (
+                            <div className="error-text">{rejoinError}</div>
+                        )}
                     </div>
                 ) : (
                     <div className={styles.controllerLive}>

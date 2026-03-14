@@ -1,6 +1,7 @@
 export interface Player {
     id: string;
     name: string;
+    score: number;
     socketId: string | null;
     color?: string;
     alive: boolean;
@@ -30,6 +31,10 @@ export interface Room {
 
 export interface GameState {
     tick: number;
+    arena: {
+        width: number;
+        height: number;
+    };
     players: Player[];
 }
 

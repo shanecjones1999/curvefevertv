@@ -213,6 +213,22 @@
   margin-top: 0.8rem;
 }
 
+.host-game-layout {
+  display: grid;
+  grid-template-columns: minmax(220px, 280px) 1fr;
+  gap: 0.9rem;
+  align-items: start;
+}
+
+.leaderboard-panel {
+  height: 100%;
+}
+
+.leaderboard-panel .player-row span:last-child {
+  color: #9ed0ff;
+  font-weight: 700;
+}
+
 .phaser-shell {
   width: 100%;
   max-width: min(100%, 1100px);
@@ -255,5 +271,9 @@
   .controller-status-pill {
     width: 100%;
     text-align: center;
+  }
+
+  .host-game-layout {
+    grid-template-columns: 1fr;
   }
 }

@@ -13,6 +13,7 @@ import {
 } from "./rooms";
 import { startGameLoop, stopGameLoop } from "./gameLoop";
 import { Player, InputPayload } from "./types";
+import { GAME_HEIGHT, GAME_WIDTH } from "./config";
 
 dotenv.config();
 
@@ -29,6 +30,10 @@ function emitLobbyUpdate(roomCode: string) {
     if (!room) return;
     io.to(room.code).emit("lobbyUpdate", {
         players: Array.from(room.players.values()),
+        gameConfig: {
+            width: GAME_WIDTH,
+            height: GAME_HEIGHT,
+        },
     });
 }
 
@@ -58,7 +63,13 @@ io.on("connection", (socket) => {
         console.log("[DEBUG] Room created:", room.code);
         // join socket to room
         socket.join(room.code);
-        cb?.({ roomCode: room.code });
+        cb?.({
+            roomCode: room.code,
+            gameConfig: {
+                width: GAME_WIDTH,
+                height: GAME_HEIGHT,
+            },
+        });
     });
 
     socket.on("reconnectHost", (data: { roomCode: string }, cb) => {
@@ -75,6 +86,10 @@ io.on("connection", (socket) => {
             roomCode: room.code,
             players: Array.from(room.players.values()),
             state: room.state,
+            gameConfig: {
+                width: GAME_WIDTH,
+                height: GAME_HEIGHT,
+            },
         });
     });
 
@@ -86,11 +101,12 @@ io.on("connection", (socket) => {
         const player: Player = {
             id: crypto.randomUUID(),
             name: data.name,
+            score: 0,
             socketId: socket.id,
             color: undefined,
             alive: true,
-            x: Math.random() * 800,
-            y: Math.random() * 600,
+            x: Math.random() * GAME_WIDTH,
+            y: Math.random() * GAME_HEIGHT,
             direction: Math.random() * Math.PI * 2,
             speed: 2.5,
             trail: [],
@@ -162,6 +178,10 @@ io.on("connection", (socket) => {
             ok: true,
             players: Array.from(room.players.values()),
             state: room.state,
+            gameConfig: {
+                width: GAME_WIDTH,
+                height: GAME_HEIGHT,
+            },
         });
     });
 
@@ -190,8 +210,19 @@ io.on("connection", (socket) => {
 
         room.state = "playing";
         startGameLoop(room.code, io);
-        io.to(room.code).emit("startGame");
-        cb?.({ ok: true });
+        io.to(room.code).emit("startGame", {
+            gameConfig: {
+                width: GAME_WIDTH,
+                height: GAME_HEIGHT,
+            },
+        });
+        cb?.({
+            ok: true,
+            gameConfig: {
+                width: GAME_WIDTH,
+                height: GAME_HEIGHT,
+            },
+        });
     });
 
     // allow clients to explicitly leave a room (player or host)

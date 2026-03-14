@@ -3,6 +3,7 @@ import socket from "./socket";
 import { EVENTS } from "./events";
 import type { Player } from "./types";
 import PhaserGame from "./PhaserGame";
+import { DEFAULT_GAME_HEIGHT, DEFAULT_GAME_WIDTH } from "./gameConfig";
 
 const HOST_SESSION_KEY = "curvefever:hostSession";
 
@@ -11,12 +12,19 @@ type ReconnectHostResponse = {
     roomCode?: string;
     players?: Player[];
     state?: "lobby" | "playing" | "finished";
+    gameConfig?: GameConfig;
     error?: string;
 };
 
 type StartGameResponse = {
     ok: boolean;
+    gameConfig?: GameConfig;
     error?: string;
+};
+
+type GameConfig = {
+    width: number;
+    height: number;
 };
 
 type Props = { onLeave: () => void };
@@ -35,7 +43,27 @@ export default function Host({ onLeave }: Props) {
     const [players, setPlayers] = useState<Player[]>([]);
     const [playing, setPlaying] = useState(false);
     const [startError, setStartError] = useState<string | null>(null);
+    const [gameConfig, setGameConfig] = useState<GameConfig>({
+        width: DEFAULT_GAME_WIDTH,
+        height: DEFAULT_GAME_HEIGHT,
+    });
+
+    const leaderboard = [...players].sort(
+        (firstPlayer, secondPlayer) =>
+            secondPlayer.score - firstPlayer.score ||
+            firstPlayer.name.localeCompare(secondPlayer.name),
+    );
+
     useEffect(() => {
+        const applyGameConfig = (incoming?: GameConfig) => {
+            if (!incoming) return;
+            if (incoming.width <= 0 || incoming.height <= 0) return;
+            setGameConfig({
+                width: incoming.width,
+                height: incoming.height,
+            });
+        };
+
         const reconnectFromSession = () => {
             const rawSession = localStorage.getItem(HOST_SESSION_KEY);
             if (!rawSession) return;
@@ -55,6 +83,7 @@ export default function Host({ onLeave }: Props) {
                             if (Array.isArray(res.players)) {
                                 setPlayers(res.players);
                             }
+                            applyGameConfig(res.gameConfig);
                             setPlaying(res.state === "playing");
                         } else {
                             localStorage.removeItem(HOST_SESSION_KEY);
@@ -78,16 +107,29 @@ export default function Host({ onLeave }: Props) {
             setPlayers((p) => [...p, data.player]);
         });
 
-        socket.on("lobbyUpdate", (data: { players: Player[] }) => {
-            setPlayers(data.players);
-        });
+        socket.on(
+            "lobbyUpdate",
+            (data: { players: Player[]; gameConfig?: GameConfig }) => {
+                setPlayers(data.players);
+                applyGameConfig(data.gameConfig);
+            },
+        );
 
-        socket.on("startGame", () => setPlaying(true));
-        socket.on("gameState", (state) => {
-            // host should render the game state; for now we replace player list
-            if (state && Array.isArray(state.players))
-                setPlayers(state.players);
+        socket.on("startGame", (data?: { gameConfig?: GameConfig }) => {
+            applyGameConfig(data?.gameConfig);
+            setPlaying(true);
         });
+        socket.on(
+            "gameState",
+            (state?: { players?: Player[]; arena?: GameConfig }) => {
+                if (state?.arena) {
+                    applyGameConfig(state.arena);
+                }
+                if (state && Array.isArray(state.players)) {
+                    setPlayers(state.players);
+                }
+            },
+        );
         socket.on(EVENTS.ROUND_RESTART, () => {
             // Silently restart, game state updates automatically
         });
@@ -106,14 +148,21 @@ export default function Host({ onLeave }: Props) {
     }, []);
 
     function handleCreateRoom() {
-        socket.emit("createRoom", null, (res: { roomCode: string }) => {
-            setRoomCode(res.roomCode);
-            setStartError(null);
-            localStorage.setItem(
-                HOST_SESSION_KEY,
-                JSON.stringify({ roomCode: res.roomCode }),
-            );
-        });
+        socket.emit(
+            "createRoom",
+            null,
+            (res: { roomCode: string; gameConfig?: GameConfig }) => {
+                setRoomCode(res.roomCode);
+                if (res.gameConfig) {
+                    setGameConfig(res.gameConfig);
+                }
+                setStartError(null);
+                localStorage.setItem(
+                    HOST_SESSION_KEY,
+                    JSON.stringify({ roomCode: res.roomCode }),
+                );
+            },
+        );
     }
 
     function handleStartGame() {
@@ -121,6 +170,9 @@ export default function Host({ onLeave }: Props) {
         socket.emit("startGame", { roomCode }, (res: StartGameResponse) => {
             if (res?.ok) {
                 setStartError(null);
+                if (res.gameConfig) {
+                    setGameConfig(res.gameConfig);
+                }
                 setPlaying(true);
             } else {
                 setStartError(res?.error ?? "Unable to start game");
@@ -219,12 +271,28 @@ export default function Host({ onLeave }: Props) {
                 </div>
 
                 {playing && (
-                    <div className="game-stage">
-                        <PhaserGame
-                            players={players}
-                            width={1280}
-                            height={720}
-                        />
+                    <div className="host-game-layout">
+                        <section className="panel inset-panel leaderboard-panel">
+                            <h3 className="section-title">Leaderboard</h3>
+                            <ul className="player-list">
+                                {leaderboard.map((player, index) => (
+                                    <li key={player.id} className="player-row">
+                                        <span>
+                                            {index + 1}. {player.name}
+                                        </span>
+                                        <span>{player.score} pts</span>
+                                    </li>
+                                ))}
+                            </ul>
+                        </section>
+
+                        <div className="game-stage">
+                            <PhaserGame
+                                players={players}
+                                width={gameConfig.width}
+                                height={gameConfig.height}
+                            />
+                        </div>
                     </div>
                 )}
             </section>

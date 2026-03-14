@@ -1,6 +1,7 @@
 import { Server } from "socket.io";
 import { getRoom } from "./rooms";
 import { GameState, Player } from "./types";
+import { GAME_HEIGHT, GAME_WIDTH } from "./config";
 
 const TICK_RATE = 60;
 const MS_PER_TICK = 1000 / TICK_RATE;
@@ -181,6 +182,7 @@ function buildGameState(roomCode: string): GameState | null {
     const players = Array.from(room.players.values()).map((p) => ({
         id: p.id,
         name: p.name,
+        score: p.score ?? 0,
         socketId: p.socketId,
         color: p.color,
         alive: p.alive,
@@ -196,7 +198,14 @@ function buildGameState(roomCode: string): GameState | null {
         inGap: p.inGap,
         gapStartDistance: p.gapStartDistance,
     }));
-    return { tick: Date.now(), players };
+    return {
+        tick: Date.now(),
+        arena: {
+            width: GAME_WIDTH,
+            height: GAME_HEIGHT,
+        },
+        players,
+    };
 }
 
 function distanceToLineSegment(
@@ -223,29 +232,35 @@ function distanceToLineSegment(
     return Math.sqrt(distX * distX + distY * distY);
 }
 
-function checkCollisions(
+function detectCollisions(
     players: Player[],
     skipGraceTickCount: number,
-): boolean {
+): Set<string> {
     // Skip collision check during grace period after round restart
-    if (skipGraceTickCount > 0) return false;
+    if (skipGraceTickCount > 0) return new Set();
 
     const collisionRadius = 5;
+    const deadPlayers = new Set<string>();
 
-    for (let i = 0; i < players.length; i++) {
-        const p = players[i];
+    for (let playerIndex = 0; playerIndex < players.length; playerIndex++) {
+        const p = players[playerIndex];
         if (!p.alive) continue;
 
         // Check player-to-player collision
-        for (let j = i + 1; j < players.length; j++) {
-            const other = players[j];
+        for (
+            let otherPlayerIndex = playerIndex + 1;
+            otherPlayerIndex < players.length;
+            otherPlayerIndex++
+        ) {
+            const other = players[otherPlayerIndex];
             if (!other.alive) continue;
             const dx = p.x - other.x;
             const dy = p.y - other.y;
             const distSq = dx * dx + dy * dy;
             // Players collide if they're within 10px of each other
             if (distSq < 100) {
-                return true;
+                deadPlayers.add(p.id);
+                deadPlayers.add(other.id);
             }
         }
 
@@ -258,9 +273,13 @@ function checkCollisions(
                 const segment = otherPlayer.trail[segIdx];
                 if (!Array.isArray(segment) || segment.length === 0) continue;
 
-                for (let i = 0; i < segment.length - 1; i++) {
-                    const pt1 = segment[i];
-                    const pt2 = segment[i + 1];
+                for (
+                    let segmentPointIndex = 0;
+                    segmentPointIndex < segment.length - 1;
+                    segmentPointIndex++
+                ) {
+                    const pt1 = segment[segmentPointIndex];
+                    const pt2 = segment[segmentPointIndex + 1];
                     if (!pt1 || !pt2) continue;
 
                     const dist = distanceToLineSegment(
@@ -272,21 +291,38 @@ function checkCollisions(
                         pt2.y,
                     );
                     if (dist < collisionRadius) {
-                        return true;
+                        deadPlayers.add(p.id);
+                        break;
                     }
                 }
+
+                if (deadPlayers.has(p.id)) break;
             }
+
+            if (deadPlayers.has(p.id)) break;
         }
     }
-    return false;
+
+    return deadPlayers;
+}
+
+function restartRound(players: Player[]) {
+    for (const p of players) {
+        p.alive = true;
+        p.x = Math.random() * GAME_WIDTH;
+        p.y = Math.random() * GAME_HEIGHT;
+        p.direction = Math.random() * Math.PI * 2;
+        p.trail = [[]];
+        p.distanceSinceLastGap = 0;
+        p.gapInterval = 200 + Math.random() * 200;
+        p.gapLength = 40 + Math.random() * 40;
+        p.inGap = false;
+    }
 }
 
 export function startGameLoop(roomCode: string, io: Server) {
     if (runningLoops.has(roomCode)) return;
 
-    // Assume 800x600 for now; could be made dynamic
-    const width = 800;
-    const height = 600;
     restartGraceMap.set(roomCode, 0);
 
     const tick = () => {
@@ -295,7 +331,7 @@ export function startGameLoop(roomCode: string, io: Server) {
 
         for (const p of room.players.values()) {
             if (!p.alive) continue;
-            movePlayer(p, width, height);
+            movePlayer(p, GAME_WIDTH, GAME_HEIGHT);
         }
 
         // Decrement grace period counter
@@ -305,22 +341,38 @@ export function startGameLoop(roomCode: string, io: Server) {
             restartGraceMap.set(roomCode, graceTicksRemaining);
         }
 
-        // Check for collisions and restart round if detected
+        // Check for collisions and determine round winner
         const players = Array.from(room.players.values());
-        if (checkCollisions(players, graceTicksRemaining)) {
+        const deadPlayerIds = detectCollisions(players, graceTicksRemaining);
+        if (deadPlayerIds.size > 0) {
             for (const p of players) {
-                p.alive = true;
-                p.x = Math.random() * width;
-                p.y = Math.random() * height;
-                p.direction = Math.random() * Math.PI * 2;
-                p.trail = [[]];
-                p.distanceSinceLastGap = 0;
-                p.gapInterval = 200 + Math.random() * 200;
-                p.gapLength = 40 + Math.random() * 40;
-                p.inGap = false;
+                if (deadPlayerIds.has(p.id)) {
+                    p.alive = false;
+                }
             }
-            restartGraceMap.set(roomCode, restartGracePeriod);
-            io.to(roomCode).emit("roundRestart");
+
+            const alivePlayers = players.filter((player) => player.alive);
+            if (alivePlayers.length <= 1 && players.length >= 2) {
+                const winner = alivePlayers[0] ?? null;
+                if (winner) {
+                    winner.score = (winner.score ?? 0) + 1;
+                }
+
+                io.to(roomCode).emit("roundOver", {
+                    winnerId: winner?.id ?? null,
+                    leaderboard: players
+                        .map((player) => ({
+                            id: player.id,
+                            name: player.name,
+                            score: player.score ?? 0,
+                        }))
+                        .sort((a, b) => b.score - a.score),
+                });
+
+                restartRound(players);
+                restartGraceMap.set(roomCode, restartGracePeriod);
+                io.to(roomCode).emit("roundRestart");
+            }
         }
 
         const state = buildGameState(roomCode);

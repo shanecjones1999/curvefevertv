@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import socket from "./socket";
 import { EVENTS } from "./events";
 import type { Player } from "./types";
@@ -29,6 +29,33 @@ type GameConfig = {
 
 type Props = { onLeave: () => void };
 
+const PLAYER_COLORS = [
+    "#e6194b",
+    "#3cb44b",
+    "#ffe119",
+    "#4363d8",
+    "#f58231",
+    "#911eb4",
+    "#46f0f0",
+    "#f032e6",
+    "#bcf60c",
+    "#fabebe",
+    "#008080",
+    "#e6beff",
+    "#9a6324",
+    "#fffac8",
+    "#800000",
+    "#aaffc3",
+    "#808000",
+    "#ffd8b1",
+    "#000075",
+    "#808080",
+    "#ffffff",
+    "#000000",
+];
+
+const DISCONNECTED_DOT_COLOR = "#8f98ad";
+
 export default function Host({ onLeave }: Props) {
     const [roomCode, setRoomCode] = useState<string | null>(() => {
         const raw = localStorage.getItem(HOST_SESSION_KEY);
@@ -49,6 +76,38 @@ export default function Host({ onLeave }: Props) {
         height: DEFAULT_GAME_HEIGHT,
     });
     const hasRequestedRoomCreation = useRef(false);
+
+    const playerColorById = useMemo(() => {
+        const colorById = new Map<string, string>();
+        players.forEach((player, index) => {
+            const fallbackColor = PLAYER_COLORS[index % PLAYER_COLORS.length];
+            const hasValidHexColor =
+                typeof player.color === "string" && /^#/.test(player.color);
+            colorById.set(
+                player.id,
+                hasValidHexColor ? player.color! : fallbackColor,
+            );
+        });
+        return colorById;
+    }, [players]);
+
+    const getPlayerRowClassName = (player: Player) => {
+        const classes = ["player-row"];
+        if (!player.socketId) {
+            classes.push("player-row-disconnected");
+        }
+        if (!player.alive) {
+            classes.push("player-row-eliminated");
+        }
+        return classes.join(" ");
+    };
+
+    const getPlayerDotColor = (player: Player) => {
+        if (!player.socketId) {
+            return DISCONNECTED_DOT_COLOR;
+        }
+        return playerColorById.get(player.id) ?? PLAYER_COLORS[0];
+    };
 
     const leaderboard = [...players].sort(
         (firstPlayer, secondPlayer) =>
@@ -308,16 +367,34 @@ export default function Host({ onLeave }: Props) {
                                 </li>
                             )}
                             {players.map((player) => (
-                                <li key={player.id} className="player-row">
+                                <li
+                                    key={player.id}
+                                    className={getPlayerRowClassName(player)}
+                                >
                                     <span className="player-name-with-status">
                                         <span
-                                            className={`status-dot ${player.socketId ? "status-online" : "status-offline"}`}
+                                            className="status-dot-wrap"
                                             title={
                                                 player.socketId
                                                     ? "Connected"
                                                     : "Disconnected"
                                             }
-                                        />
+                                        >
+                                            <svg
+                                                className="status-dot"
+                                                viewBox="0 0 10 10"
+                                                aria-hidden="true"
+                                            >
+                                                <circle
+                                                    cx="5"
+                                                    cy="5"
+                                                    r="4"
+                                                    fill={getPlayerDotColor(
+                                                        player,
+                                                    )}
+                                                />
+                                            </svg>
+                                        </span>
                                         <span>{player.name}</span>
                                     </span>
                                 </li>
@@ -341,31 +418,40 @@ export default function Host({ onLeave }: Props) {
                         <h3 className="section-title">Leaderboard</h3>
                         <ul className="player-list">
                             {leaderboard.map((player) => (
-                                <li key={player.id} className="player-row">
+                                <li
+                                    key={player.id}
+                                    className={getPlayerRowClassName(player)}
+                                >
                                     <span className="leaderboard-player-name">
                                         <span className="player-name-with-status">
                                             <span
-                                                className={`status-dot ${player.socketId ? "status-online" : "status-offline"}`}
+                                                className="status-dot-wrap"
                                                 title={
                                                     player.socketId
                                                         ? "Connected"
                                                         : "Disconnected"
                                                 }
-                                            />
+                                            >
+                                                <svg
+                                                    className="status-dot"
+                                                    viewBox="0 0 10 10"
+                                                    aria-hidden="true"
+                                                >
+                                                    <circle
+                                                        cx="5"
+                                                        cy="5"
+                                                        r="4"
+                                                        fill={getPlayerDotColor(
+                                                            player,
+                                                        )}
+                                                    />
+                                                </svg>
+                                            </span>
                                             <span>{player.name}</span>
                                         </span>
                                     </span>
                                     <span className="leaderboard-player-meta">
-                                        <span>{player.score} pts · </span>
-                                        <span
-                                            className={
-                                                player.alive ? "alive" : "dead"
-                                            }
-                                        >
-                                            {player.alive
-                                                ? "Alive"
-                                                : "Eliminated"}
-                                        </span>
+                                        <span>{player.score} pts</span>
                                     </span>
                                 </li>
                             ))}

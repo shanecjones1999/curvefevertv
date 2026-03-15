@@ -38,7 +38,7 @@ function App() {
                         className="ui-button"
                         onClick={() => selectRole("host")}
                     >
-                        Host Display
+                        Host Game
                     </button>
                     <button
                         className="ui-button ui-button-secondary"

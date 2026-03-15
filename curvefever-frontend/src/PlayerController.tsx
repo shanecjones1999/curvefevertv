@@ -289,6 +289,34 @@ export default function PlayerController({ onLeave }: Props) {
         );
     }
 
+    function handleLeaveGame() {
+        if (joined) {
+            const shouldLeave = window.confirm(
+                "Are you sure you want to leave the game?",
+            );
+            if (!shouldLeave) return;
+
+            pressRef.current.left = false;
+            pressRef.current.right = false;
+            stopSendingInput();
+            if (playerIdRef.current && roomCode) {
+                socket.emit(
+                    EVENTS.LEAVE_ROOM,
+                    {
+                        roomCode,
+                        playerId: playerIdRef.current,
+                    },
+                    () => {},
+                );
+            }
+            playerIdRef.current = null;
+            setJoined(false);
+        }
+
+        localStorage.removeItem(PLAYER_SESSION_KEY);
+        onLeave();
+    }
+
     // Show a loading state while attempting to rejoin
     if (isRejoining) {
         return (
@@ -314,9 +342,9 @@ export default function PlayerController({ onLeave }: Props) {
                     </div>
                     <button
                         className="ui-button ui-button-ghost"
-                        onClick={onLeave}
+                        onClick={handleLeaveGame}
                     >
-                        Change Role
+                        Leave Game
                     </button>
                 </div>
 
@@ -379,42 +407,6 @@ export default function PlayerController({ onLeave }: Props) {
                                 onTouchEnd={handleRightUp}
                             >
                                 Turn Right
-                            </button>
-                        </div>
-                        <div className={styles.leaveWrap}>
-                            <button
-                                className="ui-button ui-button-danger"
-                                onClick={() => {
-                                    if (
-                                        window.confirm(
-                                            "Are you sure you want to leave the game?",
-                                        )
-                                    ) {
-                                        // clean up and notify server
-                                        pressRef.current.left = false;
-                                        pressRef.current.right = false;
-                                        stopSendingInput();
-                                        if (playerIdRef.current && roomCode) {
-                                            socket.emit(
-                                                EVENTS.LEAVE_ROOM,
-                                                {
-                                                    roomCode,
-                                                    playerId:
-                                                        playerIdRef.current,
-                                                },
-                                                () => {},
-                                            );
-                                        }
-                                        playerIdRef.current = null;
-                                        setJoined(false);
-                                        localStorage.removeItem(
-                                            PLAYER_SESSION_KEY,
-                                        );
-                                        onLeave();
-                                    }
-                                }}
-                            >
-                                Leave Game
                             </button>
                         </div>
                     </div>

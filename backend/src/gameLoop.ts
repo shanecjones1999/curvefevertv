@@ -9,6 +9,10 @@ const MS_PER_TICK = 1000 / TICK_RATE;
 const runningLoops = new Map<string, NodeJS.Timeout>();
 const restartGracePeriod = 30; // ticks to prevent immediate re-collision after restart
 const restartGraceMap = new Map<string, number>();
+const ROUND_START_NO_TRAIL_TICKS = 120;
+const roundStartNoTrailMap = new Map<string, number>();
+const ROUND_RESTART_DELAY_MS = 2000;
+const pendingRoundRestartMap = new Map<string, NodeJS.Timeout>();
 const SPAWN_WALL_MARGIN = 60;
 
 function randomCoordinateAwayFromWalls(arenaSize: number, wallMargin: number) {
@@ -116,7 +120,12 @@ function splitTrailForWrap(
     appendTrailPoint(p, finalX, finalY);
 }
 
-function movePlayer(p: Player, width: number, height: number) {
+function movePlayer(
+    p: Player,
+    width: number,
+    height: number,
+    suppressTrail: boolean,
+) {
     const speed = p.speed ?? 2.5;
     // simple forward movement using direction (radians)
     const oldX = p.x;
@@ -126,6 +135,14 @@ function movePlayer(p: Player, width: number, height: number) {
 
     p.x = rawNextX;
     p.y = rawNextY;
+
+    if (suppressTrail) {
+        p.trail = [[]];
+        p.distanceSinceLastGap = 0;
+        p.gapStartDistance = 0;
+        p.inGap = false;
+        return;
+    }
 
     // Trail/gap logic
     if (!Array.isArray(p.trail) || p.trail.length === 0) p.trail = [[]];
@@ -396,22 +413,37 @@ export function restartRound(players: Player[]) {
 export function startGameLoop(roomCode: string, io: Server) {
     if (runningLoops.has(roomCode)) return;
 
-    restartGraceMap.set(roomCode, 0);
+    restartGraceMap.set(roomCode, restartGracePeriod);
+    roundStartNoTrailMap.set(roomCode, ROUND_START_NO_TRAIL_TICKS);
 
     const tick = () => {
         const room = getRoom(roomCode);
         if (!room) return;
 
+        const roundPaused = pendingRoundRestartMap.has(roomCode);
+        if (roundPaused) {
+            const state = buildGameState(roomCode);
+            if (state) {
+                io.to(roomCode).emit("gameState", state);
+            }
+            return;
+        }
+
+        const noTrailTicksRemaining = roundStartNoTrailMap.get(roomCode) ?? 0;
+        const suppressTrailThisTick = noTrailTicksRemaining > 0;
+        if (noTrailTicksRemaining > 0) {
+            roundStartNoTrailMap.set(roomCode, noTrailTicksRemaining - 1);
+        }
+
         for (const p of room.players.values()) {
             if (!p.alive) continue;
-            movePlayer(p, GAME_WIDTH, GAME_HEIGHT);
+            movePlayer(p, GAME_WIDTH, GAME_HEIGHT, suppressTrailThisTick);
         }
 
         // Decrement grace period counter
-        let graceTicksRemaining = restartGraceMap.get(roomCode) ?? 0;
+        const graceTicksRemaining = restartGraceMap.get(roomCode) ?? 0;
         if (graceTicksRemaining > 0) {
-            graceTicksRemaining--;
-            restartGraceMap.set(roomCode, graceTicksRemaining);
+            restartGraceMap.set(roomCode, graceTicksRemaining - 1);
         }
 
         // Check for collisions and determine round winner
@@ -433,25 +465,42 @@ export function startGameLoop(roomCode: string, io: Server) {
 
             const alivePlayers = players.filter((player) => player.alive);
             if (alivePlayers.length <= 1 && players.length >= 2) {
-                const winner = alivePlayers[0] ?? null;
-                if (winner) {
-                    winner.score = (winner.score ?? 0) + 1;
+                if (!pendingRoundRestartMap.has(roomCode)) {
+                    const winner = alivePlayers[0] ?? null;
+                    if (winner) {
+                        winner.score = (winner.score ?? 0) + 1;
+                    }
+
+                    io.to(roomCode).emit("roundOver", {
+                        winnerId: winner?.id ?? null,
+                        leaderboard: players
+                            .map((player) => ({
+                                id: player.id,
+                                name: player.name,
+                                score: player.score ?? 0,
+                            }))
+                            .sort((a, b) => b.score - a.score),
+                    });
+
+                    const restartHandle = setTimeout(() => {
+                        pendingRoundRestartMap.delete(roomCode);
+                        const latestRoom = getRoom(roomCode);
+                        if (!latestRoom) return;
+
+                        const latestPlayers = Array.from(
+                            latestRoom.players.values(),
+                        );
+                        restartRound(latestPlayers);
+                        restartGraceMap.set(roomCode, restartGracePeriod);
+                        roundStartNoTrailMap.set(
+                            roomCode,
+                            ROUND_START_NO_TRAIL_TICKS,
+                        );
+                        io.to(roomCode).emit("roundRestart");
+                    }, ROUND_RESTART_DELAY_MS);
+
+                    pendingRoundRestartMap.set(roomCode, restartHandle);
                 }
-
-                io.to(roomCode).emit("roundOver", {
-                    winnerId: winner?.id ?? null,
-                    leaderboard: players
-                        .map((player) => ({
-                            id: player.id,
-                            name: player.name,
-                            score: player.score ?? 0,
-                        }))
-                        .sort((a, b) => b.score - a.score),
-                });
-
-                restartRound(players);
-                restartGraceMap.set(roomCode, restartGracePeriod);
-                io.to(roomCode).emit("roundRestart");
             }
         }
 
@@ -471,4 +520,13 @@ export function stopGameLoop(roomCode: string) {
         clearInterval(handle);
         runningLoops.delete(roomCode);
     }
+
+    const restartHandle = pendingRoundRestartMap.get(roomCode);
+    if (restartHandle) {
+        clearTimeout(restartHandle);
+        pendingRoundRestartMap.delete(roomCode);
+    }
+
+    restartGraceMap.delete(roomCode);
+    roundStartNoTrailMap.delete(roomCode);
 }

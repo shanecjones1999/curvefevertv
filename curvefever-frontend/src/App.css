@@ -236,6 +236,29 @@
   background: rgba(17, 28, 61, 0.45);
 }
 
+.player-name-with-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.status-dot {
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+
+.status-online {
+  background: #57f28f;
+  /* box-shadow: 0 0 0 2px rgba(87, 242, 143, 0.2); */
+}
+
+.status-offline {
+  background: #ff6e7d;
+  /* box-shadow: 0 0 0 2px rgba(255, 110, 125, 0.22); */
+}
+
 .player-empty {
   justify-content: center;
   color: var(--cf-text-muted);

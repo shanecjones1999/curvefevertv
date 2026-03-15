@@ -244,45 +244,59 @@ export default function Host({ onLeave }: Props) {
         }
     }
 
-    return (
-        <main className="page-shell">
-            <section className="panel host-panel">
-                <div className="panel-header">
-                    <div>
-                        <p className="eyebrow">Host Console</p>
-                    </div>
-                    <button
-                        className="ui-button ui-button-ghost"
-                        onClick={handleLeaveGame}
-                    >
-                        Leave Game
-                    </button>
+    const hostControls = (
+        <>
+            <div className="panel-header">
+                <div>
+                    <p className="eyebrow">Host Console</p>
                 </div>
+                <button
+                    className="ui-button ui-button-ghost"
+                    onClick={handleLeaveGame}
+                >
+                    Leave Game
+                </button>
+            </div>
 
-                <div className="panel-row">
-                    <button
-                        type="button"
-                        className="status-pill room-code-pill room-code-button"
-                        onClick={handleCopyGameCode}
-                        disabled={!roomCode}
-                        title={
-                            roomCode
-                                ? "Click to copy game code"
-                                : "No game code available"
-                        }
-                    >
-                        <span className="room-code-label">
-                            {copiedCode
-                                ? "Copied!"
-                                : "Game Code · Click to copy"}
-                        </span>
-                        <span className="room-code-value">
-                            {roomCode ?? "------"}
-                        </span>
-                    </button>
-                </div>
+            <div className="panel-row">
+                <button
+                    type="button"
+                    className="status-pill room-code-pill room-code-button"
+                    onClick={handleCopyGameCode}
+                    disabled={!roomCode}
+                    title={
+                        roomCode
+                            ? "Click to copy game code"
+                            : "No game code available"
+                    }
+                >
+                    <span className="room-code-label">
+                        {copiedCode ? "Copied!" : "Game Code · Click to copy"}
+                    </span>
+                    <span className="room-code-value">
+                        {roomCode ?? "------"}
+                    </span>
+                </button>
+            </div>
 
-                {!playing && (
+            <div className="panel-row panel-row-bottom">
+                <button
+                    className="ui-button"
+                    onClick={handleStartGame}
+                    disabled={playing || players.length < 2}
+                >
+                    {playing ? "Game Running" : "Start Game"}
+                </button>
+                {startError && <div className="error-text">{startError}</div>}
+            </div>
+        </>
+    );
+
+    if (!playing) {
+        return (
+            <main className="page-shell">
+                <section className="panel host-panel">
+                    {hostControls}
                     <section className="panel inset-panel">
                         <h3 className="section-title">
                             Players ({players.length})
@@ -310,70 +324,63 @@ export default function Host({ onLeave }: Props) {
                             ))}
                         </ul>
                     </section>
-                )}
+                </section>
+            </main>
+        );
+    }
 
-                <div className="panel-row panel-row-bottom">
-                    <button
-                        className="ui-button"
-                        onClick={handleStartGame}
-                        disabled={playing || players.length < 2}
-                    >
-                        {playing ? "Game Running" : "Start Game"}
-                    </button>
-                    {startError && (
-                        <div className="error-text">{startError}</div>
-                    )}
+    return (
+        <main className="page-shell page-shell-host-playing">
+            <div className="host-playing-screen">
+                <div className="host-side-column">
+                    <section className="panel host-panel host-control-panel">
+                        {hostControls}
+                    </section>
+
+                    <section className="panel inset-panel leaderboard-panel">
+                        <h3 className="section-title">Leaderboard</h3>
+                        <ul className="player-list">
+                            {leaderboard.map((player) => (
+                                <li key={player.id} className="player-row">
+                                    <span className="leaderboard-player-name">
+                                        <span className="player-name-with-status">
+                                            <span
+                                                className={`status-dot ${player.socketId ? "status-online" : "status-offline"}`}
+                                                title={
+                                                    player.socketId
+                                                        ? "Connected"
+                                                        : "Disconnected"
+                                                }
+                                            />
+                                            <span>{player.name}</span>
+                                        </span>
+                                    </span>
+                                    <span className="leaderboard-player-meta">
+                                        <span>{player.score} pts · </span>
+                                        <span
+                                            className={
+                                                player.alive ? "alive" : "dead"
+                                            }
+                                        >
+                                            {player.alive
+                                                ? "Alive"
+                                                : "Eliminated"}
+                                        </span>
+                                    </span>
+                                </li>
+                            ))}
+                        </ul>
+                    </section>
                 </div>
 
-                {playing && (
-                    <div className="host-game-layout">
-                        <section className="panel inset-panel leaderboard-panel">
-                            <h3 className="section-title">Leaderboard</h3>
-                            <ul className="player-list">
-                                {leaderboard.map((player) => (
-                                    <li key={player.id} className="player-row">
-                                        <span className="leaderboard-player-name">
-                                            <span className="player-name-with-status">
-                                                <span
-                                                    className={`status-dot ${player.socketId ? "status-online" : "status-offline"}`}
-                                                    title={
-                                                        player.socketId
-                                                            ? "Connected"
-                                                            : "Disconnected"
-                                                    }
-                                                />
-                                                <span>{player.name}</span>
-                                            </span>
-                                        </span>
-                                        <span className="leaderboard-player-meta">
-                                            <span>{player.score} pts · </span>
-                                            <span
-                                                className={
-                                                    player.alive
-                                                        ? "alive"
-                                                        : "dead"
-                                                }
-                                            >
-                                                {player.alive
-                                                    ? "Alive"
-                                                    : "Eliminated"}
-                                            </span>
-                                        </span>
-                                    </li>
-                                ))}
-                            </ul>
-                        </section>
-
-                        <div className="game-stage">
-                            <PhaserGame
-                                players={players}
-                                width={gameConfig.width}
-                                height={gameConfig.height}
-                            />
-                        </div>
-                    </div>
-                )}
-            </section>
+                <div className="game-stage">
+                    <PhaserGame
+                        players={players}
+                        width={gameConfig.width}
+                        height={gameConfig.height}
+                    />
+                </div>
+            </div>
         </main>
     );
 }

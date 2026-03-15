@@ -17,6 +17,8 @@ export interface Player {
     gapLength?: number;
     inGap?: boolean;
     gapStartDistance?: number;
+    turnLeftHeld?: boolean;
+    turnRightHeld?: boolean;
 }
 
 export type RoomState = "lobby" | "playing" | "finished";

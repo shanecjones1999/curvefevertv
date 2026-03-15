@@ -5,10 +5,13 @@ import { GAME_HEIGHT, GAME_WIDTH } from "./config";
 
 const TICK_RATE = 60;
 const MS_PER_TICK = 1000 / TICK_RATE;
+const STATE_BROADCAST_EVERY_N_TICKS = 2;
+const PLAYER_TURN_RATE_PER_TICK = 0.045;
 
 const runningLoops = new Map<string, NodeJS.Timeout>();
 const restartGracePeriod = 30; // ticks to prevent immediate re-collision after restart
 const restartGraceMap = new Map<string, number>();
+const roomTickCounterMap = new Map<string, number>();
 const ROUND_START_NO_TRAIL_TICKS = 120;
 const roundStartNoTrailMap = new Map<string, number>();
 const ROUND_RESTART_DELAY_MS = 2000;
@@ -407,6 +410,8 @@ export function restartRound(players: Player[]) {
         p.gapInterval = 200 + Math.random() * 200;
         p.gapLength = 40 + Math.random() * 40;
         p.inGap = false;
+        p.turnLeftHeld = false;
+        p.turnRightHeld = false;
     }
 }
 
@@ -415,16 +420,25 @@ export function startGameLoop(roomCode: string, io: Server) {
 
     restartGraceMap.set(roomCode, restartGracePeriod);
     roundStartNoTrailMap.set(roomCode, ROUND_START_NO_TRAIL_TICKS);
+    roomTickCounterMap.set(roomCode, 0);
 
     const tick = () => {
         const room = getRoom(roomCode);
         if (!room) return;
 
+        const currentTickCount = (roomTickCounterMap.get(roomCode) ?? 0) + 1;
+        roomTickCounterMap.set(roomCode, currentTickCount);
+        const shouldBroadcastState =
+            currentTickCount === 1 ||
+            currentTickCount % STATE_BROADCAST_EVERY_N_TICKS === 0;
+
         const roundPaused = pendingRoundRestartMap.has(roomCode);
         if (roundPaused) {
-            const state = buildGameState(roomCode);
-            if (state) {
-                io.to(roomCode).emit("gameState", state);
+            if (shouldBroadcastState) {
+                const state = buildGameState(roomCode);
+                if (state) {
+                    io.to(roomCode).emit("gameState", state);
+                }
             }
             return;
         }
@@ -437,6 +451,13 @@ export function startGameLoop(roomCode: string, io: Server) {
 
         for (const p of room.players.values()) {
             if (!p.alive) continue;
+
+            if (p.turnLeftHeld && !p.turnRightHeld) {
+                p.direction -= PLAYER_TURN_RATE_PER_TICK;
+            } else if (p.turnRightHeld && !p.turnLeftHeld) {
+                p.direction += PLAYER_TURN_RATE_PER_TICK;
+            }
+
             movePlayer(p, GAME_WIDTH, GAME_HEIGHT, suppressTrailThisTick);
         }
 
@@ -504,9 +525,11 @@ export function startGameLoop(roomCode: string, io: Server) {
             }
         }
 
-        const state = buildGameState(roomCode);
-        if (state) {
-            io.to(roomCode).emit("gameState", state);
+        if (shouldBroadcastState) {
+            const state = buildGameState(roomCode);
+            if (state) {
+                io.to(roomCode).emit("gameState", state);
+            }
         }
     };
 
@@ -529,4 +552,5 @@ export function stopGameLoop(roomCode: string) {
 
     restartGraceMap.delete(roomCode);
     roundStartNoTrailMap.delete(roomCode);
+    roomTickCounterMap.delete(roomCode);
 }

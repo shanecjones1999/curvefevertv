@@ -5,6 +5,7 @@ import { EVENTS } from "./events";
 
 const PLAYER_SESSION_KEY = "curvefever:playerSession";
 const REJOIN_TIMEOUT_MS = 7000;
+const INPUT_SEND_INTERVAL_MS = 16;
 
 type PlayerSession = {
     roomCode: string;
@@ -54,15 +55,11 @@ export default function PlayerController({ onLeave }: Props) {
     });
     const intervalRef = useRef<number | null>(null);
 
-    const startSendingInput = useCallback(() => {
-        if (intervalRef.current) return;
-        intervalRef.current = window.setInterval(() => {
-            const payload = {
-                turnLeft: pressRef.current.left,
-                turnRight: pressRef.current.right,
-            };
-            socket.emit("input", payload);
-        }, 50);
+    const emitInput = useCallback(() => {
+        socket.emit("input", {
+            turnLeft: pressRef.current.left,
+            turnRight: pressRef.current.right,
+        });
     }, []);
 
     const stopSendingInput = useCallback(() => {
@@ -72,23 +69,44 @@ export default function PlayerController({ onLeave }: Props) {
         }
     }, []);
 
+    const startSendingInput = useCallback(() => {
+        if (intervalRef.current) return;
+        intervalRef.current = window.setInterval(() => {
+            if (!pressRef.current.left && !pressRef.current.right) {
+                stopSendingInput();
+                return;
+            }
+            emitInput();
+        }, INPUT_SEND_INTERVAL_MS);
+    }, [emitInput, stopSendingInput]);
+
     const handleLeftDown = useCallback(() => {
         pressRef.current.left = true;
+        emitInput();
         startSendingInput();
-    }, [startSendingInput]);
+    }, [emitInput, startSendingInput]);
 
     const handleLeftUp = useCallback(() => {
         pressRef.current.left = false;
-    }, []);
+        emitInput();
+        if (!pressRef.current.left && !pressRef.current.right) {
+            stopSendingInput();
+        }
+    }, [emitInput, stopSendingInput]);
 
     const handleRightDown = useCallback(() => {
         pressRef.current.right = true;
+        emitInput();
         startSendingInput();
-    }, [startSendingInput]);
+    }, [emitInput, startSendingInput]);
 
     const handleRightUp = useCallback(() => {
         pressRef.current.right = false;
-    }, []);
+        emitInput();
+        if (!pressRef.current.left && !pressRef.current.right) {
+            stopSendingInput();
+        }
+    }, [emitInput, stopSendingInput]);
 
     useEffect(() => {
         let rejoinTimeoutId: number | null = null;

@@ -27,8 +27,29 @@ const CORS_ORIGIN = process.env.CORS_ORIGIN ?? "*";
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: CORS_ORIGIN } });
+const io = new Server(server, {
+    cors: { origin: CORS_ORIGIN },
+    transports: ["websocket"],
+});
 console.log("Socket.IO initialized");
+
+const socketToRoomCode = new Map<string, string>();
+const socketToPlayerId = new Map<string, string>();
+
+function getPlayerBySocket(socketId: string): Player | null {
+    const mappedRoomCode = socketToRoomCode.get(socketId);
+    const mappedPlayerId = socketToPlayerId.get(socketId);
+
+    if (mappedRoomCode && mappedPlayerId) {
+        const mappedRoom = getRoom(mappedRoomCode);
+        const mappedPlayer = mappedRoom?.players.get(mappedPlayerId);
+        if (mappedPlayer && mappedPlayer.socketId === socketId) {
+            return mappedPlayer;
+        }
+    }
+
+    return null;
+}
 
 function emitLobbyUpdate(roomCode: string) {
     const room = getRoom(roomCode);
@@ -68,6 +89,7 @@ io.on("connection", (socket) => {
         console.log("[DEBUG] Room created:", room.code);
         // join socket to room
         socket.join(room.code);
+        socketToRoomCode.set(socket.id, room.code);
         cb?.({
             roomCode: room.code,
             gameConfig: {
@@ -85,6 +107,7 @@ io.on("connection", (socket) => {
 
         room.hostSocketId = socket.id;
         socket.join(room.code);
+        socketToRoomCode.set(socket.id, room.code);
 
         cb?.({
             ok: true,
@@ -117,10 +140,14 @@ io.on("connection", (socket) => {
             direction: Math.random() * Math.PI * 2,
             speed: 2.5,
             trail: [],
+            turnLeftHeld: false,
+            turnRightHeld: false,
         };
 
         joinRoom(room.code, player);
         socket.join(room.code);
+        socketToRoomCode.set(socket.id, room.code);
+        socketToPlayerId.set(socket.id, player.id);
         console.log(
             `[joinRoom] Added player ${player.id} to room ${room.code}`,
         );
@@ -165,11 +192,20 @@ io.on("connection", (socket) => {
             console.log(
                 `[rejoinRoom] Successfully rejoining player ${data.playerId} (${existingPlayer.name}) to room ${roomCode}`,
             );
+            const previousSocketId = existingPlayer.socketId;
+            if (previousSocketId && previousSocketId !== socket.id) {
+                socketToRoomCode.delete(previousSocketId);
+                socketToPlayerId.delete(previousSocketId);
+            }
             existingPlayer.socketId = socket.id;
+            existingPlayer.turnLeftHeld = false;
+            existingPlayer.turnRightHeld = false;
             if (typeof data.name === "string" && data.name.trim()) {
                 existingPlayer.name = data.name.trim();
             }
             socket.join(room.code);
+            socketToRoomCode.set(socket.id, room.code);
+            socketToPlayerId.set(socket.id, existingPlayer.id);
 
             cb?.({ ok: true, player: existingPlayer, state: room.state });
             emitLobbyUpdate(room.code);
@@ -193,19 +229,11 @@ io.on("connection", (socket) => {
     });
 
     socket.on("input", (payload: InputPayload) => {
-        // find player and update direction based on input
-        for (const room of Array.from(io.sockets.adapter.rooms.keys())) {
-            const r = getRoom(room);
-            if (!r) continue;
-            for (const p of r.players.values()) {
-                if (p.socketId === socket.id) {
-                    // simple turning logic
-                    const turnRate = 0.12;
-                    if (payload.turnLeft) p.direction -= turnRate;
-                    if (payload.turnRight) p.direction += turnRate;
-                }
-            }
-        }
+        const player = getPlayerBySocket(socket.id);
+        if (!player || !player.alive) return;
+
+        player.turnLeftHeld = Boolean(payload?.turnLeft);
+        player.turnRightHeld = Boolean(payload?.turnRight);
     });
 
     socket.on("startGame", (data: { roomCode: string }, cb) => {
@@ -249,12 +277,21 @@ io.on("connection", (socket) => {
                 const updated = leaveRoom(roomCode, data.playerId);
                 if (!updated)
                     return cb?.({ ok: false, error: "Failed to leave room" });
+                socketToRoomCode.delete(socket.id);
+                socketToPlayerId.delete(socket.id);
                 socket.leave(room.code);
                 emitLobbyUpdate(roomCode);
                 return cb?.({ ok: true });
             }
 
             // host is leaving; destroy the room entirely
+            for (const player of room.players.values()) {
+                if (player.socketId) {
+                    socketToRoomCode.delete(player.socketId);
+                    socketToPlayerId.delete(player.socketId);
+                }
+            }
+            socketToRoomCode.delete(socket.id);
             const success = deleteRoom(roomCode);
             if (success) {
                 io.to(roomCode).emit("roomClosed");
@@ -266,6 +303,8 @@ io.on("connection", (socket) => {
 
     socket.on("disconnect", () => {
         console.log("socket disconnect", socket.id);
+        socketToRoomCode.delete(socket.id);
+        socketToPlayerId.delete(socket.id);
         // when a socket drops we remove it from any player lists, but we do
         // *not* destroy the room when the host temporarily disconnects. this
         // allows the host to refresh and reattach using the reconnectHost flow

@@ -11,7 +11,12 @@ import {
     deleteRoom,
     listRooms,
 } from "./rooms";
-import { startGameLoop, stopGameLoop } from "./gameLoop";
+import {
+    generateSpawnPosition,
+    restartRound,
+    startGameLoop,
+    stopGameLoop,
+} from "./gameLoop";
 import { Player, InputPayload } from "./types";
 import { GAME_HEIGHT, GAME_WIDTH } from "./config";
 
@@ -98,6 +103,8 @@ io.on("connection", (socket) => {
         const room = roomCode ? getRoom(roomCode) : null;
         if (!room) return cb?.({ ok: false, error: "Room not found" });
 
+        const spawn = generateSpawnPosition();
+
         const player: Player = {
             id: crypto.randomUUID(),
             name: data.name,
@@ -105,8 +112,8 @@ io.on("connection", (socket) => {
             socketId: socket.id,
             color: undefined,
             alive: true,
-            x: Math.random() * GAME_WIDTH,
-            y: Math.random() * GAME_HEIGHT,
+            x: spawn.x,
+            y: spawn.y,
             direction: Math.random() * Math.PI * 2,
             speed: 2.5,
             trail: [],
@@ -208,6 +215,7 @@ io.on("connection", (socket) => {
         if (room.hostSocketId !== socket.id)
             return cb?.({ ok: false, error: "Not host" });
 
+        restartRound(Array.from(room.players.values()));
         room.state = "playing";
         startGameLoop(room.code, io);
         io.to(room.code).emit("startGame", {

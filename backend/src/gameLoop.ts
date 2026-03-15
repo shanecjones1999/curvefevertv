@@ -9,6 +9,22 @@ const MS_PER_TICK = 1000 / TICK_RATE;
 const runningLoops = new Map<string, NodeJS.Timeout>();
 const restartGracePeriod = 30; // ticks to prevent immediate re-collision after restart
 const restartGraceMap = new Map<string, number>();
+const SPAWN_WALL_MARGIN = 60;
+
+function randomCoordinateAwayFromWalls(arenaSize: number, wallMargin: number) {
+    const usableSize = arenaSize - wallMargin * 2;
+    if (usableSize <= 0) {
+        return arenaSize / 2;
+    }
+    return wallMargin + Math.random() * usableSize;
+}
+
+export function generateSpawnPosition() {
+    return {
+        x: randomCoordinateAwayFromWalls(GAME_WIDTH, SPAWN_WALL_MARGIN),
+        y: randomCoordinateAwayFromWalls(GAME_HEIGHT, SPAWN_WALL_MARGIN),
+    };
+}
 
 function ensureTrailSegment(p: Player) {
     if (!Array.isArray(p.trail) || p.trail.length === 0) {
@@ -362,11 +378,12 @@ function detectCollisions(
     return { deadPlayers, deathReasons };
 }
 
-function restartRound(players: Player[]) {
+export function restartRound(players: Player[]) {
     for (const p of players) {
+        const spawn = generateSpawnPosition();
         p.alive = true;
-        p.x = Math.random() * GAME_WIDTH;
-        p.y = Math.random() * GAME_HEIGHT;
+        p.x = spawn.x;
+        p.y = spawn.y;
         p.direction = Math.random() * Math.PI * 2;
         p.trail = [[]];
         p.distanceSinceLastGap = 0;

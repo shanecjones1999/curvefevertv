@@ -4,6 +4,11 @@
   padding: clamp(0.9rem, 2.4vw, 2rem);
 }
 
+.page-shell-host-playing {
+  width: min(100%, 1440px);
+  padding-top: clamp(0.5rem, 1.2vw, 1rem);
+}
+
 .panel {
   background: linear-gradient(160deg, rgba(14, 19, 39, 0.85), rgba(10, 13, 28, 0.92));
   border: 1px solid rgba(110, 158, 255, 0.24);
@@ -312,14 +317,46 @@
 }
 
 .game-stage {
-  margin-top: 0.8rem;
+  margin-top: 0;
+  width: 100%;
 }
 
-.host-game-layout {
+.host-playing-screen {
   display: grid;
-  grid-template-columns: minmax(220px, 280px) 1fr;
+  grid-template-columns: minmax(220px, 300px) minmax(0, 1fr);
   gap: 0.9rem;
   align-items: start;
+}
+
+.host-side-column {
+  display: grid;
+  gap: 0.9rem;
+  align-content: start;
+}
+
+.host-control-panel {
+  height: fit-content;
+}
+
+.host-panel .panel-header {
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+}
+
+.host-panel .panel-row,
+.host-panel .panel-row-bottom {
+  justify-content: center;
+}
+
+.host-panel .panel-row-bottom {
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.host-panel .error-text {
+  text-align: center;
 }
 
 .leaderboard-panel {
@@ -342,9 +379,9 @@
 
 .phaser-shell {
   width: 100%;
-  max-width: min(100%, 1100px);
+  max-width: 100%;
   margin: 0 auto;
-  aspect-ratio: 16 / 9;
+  aspect-ratio: 1280 / 1000;
   border-radius: 1rem;
   overflow: hidden;
   border: 1px solid rgba(123, 174, 255, 0.34);
@@ -384,7 +421,11 @@
     text-align: center;
   }
 
-  .host-game-layout {
+  .host-playing-screen {
     grid-template-columns: 1fr;
+  }
+
+  .host-side-column {
+    gap: 0.75rem;
   }
 }

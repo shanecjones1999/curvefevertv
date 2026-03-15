@@ -108,14 +108,8 @@ function movePlayer(p: Player, width: number, height: number) {
     const rawNextX = oldX + Math.cos(p.direction) * speed;
     const rawNextY = oldY + Math.sin(p.direction) * speed;
 
-    const wrappedX = ((rawNextX % width) + width) % width;
-    const wrappedY = ((rawNextY % height) + height) % height;
-
-    const crossedX = rawNextX < 0 || rawNextX >= width;
-    const crossedY = rawNextY < 0 || rawNextY >= height;
-
-    p.x = wrappedX;
-    p.y = wrappedY;
+    p.x = rawNextX;
+    p.y = rawNextY;
 
     // Trail/gap logic
     if (!Array.isArray(p.trail) || p.trail.length === 0) p.trail = [[]];
@@ -127,21 +121,9 @@ function movePlayer(p: Player, width: number, height: number) {
     if (typeof p.gapStartDistance !== "number") p.gapStartDistance = 0;
 
     // Distance moved
-    const wrappedDeltaX =
-        wrappedX - oldX > width / 2
-            ? wrappedX - oldX - width
-            : wrappedX - oldX < -width / 2
-              ? wrappedX - oldX + width
-              : wrappedX - oldX;
-    const wrappedDeltaY =
-        wrappedY - oldY > height / 2
-            ? wrappedY - oldY - height
-            : wrappedY - oldY < -height / 2
-              ? wrappedY - oldY + height
-              : wrappedY - oldY;
-    const dist = Math.sqrt(
-        wrappedDeltaX * wrappedDeltaX + wrappedDeltaY * wrappedDeltaY,
-    );
+    const deltaX = p.x - oldX;
+    const deltaY = p.y - oldY;
+    const dist = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
     p.distanceSinceLastGap += dist;
 
     // Gap logic
@@ -160,17 +142,7 @@ function movePlayer(p: Player, width: number, height: number) {
 
     // Add trail point if not in gap
     if (!p.inGap) {
-        if (crossedX || crossedY) {
-            splitTrailForWrap(
-                p,
-                oldX,
-                oldY,
-                wrappedDeltaX,
-                wrappedDeltaY,
-                width,
-                height,
-            );
-        } else if (dist > 2) {
+        if (dist > 2) {
             appendTrailPoint(p, p.x, p.y);
         }
     }
@@ -235,16 +207,36 @@ function distanceToLineSegment(
 function detectCollisions(
     players: Player[],
     skipGraceTickCount: number,
-): Set<string> {
+): { deadPlayers: Set<string>; deathReasons: Map<string, string[]> } {
     // Skip collision check during grace period after round restart
-    if (skipGraceTickCount > 0) return new Set();
+    if (skipGraceTickCount > 0) {
+        return {
+            deadPlayers: new Set(),
+            deathReasons: new Map(),
+        };
+    }
 
     const collisionRadius = 5;
+    const selfCollisionIgnoreDistance = 60;
     const deadPlayers = new Set<string>();
+    const deathReasonSets = new Map<string, Set<string>>();
+
+    const markDead = (playerId: string, reason: string) => {
+        deadPlayers.add(playerId);
+        if (!deathReasonSets.has(playerId)) {
+            deathReasonSets.set(playerId, new Set());
+        }
+        deathReasonSets.get(playerId)!.add(reason);
+    };
 
     for (let playerIndex = 0; playerIndex < players.length; playerIndex++) {
         const p = players[playerIndex];
         if (!p.alive) continue;
+
+        if (p.x < 0 || p.x >= GAME_WIDTH || p.y < 0 || p.y >= GAME_HEIGHT) {
+            markDead(p.id, "wall");
+            continue;
+        }
 
         // Check player-to-player collision
         for (
@@ -259,25 +251,81 @@ function detectCollisions(
             const distSq = dx * dx + dy * dy;
             // Players collide if they're within 10px of each other
             if (distSq < 100) {
-                deadPlayers.add(p.id);
-                deadPlayers.add(other.id);
+                markDead(p.id, `player:${other.id}`);
+                markDead(other.id, `player:${p.id}`);
             }
         }
 
-        // Check collision with opponent trails only (not own trail)
+        // Check collision with all trails, including own trail
         for (const otherPlayer of players) {
-            if (otherPlayer.id === p.id) continue; // Skip own trails entirely
             if (!Array.isArray(otherPlayer.trail)) continue;
+
+            const isSelf = otherPlayer.id === p.id;
+            const selfSkipFromBySegment = new Map<number, number>();
+
+            if (isSelf) {
+                let remainingIgnoreDistance = selfCollisionIgnoreDistance;
+
+                for (
+                    let reverseSegmentIndex = otherPlayer.trail.length - 1;
+                    reverseSegmentIndex >= 0 && remainingIgnoreDistance > 0;
+                    reverseSegmentIndex--
+                ) {
+                    const reverseSegment =
+                        otherPlayer.trail[reverseSegmentIndex];
+                    if (
+                        !Array.isArray(reverseSegment) ||
+                        reverseSegment.length < 2
+                    ) {
+                        continue;
+                    }
+
+                    let skipFromEdgeIndex = reverseSegment.length - 1;
+                    for (
+                        let edgeIndex = reverseSegment.length - 2;
+                        edgeIndex >= 0;
+                        edgeIndex--
+                    ) {
+                        const firstPoint = reverseSegment[edgeIndex];
+                        const secondPoint = reverseSegment[edgeIndex + 1];
+                        if (!firstPoint || !secondPoint) continue;
+
+                        const dx = secondPoint.x - firstPoint.x;
+                        const dy = secondPoint.y - firstPoint.y;
+                        remainingIgnoreDistance -= Math.sqrt(dx * dx + dy * dy);
+                        skipFromEdgeIndex = edgeIndex;
+
+                        if (remainingIgnoreDistance <= 0) {
+                            break;
+                        }
+                    }
+
+                    selfSkipFromBySegment.set(
+                        reverseSegmentIndex,
+                        skipFromEdgeIndex,
+                    );
+                }
+            }
 
             for (let segIdx = 0; segIdx < otherPlayer.trail.length; segIdx++) {
                 const segment = otherPlayer.trail[segIdx];
                 if (!Array.isArray(segment) || segment.length === 0) continue;
+                const selfSkipFromSegmentIndex =
+                    selfSkipFromBySegment.get(segIdx);
 
                 for (
                     let segmentPointIndex = 0;
                     segmentPointIndex < segment.length - 1;
                     segmentPointIndex++
                 ) {
+                    if (
+                        isSelf &&
+                        typeof selfSkipFromSegmentIndex === "number" &&
+                        segmentPointIndex >= selfSkipFromSegmentIndex
+                    ) {
+                        continue;
+                    }
+
                     const pt1 = segment[segmentPointIndex];
                     const pt2 = segment[segmentPointIndex + 1];
                     if (!pt1 || !pt2) continue;
@@ -291,7 +339,10 @@ function detectCollisions(
                         pt2.y,
                     );
                     if (dist < collisionRadius) {
-                        deadPlayers.add(p.id);
+                        markDead(
+                            p.id,
+                            isSelf ? "self-trail" : `trail:${otherPlayer.id}`,
+                        );
                         break;
                     }
                 }
@@ -303,7 +354,12 @@ function detectCollisions(
         }
     }
 
-    return deadPlayers;
+    const deathReasons = new Map<string, string[]>();
+    for (const [playerId, reasons] of deathReasonSets.entries()) {
+        deathReasons.set(playerId, Array.from(reasons));
+    }
+
+    return { deadPlayers, deathReasons };
 }
 
 function restartRound(players: Player[]) {
@@ -343,11 +399,18 @@ export function startGameLoop(roomCode: string, io: Server) {
 
         // Check for collisions and determine round winner
         const players = Array.from(room.players.values());
-        const deadPlayerIds = detectCollisions(players, graceTicksRemaining);
+        const { deadPlayers: deadPlayerIds, deathReasons } = detectCollisions(
+            players,
+            graceTicksRemaining,
+        );
         if (deadPlayerIds.size > 0) {
             for (const p of players) {
                 if (deadPlayerIds.has(p.id)) {
                     p.alive = false;
+                    const reasons = deathReasons.get(p.id) ?? ["unknown"];
+                    console.log(
+                        `[death] room=${roomCode} player=${p.id} name="${p.name}" x=${p.x.toFixed(1)} y=${p.y.toFixed(1)} reasons=${reasons.join("|")}`,
+                    );
                 }
             }
 

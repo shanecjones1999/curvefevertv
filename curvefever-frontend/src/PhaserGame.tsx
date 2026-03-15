@@ -68,14 +68,8 @@ class CurvefeverScene extends Phaser.Scene {
     updatePlayers(players: Player[] = []) {
         if (!this.add) return;
         this.players = Array.isArray(players) ? players : [];
-        const width = this.sys.game.config.width as number;
-        const height = this.sys.game.config.height as number;
 
         this.players.forEach((p, i) => {
-            // Calculate wrapped position
-            const x = ((p.x % width) + width) % width;
-            const y = ((p.y % height) + height) % height;
-
             // Draw trail
             let trailG = this.playerSprites.get(p.id + "_trail");
             if (!trailG) {
@@ -112,8 +106,8 @@ class CurvefeverScene extends Phaser.Scene {
             g.clear();
             g.fillStyle(Phaser.Display.Color.HexStringToColor(color).color, 1);
             g.fillCircle(0, 0, 8);
-            g.x = x;
-            g.y = y;
+            g.x = p.x;
+            g.y = p.y;
         });
     }
 

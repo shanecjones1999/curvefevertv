@@ -250,31 +250,29 @@
 .status-dot {
   width: 0.6rem;
   height: 0.6rem;
-  border-radius: 999px;
+  display: block;
   flex-shrink: 0;
 }
 
-.status-online {
-  background: #57f28f;
-  /* box-shadow: 0 0 0 2px rgba(87, 242, 143, 0.2); */
+.status-dot-wrap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.status-offline {
-  background: #ff6e7d;
-  /* box-shadow: 0 0 0 2px rgba(255, 110, 125, 0.22); */
+.player-row-disconnected {
+  opacity: 0.55;
+  color: var(--cf-text-muted);
+  border-color: rgba(140, 154, 183, 0.28);
+}
+
+.player-row-eliminated {
+  opacity: 0.7;
 }
 
 .player-empty {
   justify-content: center;
   color: var(--cf-text-muted);
-}
-
-.alive {
-  color: #61f5c2;
-}
-
-.dead {
-  color: #ff95b5;
 }
 
 .error-text {

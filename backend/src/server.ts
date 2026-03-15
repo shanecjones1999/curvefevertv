@@ -274,11 +274,20 @@ io.on("connection", (socket) => {
 
             if (data.playerId) {
                 // regular player leaving
+                const departingSocketId = room.players.get(
+                    data.playerId,
+                )?.socketId;
                 const updated = leaveRoom(roomCode, data.playerId);
                 if (!updated)
                     return cb?.({ ok: false, error: "Failed to leave room" });
-                socketToRoomCode.delete(socket.id);
-                socketToPlayerId.delete(socket.id);
+                if (departingSocketId) {
+                    socketToRoomCode.delete(departingSocketId);
+                    socketToPlayerId.delete(departingSocketId);
+                }
+                if (socketToPlayerId.get(socket.id) === data.playerId) {
+                    socketToRoomCode.delete(socket.id);
+                    socketToPlayerId.delete(socket.id);
+                }
                 socket.leave(room.code);
                 emitLobbyUpdate(roomCode);
                 return cb?.({ ok: true });
@@ -303,40 +312,33 @@ io.on("connection", (socket) => {
 
     socket.on("disconnect", () => {
         console.log("socket disconnect", socket.id);
+        const roomCode = socketToRoomCode.get(socket.id);
+        const playerId = socketToPlayerId.get(socket.id);
+
         socketToRoomCode.delete(socket.id);
         socketToPlayerId.delete(socket.id);
-        // when a socket drops we remove it from any player lists, but we do
-        // *not* destroy the room when the host temporarily disconnects. this
-        // allows the host to refresh and reattach using the reconnectHost flow
-        // without ending the session for everyone.
 
-        for (const room of Array.from(io.sockets.adapter.rooms.keys())) {
-            const r = getRoom(room);
-            if (!r) continue;
+        if (!roomCode) return;
 
-            // if the host happened to disconnect, leave the room alone; the
-            // reconnectHost handler will update the socket id when they come
-            // back. we could mark r.hostSocketId = "" here but it's not
-            // strictly necessary.
-            if (r.hostSocketId === socket.id) {
-                console.log(
-                    `[disconnect] Host disconnected from room ${r.code}`,
-                );
-                continue;
-            }
+        const room = getRoom(roomCode);
+        if (!room) return;
 
-            // For players: instead of removing them entirely, just disconnect their socket
-            // This allows them to rejoin later without losing their place in the room
-            for (const p of r.players.values()) {
-                if (p.socketId === socket.id) {
-                    console.log(
-                        `[disconnect] Player ${p.id} (${p.name}) disconnected from room ${r.code}`,
-                    );
-                    p.socketId = null; // Mark as disconnected but keep in room
-                    emitLobbyUpdate(r.code); // Update lobby to show disconnected state
-                    break;
-                }
-            }
+        if (room.hostSocketId === socket.id) {
+            console.log(
+                `[disconnect] Host disconnected from room ${room.code}`,
+            );
+            return;
+        }
+
+        if (!playerId) return;
+
+        const player = room.players.get(playerId);
+        if (player && player.socketId === socket.id) {
+            console.log(
+                `[disconnect] Player ${player.id} (${player.name}) disconnected from room ${room.code}`,
+            );
+            player.socketId = null;
+            emitLobbyUpdate(room.code);
         }
     });
 });

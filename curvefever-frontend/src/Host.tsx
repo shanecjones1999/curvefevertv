@@ -295,7 +295,17 @@ export default function Host({ onLeave }: Props) {
                             )}
                             {players.map((player) => (
                                 <li key={player.id} className="player-row">
-                                    <span>{player.name}</span>
+                                    <span className="player-name-with-status">
+                                        <span
+                                            className={`status-dot ${player.socketId ? "status-online" : "status-offline"}`}
+                                            title={
+                                                player.socketId
+                                                    ? "Connected"
+                                                    : "Disconnected"
+                                            }
+                                        />
+                                        <span>{player.name}</span>
+                                    </span>
                                 </li>
                             ))}
                         </ul>
@@ -320,10 +330,20 @@ export default function Host({ onLeave }: Props) {
                         <section className="panel inset-panel leaderboard-panel">
                             <h3 className="section-title">Leaderboard</h3>
                             <ul className="player-list">
-                                {leaderboard.map((player, index) => (
+                                {leaderboard.map((player) => (
                                     <li key={player.id} className="player-row">
                                         <span className="leaderboard-player-name">
-                                            {index + 1}. {player.name}
+                                            <span className="player-name-with-status">
+                                                <span
+                                                    className={`status-dot ${player.socketId ? "status-online" : "status-offline"}`}
+                                                    title={
+                                                        player.socketId
+                                                            ? "Connected"
+                                                            : "Disconnected"
+                                                    }
+                                                />
+                                                <span>{player.name}</span>
+                                            </span>
                                         </span>
                                         <span className="leaderboard-player-meta">
                                             <span>{player.score} pts · </span>

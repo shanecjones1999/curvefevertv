@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import socket from "./socket";
 import { EVENTS } from "./events";
 import type { Player } from "./types";
@@ -47,6 +47,7 @@ export default function Host({ onLeave }: Props) {
         width: DEFAULT_GAME_WIDTH,
         height: DEFAULT_GAME_HEIGHT,
     });
+    const hasRequestedRoomCreation = useRef(false);
 
     const leaderboard = [...players].sort(
         (firstPlayer, secondPlayer) =>
@@ -66,7 +67,13 @@ export default function Host({ onLeave }: Props) {
 
         const reconnectFromSession = () => {
             const rawSession = localStorage.getItem(HOST_SESSION_KEY);
-            if (!rawSession) return;
+            if (!rawSession) {
+                if (!hasRequestedRoomCreation.current) {
+                    hasRequestedRoomCreation.current = true;
+                    handleCreateRoom();
+                }
+                return;
+            }
             try {
                 const session = JSON.parse(rawSession) as { roomCode?: string };
                 if (!session.roomCode) return;
@@ -152,6 +159,11 @@ export default function Host({ onLeave }: Props) {
             "createRoom",
             null,
             (res: { roomCode: string; gameConfig?: GameConfig }) => {
+                if (!res?.roomCode) {
+                    hasRequestedRoomCreation.current = false;
+                    setStartError("Unable to create room");
+                    return;
+                }
                 setRoomCode(res.roomCode);
                 if (res.gameConfig) {
                     setGameConfig(res.gameConfig);
@@ -180,6 +192,22 @@ export default function Host({ onLeave }: Props) {
         });
     }
 
+    function handleLeaveGame() {
+        if (roomCode && !window.confirm("End session and leave the room?")) {
+            return;
+        }
+
+        if (roomCode) {
+            socket.emit(EVENTS.LEAVE_ROOM, { roomCode }, () => {});
+        }
+
+        localStorage.removeItem(HOST_SESSION_KEY);
+        setRoomCode(null);
+        setPlayers([]);
+        setPlaying(false);
+        onLeave();
+    }
+
     return (
         <main className="page-shell">
             <section className="panel host-panel">
@@ -192,48 +220,16 @@ export default function Host({ onLeave }: Props) {
                     </div>
                     <button
                         className="ui-button ui-button-ghost"
-                        onClick={onLeave}
+                        onClick={handleLeaveGame}
                     >
-                        Change Role
+                        Leave Game
                     </button>
                 </div>
 
                 <div className="panel-row">
-                    <button
-                        className="ui-button"
-                        onClick={handleCreateRoom}
-                        disabled={!!roomCode}
-                    >
-                        Create Room
-                    </button>
                     <div className="status-pill">
                         {roomCode ? `Room ${roomCode}` : "No active room"}
                     </div>
-                    {roomCode && (
-                        <button
-                            className="ui-button ui-button-danger"
-                            onClick={() => {
-                                if (
-                                    window.confirm(
-                                        "End session and leave the room?",
-                                    )
-                                ) {
-                                    socket.emit(
-                                        EVENTS.LEAVE_ROOM,
-                                        { roomCode },
-                                        () => {},
-                                    );
-                                    localStorage.removeItem(HOST_SESSION_KEY);
-                                    setRoomCode(null);
-                                    setPlayers([]);
-                                    setPlaying(false);
-                                    onLeave();
-                                }
-                            }}
-                        >
-                            Leave Room
-                        </button>
-                    )}
                 </div>
 
                 {!playing && (

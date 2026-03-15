@@ -126,6 +126,53 @@
   font-size: 0.9rem;
 }
 
+.room-code-pill {
+  display: grid;
+  gap: 0.12rem;
+  padding: 0.7rem 1.2rem;
+  border-color: rgba(128, 191, 255, 0.55);
+  background: rgba(18, 34, 84, 0.72);
+}
+
+.room-code-button {
+  text-align: left;
+  cursor: pointer;
+  transition: transform 120ms ease, border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.room-code-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  border-color: rgba(157, 211, 255, 0.85);
+  box-shadow: 0 10px 26px rgba(30, 87, 220, 0.35);
+}
+
+.room-code-button:focus-visible {
+  outline: 2px solid rgba(153, 205, 255, 0.95);
+  outline-offset: 2px;
+}
+
+.room-code-button:disabled {
+  opacity: 0.72;
+  cursor: default;
+}
+
+.room-code-label {
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--cf-text-muted);
+  line-height: 1;
+}
+
+.room-code-value {
+  font-size: clamp(1.6rem, 5vw, 2.8rem);
+  line-height: 1;
+  letter-spacing: 0.12em;
+  font-weight: 800;
+  color: #eaf6ff;
+  font-variant-numeric: tabular-nums;
+}
+
 .inset-panel {
   border-radius: 0.95rem;
   border: 1px solid rgba(105, 161, 255, 0.2);

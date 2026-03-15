@@ -43,6 +43,7 @@ export default function Host({ onLeave }: Props) {
     const [players, setPlayers] = useState<Player[]>([]);
     const [playing, setPlaying] = useState(false);
     const [startError, setStartError] = useState<string | null>(null);
+    const [copiedCode, setCopiedCode] = useState(false);
     const [gameConfig, setGameConfig] = useState<GameConfig>({
         width: DEFAULT_GAME_WIDTH,
         height: DEFAULT_GAME_HEIGHT,
@@ -154,6 +155,14 @@ export default function Host({ onLeave }: Props) {
         };
     }, []);
 
+    useEffect(() => {
+        if (!copiedCode) return;
+        const timeoutId = window.setTimeout(() => {
+            setCopiedCode(false);
+        }, 1500);
+        return () => window.clearTimeout(timeoutId);
+    }, [copiedCode]);
+
     function handleCreateRoom() {
         socket.emit(
             "createRoom",
@@ -208,15 +217,39 @@ export default function Host({ onLeave }: Props) {
         onLeave();
     }
 
+    async function handleCopyGameCode() {
+        if (!roomCode) return;
+
+        let copySucceeded = true;
+        try {
+            await navigator.clipboard.writeText(roomCode);
+        } catch {
+            try {
+                const input = document.createElement("textarea");
+                input.value = roomCode;
+                input.setAttribute("readonly", "");
+                input.style.position = "absolute";
+                input.style.left = "-9999px";
+                document.body.appendChild(input);
+                input.select();
+                document.execCommand("copy");
+                document.body.removeChild(input);
+            } catch {
+                copySucceeded = false;
+            }
+        }
+
+        if (copySucceeded) {
+            setCopiedCode(true);
+        }
+    }
+
     return (
         <main className="page-shell">
             <section className="panel host-panel">
                 <div className="panel-header">
                     <div>
                         <p className="eyebrow">Host Console</p>
-                        <h2 className="title title-small">
-                            Game Control Center
-                        </h2>
                     </div>
                     <button
                         className="ui-button ui-button-ghost"
@@ -227,9 +260,26 @@ export default function Host({ onLeave }: Props) {
                 </div>
 
                 <div className="panel-row">
-                    <div className="status-pill">
-                        {roomCode ? `Room ${roomCode}` : "No active room"}
-                    </div>
+                    <button
+                        type="button"
+                        className="status-pill room-code-pill room-code-button"
+                        onClick={handleCopyGameCode}
+                        disabled={!roomCode}
+                        title={
+                            roomCode
+                                ? "Click to copy game code"
+                                : "No game code available"
+                        }
+                    >
+                        <span className="room-code-label">
+                            {copiedCode
+                                ? "Copied!"
+                                : "Game Code · Click to copy"}
+                        </span>
+                        <span className="room-code-value">
+                            {roomCode ?? "------"}
+                        </span>
+                    </button>
                 </div>
 
                 {!playing && (

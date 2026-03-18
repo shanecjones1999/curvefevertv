@@ -1,18 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import styles from "./PlayerController.module.css";
 import socket from "./socket";
 import { EVENTS } from "./events";
+import { PLAYER_SESSION_KEY } from "./constants/storage";
+import { ROOM_CODE_REGEX, sanitizeRoomCodeInput } from "./utils/roomCode";
+import { getStoredPlayerSession } from "./utils/playerSession";
+import PlayerJoinForm from "./components/player/PlayerJoinForm";
+import PlayerLiveControls from "./components/player/PlayerLiveControls";
 
-const PLAYER_SESSION_KEY = "curvefever:playerSession";
 const REJOIN_TIMEOUT_MS = 7000;
 const INPUT_SEND_INTERVAL_MS = 16;
-const ROOM_CODE_REGEX = /^[A-Z]{4}$/;
-
-type PlayerSession = {
-    roomCode: string;
-    name: string;
-    playerId: string;
-};
 
 type JoinRoomResponse = {
     ok: boolean;
@@ -22,32 +18,6 @@ type JoinRoomResponse = {
     };
     error?: string;
 };
-
-function sanitizeRoomCodeInput(value: string) {
-    return value
-        .toUpperCase()
-        .replace(/[^A-Z]/g, "")
-        .slice(0, 4);
-}
-
-function getStoredPlayerSession(): PlayerSession | null {
-    const raw = localStorage.getItem(PLAYER_SESSION_KEY);
-    if (!raw) return null;
-
-    try {
-        const parsed = JSON.parse(raw) as Partial<PlayerSession>;
-        if (!parsed.roomCode || !parsed.name || !parsed.playerId) return null;
-        const normalizedRoomCode = sanitizeRoomCodeInput(parsed.roomCode);
-        if (!ROOM_CODE_REGEX.test(normalizedRoomCode)) return null;
-        return {
-            roomCode: normalizedRoomCode,
-            name: parsed.name,
-            playerId: parsed.playerId,
-        };
-    } catch {
-        return null;
-    }
-}
 
 type Props = { onLeave: () => void };
 
@@ -399,73 +369,27 @@ export default function PlayerController({ onLeave }: Props) {
                 </div>
 
                 {!joined ? (
-                    <div className="form-grid">
-                        <div className="field-group">
-                            <label htmlFor="room-code">Room Code</label>
-                            <input
-                                id="room-code"
-                                className="ui-input"
-                                value={roomCode}
-                                onChange={(e) =>
-                                    setRoomCode(
-                                        sanitizeRoomCodeInput(e.target.value),
-                                    )
-                                }
-                                maxLength={4}
-                                placeholder="ABCD"
-                            />
-                        </div>
-                        <div className="field-group">
-                            <label htmlFor="player-name">Name</label>
-                            <input
-                                id="player-name"
-                                className="ui-input"
-                                value={name}
-                                onChange={(e) => setName(e.target.value)}
-                                maxLength={16}
-                                placeholder="Player"
-                            />
-                        </div>
-
-                        <div className="panel-row">
-                            <button className="ui-button" onClick={handleJoin}>
-                                Join Room
-                            </button>
-                        </div>
-                        {rejoinError && (
-                            <div className="error-text">{rejoinError}</div>
-                        )}
-                    </div>
+                    <PlayerJoinForm
+                        roomCode={roomCode}
+                        name={name}
+                        rejoinError={rejoinError}
+                        onRoomCodeChange={(value) =>
+                            setRoomCode(sanitizeRoomCodeInput(value))
+                        }
+                        onNameChange={setName}
+                        onJoin={handleJoin}
+                    />
                 ) : (
-                    <div className={styles.controllerLive}>
-                        <p className="status-pill controller-status-pill">
-                            Joined room {roomCode} as {name}
-                        </p>
-                        <div className={styles["button-row"]}>
-                            <button
-                                className={`${styles.button} ${leftPressed ? styles.buttonPressed : ""}`}
-                                onMouseDown={handleLeftDown}
-                                onMouseUp={handleLeftUp}
-                                onMouseLeave={handleLeftUp}
-                                onTouchStart={handleLeftDown}
-                                onTouchEnd={handleLeftUp}
-                                onTouchCancel={handleLeftUp}
-                            >
-                                Turn Left
-                            </button>
-                            <button
-                                className={`${styles.button} ${rightPressed ? styles.buttonPressed : ""}`}
-                                onMouseDown={handleRightDown}
-                                onMouseUp={handleRightUp}
-                                onMouseLeave={handleRightUp}
-                                onTouchStart={handleRightDown}
-                                onTouchEnd={handleRightUp}
-                                onTouchCancel={handleRightUp}
-                            >
-                                Turn Right
-                            </button>
-                        </div>
-                    </div>
+                    <PlayerLiveControls
+                        roomCode={roomCode}
+                        name={name}
+                        leftPressed={leftPressed}
+                        rightPressed={rightPressed}
+                        onLeftDown={handleLeftDown}
+                        onLeftUp={handleLeftUp}
+                        onRightDown={handleRightDown}
+                        onRightUp={handleRightUp}
+                    />
                 )}
             </section>
         </main>

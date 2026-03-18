@@ -4,8 +4,13 @@ import { EVENTS } from "./events";
 import type { GameMode, Player } from "./types";
 import PhaserGame from "./PhaserGame";
 import { DEFAULT_GAME_HEIGHT, DEFAULT_GAME_WIDTH } from "./gameConfig";
-
-const HOST_SESSION_KEY = "curvefever:hostSession";
+import { PLAYER_COLORS, DISCONNECTED_DOT_COLOR } from "./constants/gameUi";
+import { HOST_SESSION_KEY } from "./constants/storage";
+import HostControls from "./components/host/HostControls";
+import HostPlayerList from "./components/host/HostPlayerList";
+import HostLeaderboard from "./components/host/HostLeaderboard";
+import HostGameOverOverlay from "./components/host/HostGameOverOverlay";
+import type { GameConfig, GameOverPayload } from "./components/host/types";
 
 type ReconnectHostResponse = {
     ok: boolean;
@@ -32,51 +37,7 @@ type SetGameModeResponse = {
     error?: string;
 };
 
-type GameOverLeaderboardEntry = {
-    id: string;
-    name: string;
-    score: number;
-    color?: string;
-};
-
-type GameOverPayload = {
-    winnerId: string | null;
-    gameMode?: GameMode;
-    targetScore?: number;
-    leaderboard: GameOverLeaderboardEntry[];
-};
-
-type GameConfig = {
-    width: number;
-    height: number;
-};
-
 type Props = { onLeave: () => void };
-
-const PLAYER_COLORS = [
-    "#e6194b",
-    "#3cb44b",
-    "#ffe119",
-    "#4363d8",
-    "#f58231",
-    "#911eb4",
-    "#46f0f0",
-    "#f032e6",
-    "#bcf60c",
-    "#fabebe",
-    "#008080",
-    "#e6beff",
-    "#9a6324",
-    "#fffac8",
-    "#800000",
-    "#aaffc3",
-    "#808000",
-    "#ffd8b1",
-    "#000075",
-    "#808080",
-    "#ffffff",
-    "#000000",
-];
 
 const PLAYER_COLOR_CLASS_BY_HEX: Record<string, string> = PLAYER_COLORS.reduce(
     (map, color, index) => {
@@ -85,8 +46,6 @@ const PLAYER_COLOR_CLASS_BY_HEX: Record<string, string> = PLAYER_COLORS.reduce(
     },
     {} as Record<string, string>,
 );
-
-const DISCONNECTED_DOT_COLOR = "#8f98ad";
 
 export default function Host({ onLeave }: Props) {
     const [roomCode, setRoomCode] = useState<string | null>(() => {
@@ -499,87 +458,19 @@ export default function Host({ onLeave }: Props) {
     }
 
     const hostControls = (
-        <>
-            <div className="panel-header">
-                <div>
-                    <p className="eyebrow">Host Console</p>
-                </div>
-                <button
-                    className="ui-button ui-button-ghost"
-                    onClick={handleLeaveGame}
-                >
-                    Leave Game
-                </button>
-            </div>
-
-            <div className="panel-row">
-                <button
-                    type="button"
-                    className="status-pill room-code-pill room-code-button"
-                    onClick={handleCopyGameCode}
-                    disabled={!roomCode}
-                    title={
-                        roomCode
-                            ? "Click to copy game code"
-                            : "No game code available"
-                    }
-                >
-                    <span className="room-code-label">
-                        {copiedCode ? "Copied!" : "Game Code"}
-                    </span>
-                    <span className="room-code-value">
-                        {roomCode ?? "------"}
-                    </span>
-                </button>
-                <div className="status-pill target-score-pill" role="status">
-                    {gameMode === "classic"
-                        ? `Race to ${effectiveTargetScore} pts`
-                        : "Battle Royale · Last player standing"}
-                </div>
-            </div>
-
-            <div className="panel-row host-mode-row">
-                <div
-                    className="host-mode-toggle"
-                    role="group"
-                    aria-label="Select game mode"
-                >
-                    <button
-                        type="button"
-                        className={`host-mode-option ${gameMode === "classic" ? "is-active" : ""}`}
-                        onClick={() => handleGameModeChange("classic")}
-                        disabled={playing}
-                    >
-                        Classic
-                    </button>
-                    <button
-                        type="button"
-                        className={`host-mode-option ${gameMode === "battle-royale" ? "is-active" : ""}`}
-                        onClick={() => handleGameModeChange("battle-royale")}
-                        disabled={playing}
-                    >
-                        Battle Royale
-                    </button>
-                </div>
-            </div>
-
-            {(!playing || startError) && (
-                <div className="panel-row panel-row-bottom">
-                    {!playing && (
-                        <button
-                            className="ui-button"
-                            onClick={handleStartGame}
-                            disabled={players.length < 1}
-                        >
-                            Start Game
-                        </button>
-                    )}
-                    {startError && (
-                        <div className="error-text">{startError}</div>
-                    )}
-                </div>
-            )}
-        </>
+        <HostControls
+            copiedCode={copiedCode}
+            roomCode={roomCode}
+            gameMode={gameMode}
+            effectiveTargetScore={effectiveTargetScore}
+            playing={playing}
+            playersCount={players.length}
+            startError={startError}
+            onLeaveGame={handleLeaveGame}
+            onCopyGameCode={handleCopyGameCode}
+            onGameModeChange={handleGameModeChange}
+            onStartGame={handleStartGame}
+        />
     );
 
     if (!playing) {
@@ -587,51 +478,11 @@ export default function Host({ onLeave }: Props) {
             <main className="page-shell">
                 <section className="panel host-panel">
                     {hostControls}
-                    <section className="panel inset-panel">
-                        <h3 className="section-title">
-                            Players ({players.length})
-                        </h3>
-                        <ul className="player-list">
-                            {players.length === 0 && (
-                                <li className="player-row player-empty">
-                                    Waiting for players to join...
-                                </li>
-                            )}
-                            {players.map((player) => (
-                                <li
-                                    key={player.id}
-                                    className={getPlayerRowClassName(player)}
-                                >
-                                    <span className="player-name-with-status">
-                                        <span
-                                            className="status-dot-wrap"
-                                            title={
-                                                player.socketId
-                                                    ? "Connected"
-                                                    : "Disconnected"
-                                            }
-                                        >
-                                            <svg
-                                                className="status-dot"
-                                                viewBox="0 0 10 10"
-                                                aria-hidden="true"
-                                            >
-                                                <circle
-                                                    cx="5"
-                                                    cy="5"
-                                                    r="4"
-                                                    fill={getPlayerDotColor(
-                                                        player,
-                                                    )}
-                                                />
-                                            </svg>
-                                        </span>
-                                        <span>{player.name}</span>
-                                    </span>
-                                </li>
-                            ))}
-                        </ul>
-                    </section>
+                    <HostPlayerList
+                        players={players}
+                        getPlayerRowClassName={getPlayerRowClassName}
+                        getPlayerDotColor={getPlayerDotColor}
+                    />
                 </section>
             </main>
         );
@@ -644,56 +495,12 @@ export default function Host({ onLeave }: Props) {
                     <section className="panel host-panel host-control-panel">
                         {hostControls}
                     </section>
-
-                    <section className="panel inset-panel leaderboard-panel">
-                        <h3 className="section-title">Leaderboard</h3>
-                        <ul className="player-list">
-                            {leaderboard.map((player) => (
-                                <li
-                                    key={player.id}
-                                    className={getPlayerRowClassName(player)}
-                                >
-                                    <span className="leaderboard-player-name">
-                                        <span className="player-name-with-status">
-                                            <span
-                                                className="status-dot-wrap"
-                                                title={
-                                                    player.socketId
-                                                        ? "Connected"
-                                                        : "Disconnected"
-                                                }
-                                            >
-                                                <svg
-                                                    className="status-dot"
-                                                    viewBox="0 0 10 10"
-                                                    aria-hidden="true"
-                                                >
-                                                    <circle
-                                                        cx="5"
-                                                        cy="5"
-                                                        r="4"
-                                                        fill={getPlayerDotColor(
-                                                            player,
-                                                        )}
-                                                    />
-                                                </svg>
-                                            </span>
-                                            <span>{player.name}</span>
-                                        </span>
-                                    </span>
-                                    <span className="leaderboard-player-meta">
-                                        <span>
-                                            {gameMode === "battle-royale"
-                                                ? player.alive
-                                                    ? "Alive"
-                                                    : "Eliminated"
-                                                : `${player.score} pts`}
-                                        </span>
-                                    </span>
-                                </li>
-                            ))}
-                        </ul>
-                    </section>
+                    <HostLeaderboard
+                        leaderboard={leaderboard}
+                        gameMode={gameMode}
+                        getPlayerRowClassName={getPlayerRowClassName}
+                        getPlayerDotColor={getPlayerDotColor}
+                    />
                 </div>
 
                 <div className="game-stage">
@@ -705,82 +512,17 @@ export default function Host({ onLeave }: Props) {
                 </div>
 
                 {gameOverData && (
-                    <section className="game-over-overlay">
-                        <div className="game-over-panel">
-                            <h2 className="game-over-title">
-                                {gameMode === "battle-royale"
-                                    ? "Battle Royale Over"
-                                    : "Game Over"}
-                            </h2>
-                            <p className="game-over-subtitle">
-                                {winnerName
-                                    ? `${winnerName} wins!`
-                                    : "Final standings"}
-                            </p>
-
-                            <div className="game-over-bars" role="list">
-                                {displayLeaderboard.map((entry, index) => {
-                                    return (
-                                        <div
-                                            key={entry.id}
-                                            className="game-over-bar-row"
-                                            role="listitem"
-                                        >
-                                            <div className="game-over-bar-meta">
-                                                <span className="game-over-rank">
-                                                    #{index + 1}
-                                                </span>
-                                                <span className="game-over-name">
-                                                    {entry.name}
-                                                </span>
-                                                <span className="game-over-score">
-                                                    {gameMode ===
-                                                    "battle-royale"
-                                                        ? entry.id ===
-                                                          gameOverData.winnerId
-                                                            ? "Winner"
-                                                            : "Eliminated"
-                                                        : `${entry.score} pts`}
-                                                </span>
-                                            </div>
-                                            {gameMode !== "battle-royale" && (
-                                                <div className="game-over-bar-track">
-                                                    <progress
-                                                        className={`game-over-progress ${getBarColorClassName(entry.color, index)}`}
-                                                        value={Math.max(
-                                                            0,
-                                                            entry.score,
-                                                        )}
-                                                        max={Math.max(
-                                                            1,
-                                                            highestScore,
-                                                        )}
-                                                        aria-label={`${entry.name} score bar`}
-                                                    />
-                                                </div>
-                                            )}
-                                        </div>
-                                    );
-                                })}
-                            </div>
-
-                            <div className="game-over-actions">
-                                <button
-                                    className="ui-button"
-                                    onClick={handleStartGame}
-                                    disabled={players.length < 1}
-                                >
-                                    Play Again
-                                </button>
-                                <button
-                                    className="ui-button ui-button-ghost"
-                                    onClick={handleLeaveGame}
-                                >
-                                    End Game
-                                </button>
-                            </div>
-                        </div>
-                    </section>
+                    <HostGameOverOverlay
+                        gameMode={gameMode}
+                        gameOverData={gameOverData}
+                        winnerName={winnerName}
+                        displayLeaderboard={displayLeaderboard}
+                        highestScore={highestScore}
+                        playersCount={players.length}
+                        getBarColorClassName={getBarColorClassName}
+                        onPlayAgain={handleStartGame}
+                        onEndGame={handleLeaveGame}
+                    />
                 )}
             </div>
         </main>

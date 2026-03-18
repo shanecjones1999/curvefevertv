@@ -26,7 +26,7 @@ function App() {
     if (role === "phone") return <PlayerController onLeave={clearRole} />;
 
     return (
-        <main className="page-shell">
+        <main className="page-shell page-shell-landing">
             <section className="panel role-panel">
                 <div className="brand-row">
                     <svg
@@ -111,10 +111,33 @@ function App() {
                         className="ui-button ui-button-secondary"
                         onClick={() => selectRole("phone")}
                     >
-                        Phone Controller
+                        Join as Player
                     </button>
                 </div>
             </section>
+            <footer className="landing-footer" aria-label="Project links">
+                <a
+                    className="landing-footer-link"
+                    href="https://github.com/shanecjones1999/curvefevertv"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="View source on GitHub"
+                >
+                    <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 24 24"
+                        role="img"
+                        aria-hidden="true"
+                        className="landing-footer-icon"
+                    >
+                        <path
+                            fill="currentColor"
+                            d="M12 .5a12 12 0 0 0-3.79 23.39c.6.1.82-.26.82-.58v-2.03c-3.34.73-4.04-1.6-4.04-1.6-.55-1.38-1.33-1.75-1.33-1.75-1.1-.75.08-.73.08-.73 1.2.08 1.83 1.23 1.83 1.23 1.08 1.83 2.83 1.3 3.52.99.1-.77.42-1.3.77-1.6-2.67-.3-5.47-1.33-5.47-5.95 0-1.31.47-2.38 1.23-3.22-.12-.3-.53-1.53.12-3.2 0 0 1.01-.32 3.3 1.23a11.53 11.53 0 0 1 6 0c2.3-1.55 3.3-1.23 3.3-1.23.65 1.67.24 2.9.12 3.2.77.84 1.23 1.91 1.23 3.22 0 4.63-2.8 5.65-5.48 5.95.43.37.81 1.1.81 2.22v3.29c0 .32.22.69.83.58A12 12 0 0 0 12 .5Z"
+                        />
+                    </svg>
+                    <span>GitHub</span>
+                </a>
+            </footer>
         </main>
     );
 }

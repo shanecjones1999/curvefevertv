@@ -380,7 +380,7 @@ export default function PlayerController({ onLeave }: Props) {
                 <div className="panel-header">
                     <div>
                         <p className="eyebrow">Mobile Console</p>
-                        <h2 className="title title-small">Player Controller</h2>
+                        <h2 className="title title-small">Join as Player</h2>
                     </div>
                     <button
                         className="ui-button ui-button-ghost"

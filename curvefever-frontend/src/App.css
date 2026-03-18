@@ -4,6 +4,14 @@
   padding: clamp(0.9rem, 2.4vw, 2rem);
 }
 
+.page-shell-landing {
+  min-height: 100dvh;
+  display: grid;
+  align-content: center;
+  gap: 0.85rem;
+  padding-bottom: clamp(2.5rem, 6vh, 3.5rem);
+}
+
 .page-shell-host-playing {
   width: min(100%, 1680px);
   padding-top: clamp(0.5rem, 1.2vw, 1rem);
@@ -28,6 +36,69 @@
 
 .role-panel {
   gap: 0.75rem;
+}
+
+.landing-footer {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: max(0.8rem, env(safe-area-inset-bottom));
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.landing-footer-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.42rem;
+  padding: 0.35rem 0.62rem;
+  border-radius: 999px;
+  color: rgba(224, 237, 255, 0.9);
+  text-decoration: none;
+  border: 1px solid rgba(152, 203, 255, 0.3);
+  background: linear-gradient(160deg, rgba(13, 24, 54, 0.58), rgba(10, 19, 44, 0.44));
+  box-shadow: 0 10px 26px rgba(4, 10, 26, 0.36), inset 0 1px 0 rgba(188, 220, 255, 0.18);
+  -webkit-backdrop-filter: blur(8px) saturate(1.2);
+  backdrop-filter: blur(8px) saturate(1.2);
+  transition: color 130ms ease, border-color 130ms ease, background-color 130ms ease, box-shadow 130ms ease;
+  pointer-events: auto;
+  animation: landingFooterFadeIn 380ms ease-out both;
+}
+
+.landing-footer-link:hover {
+  color: #eef6ff;
+  border-color: rgba(173, 220, 255, 0.56);
+  background: linear-gradient(160deg, rgba(19, 35, 79, 0.66), rgba(14, 26, 61, 0.52));
+  box-shadow: 0 12px 28px rgba(7, 16, 40, 0.4), inset 0 1px 0 rgba(204, 230, 255, 0.24);
+}
+
+.landing-footer-link:focus-visible {
+  outline: 2px solid rgba(153, 205, 255, 0.92);
+  outline-offset: 2px;
+}
+
+.landing-footer-icon {
+  width: 16px;
+  height: 16px;
+  display: block;
+}
+
+@keyframes landingFooterFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-footer-link {
+    animation: none;
+  }
 }
 
 .role-panel .title,
@@ -106,6 +177,29 @@
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 0.75rem;
+}
+
+.role-grid .ui-button {
+  border-color: rgba(160, 208, 255, 0.42);
+  background: linear-gradient(150deg, rgba(32, 76, 194, 0.52), rgba(21, 50, 136, 0.44));
+  box-shadow: 0 12px 28px rgba(6, 15, 38, 0.38), inset 0 1px 0 rgba(198, 224, 255, 0.22);
+  -webkit-backdrop-filter: blur(10px) saturate(1.18);
+  backdrop-filter: blur(10px) saturate(1.18);
+}
+
+.role-grid .ui-button-secondary {
+  border-color: rgba(165, 214, 255, 0.38);
+  background: linear-gradient(150deg, rgba(17, 33, 78, 0.62), rgba(11, 22, 56, 0.5));
+}
+
+.role-grid .ui-button:hover:not(:disabled) {
+  border-color: rgba(183, 224, 255, 0.68);
+  box-shadow: 0 14px 32px rgba(8, 20, 50, 0.45), inset 0 1px 0 rgba(214, 234, 255, 0.25);
+}
+
+.role-grid .ui-button:focus-visible {
+  outline: 2px solid rgba(167, 214, 255, 0.9);
+  outline-offset: 2px;
 }
 
 .ui-button {

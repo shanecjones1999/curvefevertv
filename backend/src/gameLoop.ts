@@ -1,5 +1,5 @@
-import { Server } from "socket.io";
 import { getRoom } from "./rooms";
+import { TypedServer } from "./socket/events";
 import { GameState, Player } from "./types";
 import { GAME_HEIGHT, GAME_WIDTH } from "./config";
 
@@ -452,7 +452,7 @@ export function restartRound(
     }
 }
 
-export function startGameLoop(roomCode: string, io: Server) {
+export function startGameLoop(roomCode: string, io: TypedServer) {
     if (runningLoops.has(roomCode)) return;
 
     restartGraceMap.set(roomCode, restartGracePeriod);

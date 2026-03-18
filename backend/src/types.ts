@@ -28,6 +28,7 @@ export interface Room {
     hostSocketId: string;
     players: Map<string, Player>;
     state: RoomState;
+    targetScore?: number;
     game?: GameState | null;
 }
 
@@ -38,6 +39,7 @@ export interface GameState {
         height: number;
     };
     players: Player[];
+    targetScore?: number;
 }
 
 export interface InputPayload {

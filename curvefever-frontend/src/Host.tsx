@@ -12,14 +12,29 @@ type ReconnectHostResponse = {
     roomCode?: string;
     players?: Player[];
     state?: "lobby" | "playing" | "finished";
+    targetScore?: number;
     gameConfig?: GameConfig;
     error?: string;
 };
 
 type StartGameResponse = {
     ok: boolean;
+    targetScore?: number;
     gameConfig?: GameConfig;
     error?: string;
+};
+
+type GameOverLeaderboardEntry = {
+    id: string;
+    name: string;
+    score: number;
+    color?: string;
+};
+
+type GameOverPayload = {
+    winnerId: string | null;
+    targetScore?: number;
+    leaderboard: GameOverLeaderboardEntry[];
 };
 
 type GameConfig = {
@@ -54,6 +69,14 @@ const PLAYER_COLORS = [
     "#000000",
 ];
 
+const PLAYER_COLOR_CLASS_BY_HEX: Record<string, string> = PLAYER_COLORS.reduce(
+    (map, color, index) => {
+        map[color.toLowerCase()] = `bar-color-${index}`;
+        return map;
+    },
+    {} as Record<string, string>,
+);
+
 const DISCONNECTED_DOT_COLOR = "#8f98ad";
 
 export default function Host({ onLeave }: Props) {
@@ -71,6 +94,10 @@ export default function Host({ onLeave }: Props) {
     const [playing, setPlaying] = useState(false);
     const [startError, setStartError] = useState<string | null>(null);
     const [copiedCode, setCopiedCode] = useState(false);
+    const [targetScore, setTargetScore] = useState<number | null>(null);
+    const [gameOverData, setGameOverData] = useState<GameOverPayload | null>(
+        null,
+    );
     const [gameConfig, setGameConfig] = useState<GameConfig>({
         width: DEFAULT_GAME_WIDTH,
         height: DEFAULT_GAME_HEIGHT,
@@ -109,11 +136,44 @@ export default function Host({ onLeave }: Props) {
         return playerColorById.get(player.id) ?? PLAYER_COLORS[0];
     };
 
+    const getBarColorClassName = (color: string | undefined, index: number) => {
+        const normalizedColor = color?.toLowerCase();
+        if (normalizedColor && PLAYER_COLOR_CLASS_BY_HEX[normalizedColor]) {
+            return PLAYER_COLOR_CLASS_BY_HEX[normalizedColor];
+        }
+        return `bar-color-${index % PLAYER_COLORS.length}`;
+    };
+
     const leaderboard = [...players].sort(
         (firstPlayer, secondPlayer) =>
             secondPlayer.score - firstPlayer.score ||
             firstPlayer.name.localeCompare(secondPlayer.name),
     );
+    const effectiveTargetScore = targetScore ?? players.length * 10 - 10;
+    const displayLeaderboard = useMemo(() => {
+        const source =
+            gameOverData?.leaderboard && gameOverData.leaderboard.length > 0
+                ? gameOverData.leaderboard
+                : leaderboard;
+
+        return source.map((entry, index) => {
+            const fallbackColor = PLAYER_COLORS[index % PLAYER_COLORS.length];
+            const colorFromPlayer = playerColorById.get(entry.id);
+            const hasValidEntryColor =
+                typeof entry.color === "string" && /^#/.test(entry.color);
+            return {
+                ...entry,
+                color:
+                    (hasValidEntryColor ? entry.color : undefined) ??
+                    colorFromPlayer ??
+                    fallbackColor,
+            };
+        });
+    }, [gameOverData, leaderboard, playerColorById]);
+    const highestScore = displayLeaderboard[0]?.score ?? 0;
+    const winnerName =
+        displayLeaderboard.find((entry) => entry.id === gameOverData?.winnerId)
+            ?.name ?? displayLeaderboard[0]?.name;
 
     useEffect(() => {
         const applyGameConfig = (incoming?: GameConfig) => {
@@ -125,12 +185,41 @@ export default function Host({ onLeave }: Props) {
             });
         };
 
+        const applyTargetScore = (incoming?: number) => {
+            if (typeof incoming !== "number") return;
+            if (!Number.isFinite(incoming) || incoming <= 0) return;
+            setTargetScore(Math.floor(incoming));
+        };
+
+        const requestCreateRoom = () => {
+            socket.emit(
+                "createRoom",
+                null,
+                (res: { roomCode: string; gameConfig?: GameConfig }) => {
+                    if (!res?.roomCode) {
+                        hasRequestedRoomCreation.current = false;
+                        setStartError("Unable to create room");
+                        return;
+                    }
+                    setRoomCode(res.roomCode);
+                    if (res.gameConfig) {
+                        setGameConfig(res.gameConfig);
+                    }
+                    setStartError(null);
+                    localStorage.setItem(
+                        HOST_SESSION_KEY,
+                        JSON.stringify({ roomCode: res.roomCode }),
+                    );
+                },
+            );
+        };
+
         const reconnectFromSession = () => {
             const rawSession = localStorage.getItem(HOST_SESSION_KEY);
             if (!rawSession) {
                 if (!hasRequestedRoomCreation.current) {
                     hasRequestedRoomCreation.current = true;
-                    handleCreateRoom();
+                    requestCreateRoom();
                 }
                 return;
             }
@@ -150,8 +239,35 @@ export default function Host({ onLeave }: Props) {
                             if (Array.isArray(res.players)) {
                                 setPlayers(res.players);
                             }
+                            applyTargetScore(res.targetScore);
                             applyGameConfig(res.gameConfig);
-                            setPlaying(res.state === "playing");
+                            if (res.state === "finished") {
+                                const fallbackLeaderboard = (res.players ?? [])
+                                    .map((player) => ({
+                                        id: player.id,
+                                        name: player.name,
+                                        score: player.score ?? 0,
+                                        color: player.color,
+                                    }))
+                                    .sort(
+                                        (firstPlayer, secondPlayer) =>
+                                            secondPlayer.score -
+                                                firstPlayer.score ||
+                                            firstPlayer.name.localeCompare(
+                                                secondPlayer.name,
+                                            ),
+                                    );
+                                setGameOverData({
+                                    winnerId:
+                                        fallbackLeaderboard[0]?.id ?? null,
+                                    targetScore: res.targetScore,
+                                    leaderboard: fallbackLeaderboard,
+                                });
+                                setPlaying(true);
+                            } else {
+                                setGameOverData(null);
+                                setPlaying(res.state === "playing");
+                            }
                         } else {
                             localStorage.removeItem(HOST_SESSION_KEY);
                             setStartError(
@@ -176,27 +292,49 @@ export default function Host({ onLeave }: Props) {
 
         socket.on(
             "lobbyUpdate",
-            (data: { players: Player[]; gameConfig?: GameConfig }) => {
+            (data: {
+                players: Player[];
+                targetScore?: number;
+                gameConfig?: GameConfig;
+            }) => {
                 setPlayers(data.players);
+                applyTargetScore(data.targetScore);
                 applyGameConfig(data.gameConfig);
             },
         );
 
-        socket.on("startGame", (data?: { gameConfig?: GameConfig }) => {
-            applyGameConfig(data?.gameConfig);
-            setPlaying(true);
-        });
         socket.on(
-            "gameState",
-            (state?: { players?: Player[]; arena?: GameConfig }) => {
+            "startGame",
+            (data?: { targetScore?: number; gameConfig?: GameConfig }) => {
+                applyTargetScore(data?.targetScore);
+                applyGameConfig(data?.gameConfig);
+                setGameOverData(null);
+                setPlaying(true);
+            },
+        );
+        socket.on(
+            EVENTS.GAME_STATE,
+            (state?: {
+                players?: Player[];
+                targetScore?: number;
+                arena?: GameConfig;
+            }) => {
                 if (state?.arena) {
                     applyGameConfig(state.arena);
                 }
+                applyTargetScore(state?.targetScore);
                 if (state && Array.isArray(state.players)) {
                     setPlayers(state.players);
                 }
             },
         );
+        socket.on(EVENTS.GAME_OVER, (data?: GameOverPayload) => {
+            applyTargetScore(data?.targetScore);
+            if (data?.leaderboard && Array.isArray(data.leaderboard)) {
+                setGameOverData(data);
+            }
+            setPlaying(true);
+        });
         socket.on(EVENTS.ROUND_RESTART, () => {
             // Silently restart, game state updates automatically
         });
@@ -208,7 +346,8 @@ export default function Host({ onLeave }: Props) {
             socket.off("playerJoined");
             socket.off("lobbyUpdate");
             socket.off("startGame");
-            socket.off("gameState");
+            socket.off(EVENTS.GAME_STATE);
+            socket.off(EVENTS.GAME_OVER);
             socket.off(EVENTS.ROUND_RESTART);
             socket.off("connect", reconnectFromSession);
         };
@@ -222,34 +361,15 @@ export default function Host({ onLeave }: Props) {
         return () => window.clearTimeout(timeoutId);
     }, [copiedCode]);
 
-    function handleCreateRoom() {
-        socket.emit(
-            "createRoom",
-            null,
-            (res: { roomCode: string; gameConfig?: GameConfig }) => {
-                if (!res?.roomCode) {
-                    hasRequestedRoomCreation.current = false;
-                    setStartError("Unable to create room");
-                    return;
-                }
-                setRoomCode(res.roomCode);
-                if (res.gameConfig) {
-                    setGameConfig(res.gameConfig);
-                }
-                setStartError(null);
-                localStorage.setItem(
-                    HOST_SESSION_KEY,
-                    JSON.stringify({ roomCode: res.roomCode }),
-                );
-            },
-        );
-    }
-
     function handleStartGame() {
         if (!roomCode) return;
         socket.emit("startGame", { roomCode }, (res: StartGameResponse) => {
             if (res?.ok) {
                 setStartError(null);
+                setGameOverData(null);
+                if (typeof res.targetScore === "number") {
+                    setTargetScore(Math.floor(res.targetScore));
+                }
                 if (res.gameConfig) {
                     setGameConfig(res.gameConfig);
                 }
@@ -336,6 +456,9 @@ export default function Host({ onLeave }: Props) {
                         {roomCode ?? "------"}
                     </span>
                 </button>
+                <div className="status-pill target-score-pill" role="status">
+                    Race to {effectiveTargetScore} pts
+                </div>
             </div>
 
             <div className="panel-row panel-row-bottom">
@@ -466,6 +589,73 @@ export default function Host({ onLeave }: Props) {
                         height={gameConfig.height}
                     />
                 </div>
+
+                {gameOverData && (
+                    <section className="game-over-overlay">
+                        <div className="game-over-panel">
+                            <h2 className="game-over-title">Game Over</h2>
+                            <p className="game-over-subtitle">
+                                {winnerName
+                                    ? `${winnerName} wins!`
+                                    : "Final standings"}
+                            </p>
+
+                            <div className="game-over-bars" role="list">
+                                {displayLeaderboard.map((entry, index) => {
+                                    return (
+                                        <div
+                                            key={entry.id}
+                                            className="game-over-bar-row"
+                                            role="listitem"
+                                        >
+                                            <div className="game-over-bar-meta">
+                                                <span className="game-over-rank">
+                                                    #{index + 1}
+                                                </span>
+                                                <span className="game-over-name">
+                                                    {entry.name}
+                                                </span>
+                                                <span className="game-over-score">
+                                                    {entry.score} pts
+                                                </span>
+                                            </div>
+                                            <div className="game-over-bar-track">
+                                                <progress
+                                                    className={`game-over-progress ${getBarColorClassName(entry.color, index)}`}
+                                                    value={Math.max(
+                                                        0,
+                                                        entry.score,
+                                                    )}
+                                                    max={Math.max(
+                                                        1,
+                                                        highestScore,
+                                                    )}
+                                                    aria-label={`${entry.name} score bar`}
+                                                />
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+
+                            <div className="game-over-actions">
+                                <button
+                                    className="ui-button"
+                                    onClick={handleStartGame}
+                                    disabled={players.length < 2}
+                                >
+                                    Play Again
+                                </button>
+                                <button
+                                    className="ui-button ui-button-ghost"
+                                    onClick={handleLeaveGame}
+                                >
+                                    End Game
+                                </button>
+                            </div>
+                        </div>
+                    </section>
+                )}
             </div>
         </main>
     );

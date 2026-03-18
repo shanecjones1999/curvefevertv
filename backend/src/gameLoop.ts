@@ -16,7 +16,7 @@ const ROUND_START_NO_TRAIL_TICKS = 120;
 const roundStartNoTrailMap = new Map<string, number>();
 const ROUND_RESTART_DELAY_MS = 2000;
 const pendingRoundRestartMap = new Map<string, NodeJS.Timeout>();
-const SPAWN_WALL_MARGIN = 60;
+const SPAWN_WALL_MARGIN = 180;
 
 function calculateTargetScore(playerCount: number) {
     return Math.max(10, playerCount * 10 - 10);

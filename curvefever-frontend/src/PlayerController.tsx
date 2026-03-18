@@ -6,6 +6,7 @@ import { EVENTS } from "./events";
 const PLAYER_SESSION_KEY = "curvefever:playerSession";
 const REJOIN_TIMEOUT_MS = 7000;
 const INPUT_SEND_INTERVAL_MS = 16;
+const ROOM_CODE_REGEX = /^[A-Z]{4}$/;
 
 type PlayerSession = {
     roomCode: string;
@@ -22,6 +23,13 @@ type JoinRoomResponse = {
     error?: string;
 };
 
+function sanitizeRoomCodeInput(value: string) {
+    return value
+        .toUpperCase()
+        .replace(/[^A-Z]/g, "")
+        .slice(0, 4);
+}
+
 function getStoredPlayerSession(): PlayerSession | null {
     const raw = localStorage.getItem(PLAYER_SESSION_KEY);
     if (!raw) return null;
@@ -29,8 +37,10 @@ function getStoredPlayerSession(): PlayerSession | null {
     try {
         const parsed = JSON.parse(raw) as Partial<PlayerSession>;
         if (!parsed.roomCode || !parsed.name || !parsed.playerId) return null;
+        const normalizedRoomCode = sanitizeRoomCodeInput(parsed.roomCode);
+        if (!ROOM_CODE_REGEX.test(normalizedRoomCode)) return null;
         return {
-            roomCode: parsed.roomCode.toUpperCase(),
+            roomCode: normalizedRoomCode,
             name: parsed.name,
             playerId: parsed.playerId,
         };
@@ -44,7 +54,7 @@ type Props = { onLeave: () => void };
 export default function PlayerController({ onLeave }: Props) {
     const storedSession = useMemo(() => getStoredPlayerSession(), []);
     const [roomCode, setRoomCode] = useState(storedSession?.roomCode ?? "");
-    const [name, setName] = useState(storedSession?.name ?? "Player");
+    const [name, setName] = useState(storedSession?.name ?? "");
     const [joined, setJoined] = useState(false);
     const [isRejoining, setIsRejoining] = useState(!!storedSession);
     const [rejoinError, setRejoinError] = useState<string | null>(null);
@@ -281,19 +291,33 @@ export default function PlayerController({ onLeave }: Props) {
     }, [joined, handleLeftDown, handleLeftUp, handleRightDown, handleRightUp]);
 
     function handleJoin() {
+        const normalizedRoomCode = sanitizeRoomCodeInput(roomCode);
+        if (!ROOM_CODE_REGEX.test(normalizedRoomCode)) {
+            setRejoinError("Room code must be 4 letters.");
+            return;
+        }
+
+        const normalizedName = name.trim();
+        if (!normalizedName) {
+            setRejoinError("Name is required.");
+            return;
+        }
+
         socket.emit(
             EVENTS.JOIN_ROOM,
-            { roomCode, name },
+            { roomCode: normalizedRoomCode, name: normalizedName },
             (res: JoinRoomResponse) => {
                 if (res?.ok && res.player?.id) {
                     playerIdRef.current = res.player.id;
                     setJoined(true);
                     setRejoinError(null);
+                    setRoomCode(normalizedRoomCode);
+                    setName(normalizedName);
                     localStorage.setItem(
                         PLAYER_SESSION_KEY,
                         JSON.stringify({
-                            roomCode: roomCode.toUpperCase(),
-                            name,
+                            roomCode: normalizedRoomCode,
+                            name: normalizedName,
                             playerId: res.player.id,
                         }),
                     );
@@ -375,10 +399,12 @@ export default function PlayerController({ onLeave }: Props) {
                                 className="ui-input"
                                 value={roomCode}
                                 onChange={(e) =>
-                                    setRoomCode(e.target.value.toUpperCase())
+                                    setRoomCode(
+                                        sanitizeRoomCodeInput(e.target.value),
+                                    )
                                 }
-                                maxLength={6}
-                                placeholder="ABCD12"
+                                maxLength={4}
+                                placeholder="ABCD"
                             />
                         </div>
                         <div className="field-group">

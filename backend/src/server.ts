@@ -20,6 +20,8 @@ import {
 import { Player, InputPayload, GameMode } from "./types";
 import { GAME_HEIGHT, GAME_WIDTH } from "./config";
 
+const ROOM_CODE_REGEX = /^[A-Z]{4}$/;
+
 function calculateTargetScore(playerCount: number) {
     return Math.max(10, playerCount * 10 - 10);
 }
@@ -29,6 +31,13 @@ function sanitizeGameMode(value: unknown): GameMode {
         return "battle-royale";
     }
     return "classic";
+}
+
+function normalizeRoomCode(value: unknown): string | null {
+    if (typeof value !== "string") return null;
+    const roomCode = value.trim().toUpperCase();
+    if (!ROOM_CODE_REGEX.test(roomCode)) return null;
+    return roomCode;
 }
 
 dotenv.config();
@@ -116,8 +125,9 @@ io.on("connection", (socket) => {
     });
 
     socket.on("reconnectHost", (data: { roomCode: string }, cb) => {
-        const roomCode = data?.roomCode?.toUpperCase();
-        if (!roomCode) return cb?.({ ok: false, error: "Room code required" });
+        const roomCode = normalizeRoomCode(data?.roomCode);
+        if (!roomCode)
+            return cb?.({ ok: false, error: "Room code must be 4 letters" });
         const room = getRoom(roomCode);
         if (!room) return cb?.({ ok: false, error: "Room not found" });
 
@@ -144,15 +154,23 @@ io.on("connection", (socket) => {
     });
 
     socket.on("joinRoom", (data: { roomCode: string; name: string }, cb) => {
-        const roomCode = data.roomCode?.toUpperCase();
-        const room = roomCode ? getRoom(roomCode) : null;
+        const roomCode = normalizeRoomCode(data?.roomCode);
+        if (!roomCode)
+            return cb?.({ ok: false, error: "Room code must be 4 letters" });
+
+        const normalizedName = data?.name?.trim();
+        if (!normalizedName) {
+            return cb?.({ ok: false, error: "Name is required" });
+        }
+
+        const room = getRoom(roomCode);
         if (!room) return cb?.({ ok: false, error: "Room not found" });
 
         const spawn = generateSpawnPosition();
 
         const player: Player = {
             id: crypto.randomUUID(),
-            name: data.name,
+            name: normalizedName,
             score: 0,
             socketId: socket.id,
             color: undefined,
@@ -181,7 +199,7 @@ io.on("connection", (socket) => {
     socket.on(
         "rejoinRoom",
         (data: { roomCode: string; playerId: string; name?: string }, cb) => {
-            const roomCode = data?.roomCode?.toUpperCase();
+            const roomCode = normalizeRoomCode(data?.roomCode);
             console.log(
                 `[rejoinRoom] Attempt for player ${data?.playerId} in room ${roomCode}`,
             );
@@ -192,7 +210,7 @@ io.on("connection", (socket) => {
                 );
                 return cb?.({
                     ok: false,
-                    error: "roomCode and playerId required",
+                    error: "roomCode (4 letters) and playerId required",
                 });
             }
 
@@ -235,8 +253,9 @@ io.on("connection", (socket) => {
     );
 
     socket.on("requestLobbyState", (data: { roomCode: string }, cb) => {
-        const roomCode = data?.roomCode?.toUpperCase();
-        if (!roomCode) return cb?.({ ok: false, error: "Room code required" });
+        const roomCode = normalizeRoomCode(data?.roomCode);
+        if (!roomCode)
+            return cb?.({ ok: false, error: "Room code must be 4 letters" });
         const room = getRoom(roomCode);
         if (!room) return cb?.({ ok: false, error: "Room not found" });
         cb?.({
@@ -267,8 +286,13 @@ io.on("connection", (socket) => {
     socket.on(
         "setGameMode",
         (data: { roomCode: string; gameMode?: GameMode }, cb) => {
-            const roomCode = data?.roomCode?.toUpperCase();
-            const room = roomCode ? getRoom(roomCode) : null;
+            const roomCode = normalizeRoomCode(data?.roomCode);
+            if (!roomCode)
+                return cb?.({
+                    ok: false,
+                    error: "Room code must be 4 letters",
+                });
+            const room = getRoom(roomCode);
             if (!room) return cb?.({ ok: false, error: "Room not found" });
             if (room.hostSocketId !== socket.id)
                 return cb?.({ ok: false, error: "Not host" });
@@ -288,8 +312,13 @@ io.on("connection", (socket) => {
     socket.on(
         "startGame",
         (data: { roomCode: string; gameMode?: GameMode }, cb) => {
-            const roomCode = data?.roomCode?.toUpperCase();
-            const room = roomCode ? getRoom(roomCode) : null;
+            const roomCode = normalizeRoomCode(data?.roomCode);
+            if (!roomCode)
+                return cb?.({
+                    ok: false,
+                    error: "Room code must be 4 letters",
+                });
+            const room = getRoom(roomCode);
             if (!room) return cb?.({ ok: false, error: "Room not found" });
             if (room.hostSocketId !== socket.id)
                 return cb?.({ ok: false, error: "Not host" });
@@ -340,9 +369,12 @@ io.on("connection", (socket) => {
     socket.on(
         "leaveRoom",
         (data: { roomCode: string; playerId?: string }, cb) => {
-            const roomCode = data?.roomCode?.toUpperCase();
+            const roomCode = normalizeRoomCode(data?.roomCode);
             if (!roomCode)
-                return cb?.({ ok: false, error: "Room code required" });
+                return cb?.({
+                    ok: false,
+                    error: "Room code must be 4 letters",
+                });
 
             const room = getRoom(roomCode);
             if (!room) return cb?.({ ok: false, error: "Room not found" });

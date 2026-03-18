@@ -1,12 +1,15 @@
 import { Room, Player } from "./types";
 
 const rooms = new Map<string, Room>();
+const ROOM_CODE_LENGTH = 4;
+const ROOM_CODE_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
-function generateRoomCode(length = 4) {
-    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+function generateRoomCode() {
     let code = "";
-    for (let i = 0; i < length; i++)
-        code += chars[Math.floor(Math.random() * chars.length)];
+    for (let i = 0; i < ROOM_CODE_LENGTH; i++) {
+        code +=
+            ROOM_CODE_CHARS[Math.floor(Math.random() * ROOM_CODE_CHARS.length)];
+    }
     return code;
 }
 

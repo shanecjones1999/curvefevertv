@@ -149,7 +149,8 @@ export default function Host({ onLeave }: Props) {
             secondPlayer.score - firstPlayer.score ||
             firstPlayer.name.localeCompare(secondPlayer.name),
     );
-    const effectiveTargetScore = targetScore ?? players.length * 10 - 10;
+    const effectiveTargetScore =
+        targetScore ?? Math.max(10, players.length * 10 - 10);
     const displayLeaderboard = useMemo(() => {
         const source =
             gameOverData?.leaderboard && gameOverData.leaderboard.length > 0
@@ -465,7 +466,7 @@ export default function Host({ onLeave }: Props) {
                 <button
                     className="ui-button"
                     onClick={handleStartGame}
-                    disabled={playing || players.length < 2}
+                    disabled={playing || players.length < 1}
                 >
                     {playing ? "Game Running" : "Start Game"}
                 </button>
@@ -642,7 +643,7 @@ export default function Host({ onLeave }: Props) {
                                 <button
                                     className="ui-button"
                                     onClick={handleStartGame}
-                                    disabled={players.length < 2}
+                                    disabled={players.length < 1}
                                 >
                                     Play Again
                                 </button>

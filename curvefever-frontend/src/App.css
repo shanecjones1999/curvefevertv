@@ -615,7 +615,7 @@
   max-width: 100%;
   margin: 0 auto;
   aspect-ratio: 1280 / 1000;
-  border-radius: 1rem;
+  border-radius: 0;
   overflow: hidden;
   border: 1px solid rgba(123, 174, 255, 0.34);
   background: radial-gradient(circle at 50% 10%, rgba(70, 110, 224, 0.3), rgba(6, 9, 18, 0.92));

@@ -527,36 +527,36 @@
 
 .page-shell-host-playing .ui-button {
   min-height: 50px;
-  font-size: 1.22rem;
+  font-size: 0.98rem;
 }
 
 .page-shell-host-playing .section-title {
-  font-size: 1.34rem;
+  font-size: 1.07rem;
 }
 
 .page-shell-host-playing .room-code-label {
-  font-size: 0.9rem;
+  font-size: 0.72rem;
 }
 
 .page-shell-host-playing .room-code-value {
-  font-size: clamp(2.3rem, 6.2vw, 4rem);
+  font-size: clamp(1.84rem, 4.96vw, 3.2rem);
 }
 
 .page-shell-host-playing .player-row {
   padding: 0.78rem 0.95rem;
-  font-size: 1.2rem;
-}
-
-.host-panel .eyebrow {
   font-size: 0.96rem;
 }
 
+.host-panel .eyebrow {
+  font-size: 0.77rem;
+}
+
 .host-panel .status-pill {
-  font-size: 1.1rem;
+  font-size: 0.88rem;
 }
 
 .host-panel .room-code-label {
-  font-size: 0.9rem;
+  font-size: 0.72rem;
 }
 
 .host-side-column {
@@ -588,7 +588,7 @@
 
 .host-panel .error-text {
   text-align: center;
-  font-size: 1.02rem;
+  font-size: 0.82rem;
 }
 
 .leaderboard-panel {
@@ -607,7 +607,7 @@
 .leaderboard-player-meta {
   color: #9ed0ff;
   font-weight: 700;
-  font-size: 1.12rem;
+  font-size: 0.9rem;
 }
 
 .phaser-shell {

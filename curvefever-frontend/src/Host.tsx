@@ -539,7 +539,6 @@ export default function Host({ onLeave }: Props) {
             </div>
 
             <div className="panel-row host-mode-row">
-                <span className="host-mode-label">Game Mode</span>
                 <div
                     className="host-mode-toggle"
                     role="group"
@@ -564,16 +563,22 @@ export default function Host({ onLeave }: Props) {
                 </div>
             </div>
 
-            <div className="panel-row panel-row-bottom">
-                <button
-                    className="ui-button"
-                    onClick={handleStartGame}
-                    disabled={playing || players.length < 1}
-                >
-                    {playing ? "Game Running" : "Start Game"}
-                </button>
-                {startError && <div className="error-text">{startError}</div>}
-            </div>
+            {(!playing || startError) && (
+                <div className="panel-row panel-row-bottom">
+                    {!playing && (
+                        <button
+                            className="ui-button"
+                            onClick={handleStartGame}
+                            disabled={players.length < 1}
+                        >
+                            Start Game
+                        </button>
+                    )}
+                    {startError && (
+                        <div className="error-text">{startError}</div>
+                    )}
+                </div>
+            )}
         </>
     );
 

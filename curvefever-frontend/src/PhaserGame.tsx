@@ -1,7 +1,11 @@
 import { useEffect, useRef } from "react";
 import Phaser from "phaser";
 import type { Player } from "./types";
-import { DEFAULT_GAME_HEIGHT, DEFAULT_GAME_WIDTH } from "./gameConfig";
+import {
+    DEFAULT_GAME_HEIGHT,
+    DEFAULT_GAME_WIDTH,
+    PLAYER_TRAIL_WIDTH,
+} from "./gameConfig";
 
 interface PhaserGameProps {
     players: Player[];
@@ -97,7 +101,7 @@ class CurvefeverScene extends Phaser.Scene {
                     ? p.color
                     : PLAYER_COLORS[i % PLAYER_COLORS.length];
             trailG.lineStyle(
-                3,
+                PLAYER_TRAIL_WIDTH,
                 Phaser.Display.Color.HexStringToColor(color).color,
                 1,
             );

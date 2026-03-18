@@ -4,12 +4,12 @@
   -webkit-touch-callout: none;
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
-  min-height: clamp(92px, 24vh, 180px);
+  min-height: clamp(234px, 52vh, 442px);
   min-width: min(44vw, 240px);
   font-size: clamp(1.1rem, 4.2vw, 1.45rem);
   font-weight: 700;
   letter-spacing: 0.03em;
-  padding: 1rem 1rem;
+  padding: 2.1rem 1rem;
   border-radius: 1.2rem;
   border: 1px solid rgba(157, 203, 255, 0.34);
   background: linear-gradient(145deg, rgba(35, 91, 230, 0.92), rgba(28, 67, 180, 0.95));
@@ -50,9 +50,10 @@
 
 @media (max-width: 600px) {
   .button {
-    min-height: clamp(88px, 28vh, 140px);
+    min-height: clamp(218.4px, 54.6vh, 364px);
     min-width: 0;
     flex: 1;
+    padding: 1.9rem 0.9rem;
   }
 
   .button-row {

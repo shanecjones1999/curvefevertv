@@ -91,18 +91,6 @@ class CurvefeverScene extends Phaser.Scene {
                 this.playerSprites.set(p.id + "_trail", trailG);
             }
             trailG.clear();
-
-            // Do not render crashed/eliminated players
-            if (!p.alive) {
-                const g = this.playerSprites.get(p.id);
-                if (g) {
-                    g.clear();
-                    g.setVisible(false);
-                }
-                trailG.setVisible(false);
-                return;
-            }
-
             trailG.setVisible(true);
             const color =
                 p.color && /^#/.test(p.color)

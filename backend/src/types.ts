@@ -17,6 +17,7 @@ export interface Player {
     gapLength?: number;
     inGap?: boolean;
     gapStartDistance?: number;
+    isFloating?: boolean;
     turnLeftHeld?: boolean;
     turnRightHeld?: boolean;
 }

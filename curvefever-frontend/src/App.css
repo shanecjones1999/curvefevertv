@@ -565,6 +565,9 @@
 
 .controller-status-pill {
   width: fit-content;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
 
 @media (max-width: 680px) {

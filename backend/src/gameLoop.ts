@@ -19,7 +19,7 @@ const pendingRoundRestartMap = new Map<string, NodeJS.Timeout>();
 const SPAWN_WALL_MARGIN = 60;
 
 function calculateTargetScore(playerCount: number) {
-    return playerCount * 10 - 10;
+    return Math.max(10, playerCount * 10 - 10);
 }
 
 function randomCoordinateAwayFromWalls(arenaSize: number, wallMargin: number) {
@@ -499,6 +499,10 @@ export function startGameLoop(roomCode: string, io: Server) {
                 }
             }
 
+            if (players.length === 1) {
+                players[0].score = (players[0].score ?? 0) + 1;
+            }
+
             const targetScore =
                 room.targetScore ?? calculateTargetScore(players.length);
             room.targetScore = targetScore;
@@ -532,7 +536,7 @@ export function startGameLoop(roomCode: string, io: Server) {
                 return;
             }
 
-            if (alivePlayers.length <= 1 && players.length >= 2) {
+            if (alivePlayers.length <= 1 && players.length >= 1) {
                 if (!pendingRoundRestartMap.has(roomCode)) {
                     const winner = alivePlayers[0] ?? null;
 

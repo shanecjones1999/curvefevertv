@@ -21,7 +21,7 @@ import { Player, InputPayload } from "./types";
 import { GAME_HEIGHT, GAME_WIDTH } from "./config";
 
 function calculateTargetScore(playerCount: number) {
-    return playerCount * 10 - 10;
+    return Math.max(10, playerCount * 10 - 10);
 }
 
 dotenv.config();
@@ -252,6 +252,9 @@ io.on("connection", (socket) => {
         if (!room) return cb?.({ ok: false, error: "Room not found" });
         if (room.hostSocketId !== socket.id)
             return cb?.({ ok: false, error: "Not host" });
+
+        if (room.players.size < 1)
+            return cb?.({ ok: false, error: "Need at least 1 player" });
 
         const targetScore = calculateTargetScore(room.players.size);
         room.targetScore = targetScore;

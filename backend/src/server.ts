@@ -256,6 +256,23 @@ io.on("connection", (socket) => {
         });
     });
 
+    socket.on(
+        "telemetryPing",
+        (data: { clientSentAt?: number } | undefined, cb) => {
+            const serverRecvAt = Date.now();
+            const clientSentAt =
+                typeof data?.clientSentAt === "number"
+                    ? data.clientSentAt
+                    : null;
+
+            cb?.({
+                clientSentAt,
+                serverRecvAt,
+                serverSendAt: Date.now(),
+            });
+        },
+    );
+
     socket.on("input", (payload: InputPayload) => {
         const player = getPlayerBySocket(socket.id);
         if (!player || !player.alive) return;

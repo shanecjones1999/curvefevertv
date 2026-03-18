@@ -32,6 +32,12 @@ type SetGameModeResponse = {
     error?: string;
 };
 
+type TelemetryPingResponse = {
+    clientSentAt: number | null;
+    serverRecvAt: number;
+    serverSendAt: number;
+};
+
 type GameOverLeaderboardEntry = {
     id: string;
     name: string;
@@ -112,6 +118,14 @@ export default function Host({ onLeave }: Props) {
         width: DEFAULT_GAME_WIDTH,
         height: DEFAULT_GAME_HEIGHT,
     });
+    const [latencyRttMs, setLatencyRttMs] = useState<number | null>(null);
+    const [latencyOneWayMs, setLatencyOneWayMs] = useState<number | null>(null);
+    const [serverProcessingMs, setServerProcessingMs] = useState<number | null>(
+        null,
+    );
+    const [telemetryStatus, setTelemetryStatus] = useState<
+        "ok" | "timeout" | "disconnected"
+    >("disconnected");
     const hasRequestedRoomCreation = useRef(false);
 
     const playerColorById = useMemo(() => {
@@ -195,6 +209,61 @@ export default function Host({ onLeave }: Props) {
     const winnerName =
         displayLeaderboard.find((entry) => entry.id === gameOverData?.winnerId)
             ?.name ?? displayLeaderboard[0]?.name;
+
+    useEffect(() => {
+        const runTelemetryPing = () => {
+            if (!socket.connected) {
+                setTelemetryStatus("disconnected");
+                setLatencyRttMs(null);
+                setLatencyOneWayMs(null);
+                setServerProcessingMs(null);
+                return;
+            }
+
+            const clientSentAt = Date.now();
+            socket
+                .timeout(2500)
+                .emit(
+                    EVENTS.TELEMETRY_PING,
+                    { clientSentAt },
+                    (err: unknown, response?: TelemetryPingResponse) => {
+                        if (err || !response) {
+                            setTelemetryStatus("timeout");
+                            return;
+                        }
+
+                        const now = Date.now();
+                        const rttMs = Math.max(0, now - clientSentAt);
+                        const processingMs = Math.max(
+                            0,
+                            response.serverSendAt - response.serverRecvAt,
+                        );
+                        const oneWayMs = Math.max(
+                            0,
+                            Math.round((rttMs - processingMs) / 2),
+                        );
+
+                        setTelemetryStatus("ok");
+                        setLatencyRttMs(rttMs);
+                        setLatencyOneWayMs(oneWayMs);
+                        setServerProcessingMs(processingMs);
+                    },
+                );
+        };
+
+        runTelemetryPing();
+        const intervalId = window.setInterval(runTelemetryPing, 3000);
+
+        const handleDisconnect = () => {
+            setTelemetryStatus("disconnected");
+        };
+        socket.on("disconnect", handleDisconnect);
+
+        return () => {
+            window.clearInterval(intervalId);
+            socket.off("disconnect", handleDisconnect);
+        };
+    }, []);
 
     useEffect(() => {
         const applyGameConfig = (incoming?: GameConfig) => {
@@ -535,6 +604,16 @@ export default function Host({ onLeave }: Props) {
                     {gameMode === "classic"
                         ? `Race to ${effectiveTargetScore} pts`
                         : "Battle Royale · Last player standing"}
+                </div>
+            </div>
+
+            <div className="panel-row">
+                <div className="status-pill" role="status">
+                    {telemetryStatus === "ok"
+                        ? `Latency RTT ${latencyRttMs ?? 0}ms · ~${latencyOneWayMs ?? 0}ms one-way · srv ${serverProcessingMs ?? 0}ms`
+                        : telemetryStatus === "timeout"
+                          ? "Latency check timeout"
+                          : "Latency waiting for socket"}
                 </div>
             </div>
 

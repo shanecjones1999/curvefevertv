@@ -6,6 +6,7 @@ export const EVENTS = {
     START_GAME: "startGame",
     SET_GAME_MODE: "setGameMode",
     LEAVE_ROOM: "leaveRoom",
+    TELEMETRY_PING: "telemetryPing",
 
     // Server -> Client
     ROOM_CREATED: "roomCreated",
@@ -17,4 +18,5 @@ export const EVENTS = {
     GAME_OVER: "gameOver",
     ROOM_CLOSED: "roomClosed",
     ROUND_RESTART: "roundRestart",
+    TELEMETRY_PONG: "telemetryPong",
 } as const;

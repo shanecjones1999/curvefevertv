@@ -21,6 +21,8 @@ export interface Player {
     turnRightHeld?: boolean;
 }
 
+export type GameMode = "classic" | "battle-royale";
+
 export type RoomState = "lobby" | "playing" | "finished";
 
 export interface Room {
@@ -29,6 +31,8 @@ export interface Room {
     players: Map<string, Player>;
     state: RoomState;
     targetScore?: number;
+    gameMode: GameMode;
+    battleRoyaleEliminatedPlayerIds?: Set<string>;
     game?: GameState | null;
 }
 
@@ -39,6 +43,7 @@ export interface GameState {
         height: number;
     };
     players: Player[];
+    gameMode: GameMode;
     targetScore?: number;
 }
 

@@ -69,6 +69,20 @@ class CurvefeverScene extends Phaser.Scene {
         if (!this.add) return;
         this.players = Array.isArray(players) ? players : [];
 
+        const incomingPlayerIds = new Set(
+            this.players.map((player) => player.id),
+        );
+
+        for (const [key, graphic] of this.playerSprites.entries()) {
+            const playerId = key.endsWith("_trail")
+                ? key.slice(0, -"_trail".length)
+                : key;
+            if (!incomingPlayerIds.has(playerId)) {
+                graphic.destroy();
+                this.playerSprites.delete(key);
+            }
+        }
+
         this.players.forEach((p, i) => {
             // Draw trail
             let trailG = this.playerSprites.get(p.id + "_trail");
@@ -77,6 +91,19 @@ class CurvefeverScene extends Phaser.Scene {
                 this.playerSprites.set(p.id + "_trail", trailG);
             }
             trailG.clear();
+
+            // Do not render crashed/eliminated players
+            if (!p.alive) {
+                const g = this.playerSprites.get(p.id);
+                if (g) {
+                    g.clear();
+                    g.setVisible(false);
+                }
+                trailG.setVisible(false);
+                return;
+            }
+
+            trailG.setVisible(true);
             const color =
                 p.color && /^#/.test(p.color)
                     ? p.color
@@ -103,6 +130,7 @@ class CurvefeverScene extends Phaser.Scene {
                 g = this.add.graphics();
                 this.playerSprites.set(p.id, g);
             }
+            g.setVisible(true);
             g.clear();
             g.fillStyle(Phaser.Display.Color.HexStringToColor(color).color, 1);
             g.fillCircle(0, 0, 8);

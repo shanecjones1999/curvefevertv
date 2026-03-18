@@ -17,11 +17,18 @@ import {
     startGameLoop,
     stopGameLoop,
 } from "./gameLoop";
-import { Player, InputPayload } from "./types";
+import { Player, InputPayload, GameMode } from "./types";
 import { GAME_HEIGHT, GAME_WIDTH } from "./config";
 
 function calculateTargetScore(playerCount: number) {
     return Math.max(10, playerCount * 10 - 10);
+}
+
+function sanitizeGameMode(value: unknown): GameMode {
+    if (value === "battle-royale") {
+        return "battle-royale";
+    }
+    return "classic";
 }
 
 dotenv.config();
@@ -60,8 +67,11 @@ function emitLobbyUpdate(roomCode: string) {
     if (!room) return;
     io.to(room.code).emit("lobbyUpdate", {
         players: Array.from(room.players.values()),
+        gameMode: room.gameMode,
         targetScore:
-            room.targetScore ?? calculateTargetScore(room.players.size),
+            room.gameMode === "classic"
+                ? (room.targetScore ?? calculateTargetScore(room.players.size))
+                : undefined,
         gameConfig: {
             width: GAME_WIDTH,
             height: GAME_HEIGHT,
@@ -120,8 +130,12 @@ io.on("connection", (socket) => {
             roomCode: room.code,
             players: Array.from(room.players.values()),
             state: room.state,
+            gameMode: room.gameMode,
             targetScore:
-                room.targetScore ?? calculateTargetScore(room.players.size),
+                room.gameMode === "classic"
+                    ? (room.targetScore ??
+                      calculateTargetScore(room.players.size))
+                    : undefined,
             gameConfig: {
                 width: GAME_WIDTH,
                 height: GAME_HEIGHT,
@@ -229,8 +243,12 @@ io.on("connection", (socket) => {
             ok: true,
             players: Array.from(room.players.values()),
             state: room.state,
+            gameMode: room.gameMode,
             targetScore:
-                room.targetScore ?? calculateTargetScore(room.players.size),
+                room.gameMode === "classic"
+                    ? (room.targetScore ??
+                      calculateTargetScore(room.players.size))
+                    : undefined,
             gameConfig: {
                 width: GAME_WIDTH,
                 height: GAME_HEIGHT,
@@ -246,41 +264,77 @@ io.on("connection", (socket) => {
         player.turnRightHeld = Boolean(payload?.turnRight);
     });
 
-    socket.on("startGame", (data: { roomCode: string }, cb) => {
-        const roomCode = data?.roomCode?.toUpperCase();
-        const room = roomCode ? getRoom(roomCode) : null;
-        if (!room) return cb?.({ ok: false, error: "Room not found" });
-        if (room.hostSocketId !== socket.id)
-            return cb?.({ ok: false, error: "Not host" });
+    socket.on(
+        "setGameMode",
+        (data: { roomCode: string; gameMode?: GameMode }, cb) => {
+            const roomCode = data?.roomCode?.toUpperCase();
+            const room = roomCode ? getRoom(roomCode) : null;
+            if (!room) return cb?.({ ok: false, error: "Room not found" });
+            if (room.hostSocketId !== socket.id)
+                return cb?.({ ok: false, error: "Not host" });
+            if (room.state === "playing") {
+                return cb?.({
+                    ok: false,
+                    error: "Cannot change game mode during an active game",
+                });
+            }
 
-        if (room.players.size < 1)
-            return cb?.({ ok: false, error: "Need at least 1 player" });
+            room.gameMode = sanitizeGameMode(data?.gameMode);
+            emitLobbyUpdate(room.code);
+            cb?.({ ok: true, gameMode: room.gameMode });
+        },
+    );
 
-        const targetScore = calculateTargetScore(room.players.size);
-        room.targetScore = targetScore;
-        const players = Array.from(room.players.values());
-        for (const player of players) {
-            player.score = 0;
-        }
-        restartRound(players);
-        room.state = "playing";
-        startGameLoop(room.code, io);
-        io.to(room.code).emit("startGame", {
-            targetScore,
-            gameConfig: {
-                width: GAME_WIDTH,
-                height: GAME_HEIGHT,
-            },
-        });
-        cb?.({
-            ok: true,
-            targetScore,
-            gameConfig: {
-                width: GAME_WIDTH,
-                height: GAME_HEIGHT,
-            },
-        });
-    });
+    socket.on(
+        "startGame",
+        (data: { roomCode: string; gameMode?: GameMode }, cb) => {
+            const roomCode = data?.roomCode?.toUpperCase();
+            const room = roomCode ? getRoom(roomCode) : null;
+            if (!room) return cb?.({ ok: false, error: "Room not found" });
+            if (room.hostSocketId !== socket.id)
+                return cb?.({ ok: false, error: "Not host" });
+
+            if (room.players.size < 1)
+                return cb?.({ ok: false, error: "Need at least 1 player" });
+
+            const gameMode = sanitizeGameMode(data?.gameMode);
+            room.gameMode = gameMode;
+
+            const targetScore =
+                gameMode === "classic"
+                    ? calculateTargetScore(room.players.size)
+                    : undefined;
+            room.targetScore = targetScore;
+            room.battleRoyaleEliminatedPlayerIds = new Set<string>();
+            const players = Array.from(room.players.values());
+            for (const player of players) {
+                player.score = 0;
+            }
+            restartRound(players, {
+                battleRoyaleEliminatedPlayerIds:
+                    room.battleRoyaleEliminatedPlayerIds,
+            });
+            room.state = "playing";
+            startGameLoop(room.code, io);
+            io.to(room.code).emit("startGame", {
+                gameMode,
+                targetScore,
+                gameConfig: {
+                    width: GAME_WIDTH,
+                    height: GAME_HEIGHT,
+                },
+            });
+            cb?.({
+                ok: true,
+                gameMode,
+                targetScore,
+                gameConfig: {
+                    width: GAME_WIDTH,
+                    height: GAME_HEIGHT,
+                },
+            });
+        },
+    );
 
     // allow clients to explicitly leave a room (player or host)
     socket.on(

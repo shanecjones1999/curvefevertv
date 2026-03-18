@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import socket from "./socket";
 import { EVENTS } from "./events";
-import type { Player } from "./types";
+import type { GameMode, Player } from "./types";
 import PhaserGame from "./PhaserGame";
 import { DEFAULT_GAME_HEIGHT, DEFAULT_GAME_WIDTH } from "./gameConfig";
 
@@ -12,6 +12,7 @@ type ReconnectHostResponse = {
     roomCode?: string;
     players?: Player[];
     state?: "lobby" | "playing" | "finished";
+    gameMode?: GameMode;
     targetScore?: number;
     gameConfig?: GameConfig;
     error?: string;
@@ -19,8 +20,15 @@ type ReconnectHostResponse = {
 
 type StartGameResponse = {
     ok: boolean;
+    gameMode?: GameMode;
     targetScore?: number;
     gameConfig?: GameConfig;
+    error?: string;
+};
+
+type SetGameModeResponse = {
+    ok: boolean;
+    gameMode?: GameMode;
     error?: string;
 };
 
@@ -33,6 +41,7 @@ type GameOverLeaderboardEntry = {
 
 type GameOverPayload = {
     winnerId: string | null;
+    gameMode?: GameMode;
     targetScore?: number;
     leaderboard: GameOverLeaderboardEntry[];
 };
@@ -95,6 +104,7 @@ export default function Host({ onLeave }: Props) {
     const [startError, setStartError] = useState<string | null>(null);
     const [copiedCode, setCopiedCode] = useState(false);
     const [targetScore, setTargetScore] = useState<number | null>(null);
+    const [gameMode, setGameMode] = useState<GameMode>("classic");
     const [gameOverData, setGameOverData] = useState<GameOverPayload | null>(
         null,
     );
@@ -144,11 +154,21 @@ export default function Host({ onLeave }: Props) {
         return `bar-color-${index % PLAYER_COLORS.length}`;
     };
 
-    const leaderboard = [...players].sort(
-        (firstPlayer, secondPlayer) =>
-            secondPlayer.score - firstPlayer.score ||
-            firstPlayer.name.localeCompare(secondPlayer.name),
-    );
+    const leaderboard = useMemo(() => {
+        return [...players].sort((firstPlayer, secondPlayer) => {
+            if (gameMode === "battle-royale") {
+                return (
+                    Number(secondPlayer.alive) - Number(firstPlayer.alive) ||
+                    firstPlayer.name.localeCompare(secondPlayer.name)
+                );
+            }
+
+            return (
+                secondPlayer.score - firstPlayer.score ||
+                firstPlayer.name.localeCompare(secondPlayer.name)
+            );
+        });
+    }, [gameMode, players]);
     const effectiveTargetScore =
         targetScore ?? Math.max(10, players.length * 10 - 10);
     const displayLeaderboard = useMemo(() => {
@@ -190,6 +210,16 @@ export default function Host({ onLeave }: Props) {
             if (typeof incoming !== "number") return;
             if (!Number.isFinite(incoming) || incoming <= 0) return;
             setTargetScore(Math.floor(incoming));
+        };
+
+        const applyGameMode = (incoming?: GameMode) => {
+            if (incoming === "battle-royale") {
+                setGameMode("battle-royale");
+                return;
+            }
+            if (incoming === "classic") {
+                setGameMode("classic");
+            }
         };
 
         const requestCreateRoom = () => {
@@ -240,6 +270,7 @@ export default function Host({ onLeave }: Props) {
                             if (Array.isArray(res.players)) {
                                 setPlayers(res.players);
                             }
+                            applyGameMode(res.gameMode);
                             applyTargetScore(res.targetScore);
                             applyGameConfig(res.gameConfig);
                             if (res.state === "finished") {
@@ -249,11 +280,15 @@ export default function Host({ onLeave }: Props) {
                                         name: player.name,
                                         score: player.score ?? 0,
                                         color: player.color,
+                                        alive: player.alive,
                                     }))
                                     .sort(
                                         (firstPlayer, secondPlayer) =>
-                                            secondPlayer.score -
-                                                firstPlayer.score ||
+                                            (res.gameMode === "battle-royale"
+                                                ? Number(secondPlayer.alive) -
+                                                  Number(firstPlayer.alive)
+                                                : secondPlayer.score -
+                                                  firstPlayer.score) ||
                                             firstPlayer.name.localeCompare(
                                                 secondPlayer.name,
                                             ),
@@ -261,6 +296,7 @@ export default function Host({ onLeave }: Props) {
                                 setGameOverData({
                                     winnerId:
                                         fallbackLeaderboard[0]?.id ?? null,
+                                    gameMode: res.gameMode,
                                     targetScore: res.targetScore,
                                     leaderboard: fallbackLeaderboard,
                                 });
@@ -295,10 +331,12 @@ export default function Host({ onLeave }: Props) {
             "lobbyUpdate",
             (data: {
                 players: Player[];
+                gameMode?: GameMode;
                 targetScore?: number;
                 gameConfig?: GameConfig;
             }) => {
                 setPlayers(data.players);
+                applyGameMode(data.gameMode);
                 applyTargetScore(data.targetScore);
                 applyGameConfig(data.gameConfig);
             },
@@ -306,7 +344,12 @@ export default function Host({ onLeave }: Props) {
 
         socket.on(
             "startGame",
-            (data?: { targetScore?: number; gameConfig?: GameConfig }) => {
+            (data?: {
+                gameMode?: GameMode;
+                targetScore?: number;
+                gameConfig?: GameConfig;
+            }) => {
+                applyGameMode(data?.gameMode);
                 applyTargetScore(data?.targetScore);
                 applyGameConfig(data?.gameConfig);
                 setGameOverData(null);
@@ -317,12 +360,14 @@ export default function Host({ onLeave }: Props) {
             EVENTS.GAME_STATE,
             (state?: {
                 players?: Player[];
+                gameMode?: GameMode;
                 targetScore?: number;
                 arena?: GameConfig;
             }) => {
                 if (state?.arena) {
                     applyGameConfig(state.arena);
                 }
+                applyGameMode(state?.gameMode);
                 applyTargetScore(state?.targetScore);
                 if (state && Array.isArray(state.players)) {
                     setPlayers(state.players);
@@ -330,6 +375,7 @@ export default function Host({ onLeave }: Props) {
             },
         );
         socket.on(EVENTS.GAME_OVER, (data?: GameOverPayload) => {
+            applyGameMode(data?.gameMode);
             applyTargetScore(data?.targetScore);
             if (data?.leaderboard && Array.isArray(data.leaderboard)) {
                 setGameOverData(data);
@@ -364,21 +410,49 @@ export default function Host({ onLeave }: Props) {
 
     function handleStartGame() {
         if (!roomCode) return;
-        socket.emit("startGame", { roomCode }, (res: StartGameResponse) => {
-            if (res?.ok) {
+        socket.emit(
+            "startGame",
+            { roomCode, gameMode },
+            (res: StartGameResponse) => {
+                if (res?.ok) {
+                    setStartError(null);
+                    setGameOverData(null);
+                    if (res.gameMode) {
+                        setGameMode(res.gameMode);
+                    }
+                    if (typeof res.targetScore === "number") {
+                        setTargetScore(Math.floor(res.targetScore));
+                    }
+                    if (res.gameConfig) {
+                        setGameConfig(res.gameConfig);
+                    }
+                    setPlaying(true);
+                } else {
+                    setStartError(res?.error ?? "Unable to start game");
+                }
+            },
+        );
+    }
+
+    function handleGameModeChange(nextGameMode: GameMode) {
+        setGameMode(nextGameMode);
+
+        if (!roomCode || playing) return;
+
+        socket.emit(
+            EVENTS.SET_GAME_MODE,
+            { roomCode, gameMode: nextGameMode },
+            (res: SetGameModeResponse) => {
+                if (!res?.ok) {
+                    setStartError(res?.error ?? "Unable to update game mode");
+                    return;
+                }
                 setStartError(null);
-                setGameOverData(null);
-                if (typeof res.targetScore === "number") {
-                    setTargetScore(Math.floor(res.targetScore));
+                if (res.gameMode) {
+                    setGameMode(res.gameMode);
                 }
-                if (res.gameConfig) {
-                    setGameConfig(res.gameConfig);
-                }
-                setPlaying(true);
-            } else {
-                setStartError(res?.error ?? "Unable to start game");
-            }
-        });
+            },
+        );
     }
 
     function handleLeaveGame() {
@@ -451,14 +525,42 @@ export default function Host({ onLeave }: Props) {
                     }
                 >
                     <span className="room-code-label">
-                        {copiedCode ? "Copied!" : "Game Code · Click to copy"}
+                        {copiedCode ? "Copied!" : "Game Code"}
                     </span>
                     <span className="room-code-value">
                         {roomCode ?? "------"}
                     </span>
                 </button>
                 <div className="status-pill target-score-pill" role="status">
-                    Race to {effectiveTargetScore} pts
+                    {gameMode === "classic"
+                        ? `Race to ${effectiveTargetScore} pts`
+                        : "Battle Royale · Last player standing"}
+                </div>
+            </div>
+
+            <div className="panel-row host-mode-row">
+                <span className="host-mode-label">Game Mode</span>
+                <div
+                    className="host-mode-toggle"
+                    role="group"
+                    aria-label="Select game mode"
+                >
+                    <button
+                        type="button"
+                        className={`host-mode-option ${gameMode === "classic" ? "is-active" : ""}`}
+                        onClick={() => handleGameModeChange("classic")}
+                        disabled={playing}
+                    >
+                        Classic
+                    </button>
+                    <button
+                        type="button"
+                        className={`host-mode-option ${gameMode === "battle-royale" ? "is-active" : ""}`}
+                        onClick={() => handleGameModeChange("battle-royale")}
+                        disabled={playing}
+                    >
+                        Battle Royale
+                    </button>
                 </div>
             </div>
 
@@ -575,7 +677,13 @@ export default function Host({ onLeave }: Props) {
                                         </span>
                                     </span>
                                     <span className="leaderboard-player-meta">
-                                        <span>{player.score} pts</span>
+                                        <span>
+                                            {gameMode === "battle-royale"
+                                                ? player.alive
+                                                    ? "Alive"
+                                                    : "Eliminated"
+                                                : `${player.score} pts`}
+                                        </span>
                                     </span>
                                 </li>
                             ))}
@@ -594,7 +702,11 @@ export default function Host({ onLeave }: Props) {
                 {gameOverData && (
                     <section className="game-over-overlay">
                         <div className="game-over-panel">
-                            <h2 className="game-over-title">Game Over</h2>
+                            <h2 className="game-over-title">
+                                {gameMode === "battle-royale"
+                                    ? "Battle Royale Over"
+                                    : "Game Over"}
+                            </h2>
                             <p className="game-over-subtitle">
                                 {winnerName
                                     ? `${winnerName} wins!`
@@ -617,23 +729,31 @@ export default function Host({ onLeave }: Props) {
                                                     {entry.name}
                                                 </span>
                                                 <span className="game-over-score">
-                                                    {entry.score} pts
+                                                    {gameMode ===
+                                                    "battle-royale"
+                                                        ? entry.id ===
+                                                          gameOverData.winnerId
+                                                            ? "Winner"
+                                                            : "Eliminated"
+                                                        : `${entry.score} pts`}
                                                 </span>
                                             </div>
-                                            <div className="game-over-bar-track">
-                                                <progress
-                                                    className={`game-over-progress ${getBarColorClassName(entry.color, index)}`}
-                                                    value={Math.max(
-                                                        0,
-                                                        entry.score,
-                                                    )}
-                                                    max={Math.max(
-                                                        1,
-                                                        highestScore,
-                                                    )}
-                                                    aria-label={`${entry.name} score bar`}
-                                                />
-                                            </div>
+                                            {gameMode !== "battle-royale" && (
+                                                <div className="game-over-bar-track">
+                                                    <progress
+                                                        className={`game-over-progress ${getBarColorClassName(entry.color, index)}`}
+                                                        value={Math.max(
+                                                            0,
+                                                            entry.score,
+                                                        )}
+                                                        max={Math.max(
+                                                            1,
+                                                            highestScore,
+                                                        )}
+                                                        aria-label={`${entry.name} score bar`}
+                                                    />
+                                                </div>
+                                            )}
                                         </div>
                                     );
                                 })}

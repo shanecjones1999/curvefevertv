@@ -206,6 +206,8 @@
   text-transform: uppercase;
   color: var(--cf-text-muted);
   line-height: 1;
+  display: block;
+  text-align: center;
 }
 
 .room-code-value {
@@ -215,6 +217,60 @@
   font-weight: 800;
   color: #eaf6ff;
   font-variant-numeric: tabular-nums;
+}
+
+.host-mode-row {
+  width: min(100%, 540px);
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  margin-inline: auto;
+}
+
+.host-mode-label {
+  color: var(--cf-text-soft);
+  font-weight: 700;
+  font-size: 1.14rem;
+  text-align: center;
+}
+
+.host-mode-toggle {
+  width: min(100%, 360px);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.35rem;
+  padding: 0.28rem;
+  border-radius: 0.85rem;
+  border: 1px solid rgba(126, 178, 255, 0.35);
+  background: rgba(10, 17, 39, 0.76);
+}
+
+.host-mode-option {
+  min-height: 46px;
+  border-radius: 0.65rem;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--cf-text-soft);
+  font-weight: 700;
+  font-size: 1.08rem;
+  cursor: pointer;
+  transition: background-color 130ms ease, border-color 130ms ease, color 130ms ease;
+}
+
+.host-mode-option:hover:not(:disabled) {
+  border-color: rgba(146, 197, 255, 0.7);
+  background: rgba(38, 67, 140, 0.28);
+}
+
+.host-mode-option.is-active {
+  border-color: rgba(146, 197, 255, 0.9);
+  background: rgba(43, 102, 255, 0.35);
+  color: #eaf2ff;
+}
+
+.host-mode-option:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .inset-panel {
@@ -471,24 +527,36 @@
 
 .page-shell-host-playing .ui-button {
   min-height: 50px;
-  font-size: 1.06rem;
+  font-size: 1.22rem;
 }
 
 .page-shell-host-playing .section-title {
-  font-size: 1.12rem;
+  font-size: 1.34rem;
 }
 
 .page-shell-host-playing .room-code-label {
-  font-size: 0.8rem;
+  font-size: 0.9rem;
 }
 
 .page-shell-host-playing .room-code-value {
-  font-size: clamp(2rem, 5.4vw, 3.4rem);
+  font-size: clamp(2.3rem, 6.2vw, 4rem);
 }
 
 .page-shell-host-playing .player-row {
   padding: 0.78rem 0.95rem;
-  font-size: 1.05rem;
+  font-size: 1.2rem;
+}
+
+.host-panel .eyebrow {
+  font-size: 0.96rem;
+}
+
+.host-panel .status-pill {
+  font-size: 1.1rem;
+}
+
+.host-panel .room-code-label {
+  font-size: 0.9rem;
 }
 
 .host-side-column {
@@ -520,6 +588,7 @@
 
 .host-panel .error-text {
   text-align: center;
+  font-size: 1.02rem;
 }
 
 .leaderboard-panel {
@@ -538,6 +607,7 @@
 .leaderboard-player-meta {
   color: #9ed0ff;
   font-weight: 700;
+  font-size: 1.12rem;
 }
 
 .phaser-shell {

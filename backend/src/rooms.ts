@@ -24,6 +24,8 @@ export function createRoom(hostSocketId: string) {
         players: new Map<string, Player>(),
         state: "lobby",
         targetScore: undefined,
+        gameMode: "classic",
+        battleRoyaleEliminatedPlayerIds: new Set<string>(),
         game: null,
     };
     rooms.set(code, room);

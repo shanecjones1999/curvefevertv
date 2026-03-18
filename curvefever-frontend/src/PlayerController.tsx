@@ -56,6 +56,8 @@ export default function PlayerController({ onLeave }: Props) {
     const [roomCode, setRoomCode] = useState(storedSession?.roomCode ?? "");
     const [name, setName] = useState(storedSession?.name ?? "");
     const [joined, setJoined] = useState(false);
+    const [leftPressed, setLeftPressed] = useState(false);
+    const [rightPressed, setRightPressed] = useState(false);
     const [isRejoining, setIsRejoining] = useState(!!storedSession);
     const [rejoinError, setRejoinError] = useState<string | null>(null);
     const playerIdRef = useRef<string | null>(storedSession?.playerId ?? null);
@@ -92,12 +94,14 @@ export default function PlayerController({ onLeave }: Props) {
 
     const handleLeftDown = useCallback(() => {
         pressRef.current.left = true;
+        setLeftPressed(true);
         emitInput();
         startSendingInput();
     }, [emitInput, startSendingInput]);
 
     const handleLeftUp = useCallback(() => {
         pressRef.current.left = false;
+        setLeftPressed(false);
         emitInput();
         if (!pressRef.current.left && !pressRef.current.right) {
             stopSendingInput();
@@ -106,12 +110,14 @@ export default function PlayerController({ onLeave }: Props) {
 
     const handleRightDown = useCallback(() => {
         pressRef.current.right = true;
+        setRightPressed(true);
         emitInput();
         startSendingInput();
     }, [emitInput, startSendingInput]);
 
     const handleRightUp = useCallback(() => {
         pressRef.current.right = false;
+        setRightPressed(false);
         emitInput();
         if (!pressRef.current.left && !pressRef.current.right) {
             stopSendingInput();
@@ -340,6 +346,8 @@ export default function PlayerController({ onLeave }: Props) {
 
             pressRef.current.left = false;
             pressRef.current.right = false;
+            setLeftPressed(false);
+            setRightPressed(false);
             stopSendingInput();
             if (playerIdRef.current && roomCode) {
                 socket.emit(
@@ -435,20 +443,24 @@ export default function PlayerController({ onLeave }: Props) {
                         </p>
                         <div className={styles["button-row"]}>
                             <button
-                                className={styles.button}
+                                className={`${styles.button} ${leftPressed ? styles.buttonPressed : ""}`}
                                 onMouseDown={handleLeftDown}
                                 onMouseUp={handleLeftUp}
+                                onMouseLeave={handleLeftUp}
                                 onTouchStart={handleLeftDown}
                                 onTouchEnd={handleLeftUp}
+                                onTouchCancel={handleLeftUp}
                             >
                                 Turn Left
                             </button>
                             <button
-                                className={styles.button}
+                                className={`${styles.button} ${rightPressed ? styles.buttonPressed : ""}`}
                                 onMouseDown={handleRightDown}
                                 onMouseUp={handleRightUp}
+                                onMouseLeave={handleRightUp}
                                 onTouchStart={handleRightDown}
                                 onTouchEnd={handleRightUp}
+                                onTouchCancel={handleRightUp}
                             >
                                 Turn Right
                             </button>

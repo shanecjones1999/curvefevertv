@@ -148,6 +148,7 @@ function movePlayer(
         p.distanceSinceLastGap = 0;
         p.gapStartDistance = 0;
         p.inGap = false;
+        p.isFloating = true;
         return;
     }
 
@@ -179,6 +180,8 @@ function movePlayer(
         p.gapLength = 40 + Math.random() * 40;
         p.distanceSinceLastGap = 0;
     }
+
+    p.isFloating = p.inGap;
 
     // Add trail point if not in gap
     if (!p.inGap) {
@@ -274,9 +277,13 @@ function detectCollisions(
         deathReasonSets.get(playerId)!.add(reason);
     };
 
+    const isPlayerFloating = (player: Player) =>
+        Boolean(player.isFloating || player.inGap);
+
     for (let playerIndex = 0; playerIndex < players.length; playerIndex++) {
         const p = players[playerIndex];
         if (!p.alive) continue;
+        const playerIsFloating = isPlayerFloating(p);
 
         if (p.x < 0 || p.x >= GAME_WIDTH || p.y < 0 || p.y >= GAME_HEIGHT) {
             markDead(p.id, "wall");
@@ -291,6 +298,7 @@ function detectCollisions(
         ) {
             const other = players[otherPlayerIndex];
             if (!other.alive) continue;
+            if (playerIsFloating || isPlayerFloating(other)) continue;
             const dx = p.x - other.x;
             const dy = p.y - other.y;
             const distSq = dx * dx + dy * dy;
@@ -299,6 +307,10 @@ function detectCollisions(
                 markDead(p.id, `player:${other.id}`);
                 markDead(other.id, `player:${p.id}`);
             }
+        }
+
+        if (playerIsFloating) {
+            continue;
         }
 
         // Check collision with all trails, including own trail
@@ -418,6 +430,7 @@ export function restartRound(
         if (isEliminated) {
             p.alive = false;
             p.trail = [[]];
+            p.isFloating = false;
             p.turnLeftHeld = false;
             p.turnRightHeld = false;
             continue;
@@ -433,6 +446,7 @@ export function restartRound(
         p.gapInterval = 200 + Math.random() * 200;
         p.gapLength = 40 + Math.random() * 40;
         p.inGap = false;
+        p.isFloating = false;
         p.turnLeftHeld = false;
         p.turnRightHeld = false;
     }

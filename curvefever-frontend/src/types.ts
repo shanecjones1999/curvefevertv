@@ -36,6 +36,7 @@ export interface GameState {
         height: number;
     };
     players: Player[];
+    targetScore?: number;
 }
 
 export interface InputPayload {

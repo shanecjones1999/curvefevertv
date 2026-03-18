@@ -20,6 +20,10 @@ import {
 import { Player, InputPayload } from "./types";
 import { GAME_HEIGHT, GAME_WIDTH } from "./config";
 
+function calculateTargetScore(playerCount: number) {
+    return playerCount * 10 - 10;
+}
+
 dotenv.config();
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 3001;
@@ -56,6 +60,8 @@ function emitLobbyUpdate(roomCode: string) {
     if (!room) return;
     io.to(room.code).emit("lobbyUpdate", {
         players: Array.from(room.players.values()),
+        targetScore:
+            room.targetScore ?? calculateTargetScore(room.players.size),
         gameConfig: {
             width: GAME_WIDTH,
             height: GAME_HEIGHT,
@@ -114,6 +120,8 @@ io.on("connection", (socket) => {
             roomCode: room.code,
             players: Array.from(room.players.values()),
             state: room.state,
+            targetScore:
+                room.targetScore ?? calculateTargetScore(room.players.size),
             gameConfig: {
                 width: GAME_WIDTH,
                 height: GAME_HEIGHT,
@@ -221,6 +229,8 @@ io.on("connection", (socket) => {
             ok: true,
             players: Array.from(room.players.values()),
             state: room.state,
+            targetScore:
+                room.targetScore ?? calculateTargetScore(room.players.size),
             gameConfig: {
                 width: GAME_WIDTH,
                 height: GAME_HEIGHT,
@@ -243,10 +253,17 @@ io.on("connection", (socket) => {
         if (room.hostSocketId !== socket.id)
             return cb?.({ ok: false, error: "Not host" });
 
-        restartRound(Array.from(room.players.values()));
+        const targetScore = calculateTargetScore(room.players.size);
+        room.targetScore = targetScore;
+        const players = Array.from(room.players.values());
+        for (const player of players) {
+            player.score = 0;
+        }
+        restartRound(players);
         room.state = "playing";
         startGameLoop(room.code, io);
         io.to(room.code).emit("startGame", {
+            targetScore,
             gameConfig: {
                 width: GAME_WIDTH,
                 height: GAME_HEIGHT,
@@ -254,6 +271,7 @@ io.on("connection", (socket) => {
         });
         cb?.({
             ok: true,
+            targetScore,
             gameConfig: {
                 width: GAME_WIDTH,
                 height: GAME_HEIGHT,

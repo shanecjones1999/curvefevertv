@@ -18,6 +18,10 @@ const ROUND_RESTART_DELAY_MS = 2000;
 const pendingRoundRestartMap = new Map<string, NodeJS.Timeout>();
 const SPAWN_WALL_MARGIN = 60;
 
+function calculateTargetScore(playerCount: number) {
+    return playerCount * 10 - 10;
+}
+
 function randomCoordinateAwayFromWalls(arenaSize: number, wallMargin: number) {
     const usableSize = arenaSize - wallMargin * 2;
     if (usableSize <= 0) {
@@ -213,6 +217,8 @@ function buildGameState(roomCode: string): GameState | null {
             height: GAME_HEIGHT,
         },
         players,
+        targetScore:
+            room.targetScore ?? calculateTargetScore(room.players.size),
     };
 }
 
@@ -485,12 +491,50 @@ export function startGameLoop(roomCode: string, io: Server) {
             }
 
             const alivePlayers = players.filter((player) => player.alive);
+            if (alivePlayers.length > 0) {
+                const pointsPerAlivePlayer = deadPlayerIds.size;
+                for (const alivePlayer of alivePlayers) {
+                    alivePlayer.score =
+                        (alivePlayer.score ?? 0) + pointsPerAlivePlayer;
+                }
+            }
+
+            const targetScore =
+                room.targetScore ?? calculateTargetScore(players.length);
+            room.targetScore = targetScore;
+            const playersAtOrAboveTarget = players.filter(
+                (player) => (player.score ?? 0) >= targetScore,
+            );
+            if (playersAtOrAboveTarget.length > 0) {
+                const sortedLeaderboard = players
+                    .map((player) => ({
+                        id: player.id,
+                        name: player.name,
+                        score: player.score ?? 0,
+                        color: player.color,
+                    }))
+                    .sort((firstPlayer, secondPlayer) => {
+                        if (secondPlayer.score !== firstPlayer.score) {
+                            return secondPlayer.score - firstPlayer.score;
+                        }
+                        return firstPlayer.name.localeCompare(
+                            secondPlayer.name,
+                        );
+                    });
+
+                room.state = "finished";
+                io.to(roomCode).emit("gameOver", {
+                    winnerId: sortedLeaderboard[0]?.id ?? null,
+                    targetScore,
+                    leaderboard: sortedLeaderboard,
+                });
+                stopGameLoop(roomCode);
+                return;
+            }
+
             if (alivePlayers.length <= 1 && players.length >= 2) {
                 if (!pendingRoundRestartMap.has(roomCode)) {
                     const winner = alivePlayers[0] ?? null;
-                    if (winner) {
-                        winner.score = (winner.score ?? 0) + 1;
-                    }
 
                     io.to(roomCode).emit("roundOver", {
                         winnerId: winner?.id ?? null,

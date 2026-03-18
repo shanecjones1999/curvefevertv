@@ -23,6 +23,7 @@ export function createRoom(hostSocketId: string) {
         hostSocketId,
         players: new Map<string, Player>(),
         state: "lobby",
+        targetScore: undefined,
         game: null,
     };
     rooms.set(code, room);

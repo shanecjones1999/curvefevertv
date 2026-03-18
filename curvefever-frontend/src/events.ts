@@ -4,6 +4,7 @@ export const EVENTS = {
     CREATE_ROOM: "createRoom",
     JOIN_ROOM: "joinRoom",
     START_GAME: "startGame",
+    SET_GAME_MODE: "setGameMode",
     LEAVE_ROOM: "leaveRoom",
 
     // Server -> Client

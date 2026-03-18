@@ -217,8 +217,11 @@ function buildGameState(roomCode: string): GameState | null {
             height: GAME_HEIGHT,
         },
         players,
+        gameMode: room.gameMode,
         targetScore:
-            room.targetScore ?? calculateTargetScore(room.players.size),
+            room.gameMode === "classic"
+                ? (room.targetScore ?? calculateTargetScore(room.players.size))
+                : undefined,
     };
 }
 
@@ -404,8 +407,22 @@ function detectCollisions(
     return { deadPlayers, deathReasons };
 }
 
-export function restartRound(players: Player[]) {
+export function restartRound(
+    players: Player[],
+    options?: { battleRoyaleEliminatedPlayerIds?: Set<string> },
+) {
+    const eliminatedIds = options?.battleRoyaleEliminatedPlayerIds;
+
     for (const p of players) {
+        const isEliminated = eliminatedIds?.has(p.id) ?? false;
+        if (isEliminated) {
+            p.alive = false;
+            p.trail = [[]];
+            p.turnLeftHeld = false;
+            p.turnRightHeld = false;
+            continue;
+        }
+
         const spawn = generateSpawnPosition();
         p.alive = true;
         p.x = spawn.x;
@@ -490,6 +507,87 @@ export function startGameLoop(roomCode: string, io: Server) {
                 }
             }
 
+            const isBattleRoyale = room.gameMode === "battle-royale";
+
+            if (isBattleRoyale) {
+                const eliminatedPlayerIds =
+                    room.battleRoyaleEliminatedPlayerIds ?? new Set<string>();
+                room.battleRoyaleEliminatedPlayerIds = eliminatedPlayerIds;
+                for (const deadPlayerId of deadPlayerIds) {
+                    eliminatedPlayerIds.add(deadPlayerId);
+                }
+
+                const survivingPlayers = players.filter(
+                    (player) => !eliminatedPlayerIds.has(player.id),
+                );
+
+                if (survivingPlayers.length <= 1) {
+                    const winner = survivingPlayers[0] ?? null;
+                    const sortedLeaderboard = players
+                        .map((player) => ({
+                            id: player.id,
+                            name: player.name,
+                            score: eliminatedPlayerIds.has(player.id) ? 0 : 1,
+                            color: player.color,
+                        }))
+                        .sort((firstPlayer, secondPlayer) => {
+                            if (secondPlayer.score !== firstPlayer.score) {
+                                return secondPlayer.score - firstPlayer.score;
+                            }
+                            return firstPlayer.name.localeCompare(
+                                secondPlayer.name,
+                            );
+                        });
+
+                    room.state = "finished";
+                    io.to(roomCode).emit("gameOver", {
+                        winnerId: winner?.id ?? null,
+                        gameMode: room.gameMode,
+                        leaderboard: sortedLeaderboard,
+                    });
+                    stopGameLoop(roomCode);
+                    return;
+                }
+
+                if (!pendingRoundRestartMap.has(roomCode)) {
+                    io.to(roomCode).emit("roundOver", {
+                        winnerId: null,
+                        gameMode: room.gameMode,
+                        eliminatedPlayerIds: Array.from(eliminatedPlayerIds),
+                    });
+
+                    const restartHandle = setTimeout(() => {
+                        pendingRoundRestartMap.delete(roomCode);
+                        const latestRoom = getRoom(roomCode);
+                        if (!latestRoom) return;
+
+                        const latestPlayers = Array.from(
+                            latestRoom.players.values(),
+                        );
+                        restartRound(latestPlayers, {
+                            battleRoyaleEliminatedPlayerIds:
+                                latestRoom.battleRoyaleEliminatedPlayerIds,
+                        });
+                        restartGraceMap.set(roomCode, restartGracePeriod);
+                        roundStartNoTrailMap.set(
+                            roomCode,
+                            ROUND_START_NO_TRAIL_TICKS,
+                        );
+                        io.to(roomCode).emit("roundRestart");
+                    }, ROUND_RESTART_DELAY_MS);
+
+                    pendingRoundRestartMap.set(roomCode, restartHandle);
+                }
+
+                if (shouldBroadcastState) {
+                    const state = buildGameState(roomCode);
+                    if (state) {
+                        io.to(roomCode).emit("gameState", state);
+                    }
+                }
+                return;
+            }
+
             const alivePlayers = players.filter((player) => player.alive);
             if (alivePlayers.length > 0) {
                 const pointsPerAlivePlayer = deadPlayerIds.size;
@@ -529,6 +627,7 @@ export function startGameLoop(roomCode: string, io: Server) {
                 room.state = "finished";
                 io.to(roomCode).emit("gameOver", {
                     winnerId: sortedLeaderboard[0]?.id ?? null,
+                    gameMode: room.gameMode,
                     targetScore,
                     leaderboard: sortedLeaderboard,
                 });

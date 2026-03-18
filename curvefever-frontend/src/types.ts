@@ -19,6 +19,8 @@ export interface Player {
     gapStartDistance?: number;
 }
 
+export type GameMode = "classic" | "battle-royale";
+
 export type RoomState = "lobby" | "playing" | "finished";
 
 export interface Room {
@@ -36,6 +38,7 @@ export interface GameState {
         height: number;
     };
     players: Player[];
+    gameMode: GameMode;
     targetScore?: number;
 }
 

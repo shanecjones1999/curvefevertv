@@ -193,7 +193,6 @@ flowchart LR
 
 - Backend default port: `3001`
 - CORS origin from `CORS_ORIGIN` env (fallback `*`)
-- Backend has `/debug` endpoint for in-memory room inspection
 - Current persistence model means server restart clears all active rooms
 
 ## 11. Known Constraints / Follow-ups

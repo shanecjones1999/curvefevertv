@@ -17,9 +17,7 @@ import {
 
 export function registerLobbyHandlers(io: TypedServer, socket: TypedSocket) {
     socket.on("createRoom", (_data, cb) => {
-        console.log("[DEBUG] createRoom event received!");
         const room = createRoom(socket.id);
-        console.log("[DEBUG] Room created:", room.code);
         socket.join(room.code);
         bindSocketToRoom(socket.id, room.code);
         cb?.({

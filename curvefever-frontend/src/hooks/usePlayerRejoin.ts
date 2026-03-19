@@ -2,7 +2,10 @@ import { useEffect } from "react";
 import socket from "../socket";
 import { EVENTS } from "../events";
 import { PLAYER_SESSION_KEY } from "../constants/storage";
-import type { PlayerSession } from "../utils/playerSession";
+import {
+    getStoredPlayerSession,
+    type PlayerSession,
+} from "../utils/playerSession";
 
 const REJOIN_TIMEOUT_MS = 7000;
 
@@ -64,32 +67,32 @@ export function usePlayerRejoin({
         };
 
         const rejoinFromSession = () => {
-            // Only attempt rejoin if we have a stored session with a valid player ID
-            if (!storedSession || !playerIdRef.current) {
+            const activeSession = storedSession ?? getStoredPlayerSession();
+            const activePlayerId =
+                playerIdRef.current ?? activeSession?.playerId ?? null;
+
+            // Only attempt rejoin if we can resolve both room and player identity
+            if (!activeSession || !activePlayerId) {
                 setIsRejoining(false);
-                // Clean up any orphaned session data
-                if (localStorage.getItem(PLAYER_SESSION_KEY)) {
-                    playerIdRef.current = null;
-                    localStorage.removeItem(PLAYER_SESSION_KEY);
-                }
                 return;
             }
 
             armRejoinTimeout();
+            playerIdRef.current = activePlayerId;
 
             console.log(
                 "[PlayerController] Attempting to rejoin room",
-                storedSession.roomCode,
+                activeSession.roomCode,
                 "as player",
-                playerIdRef.current,
+                activePlayerId,
             );
 
             socket.emit(
                 "rejoinRoom",
                 {
-                    roomCode: storedSession.roomCode,
-                    playerId: playerIdRef.current,
-                    name: storedSession.name,
+                    roomCode: activeSession.roomCode,
+                    playerId: activePlayerId,
+                    name: activeSession.name,
                 },
                 (res: JoinRoomResponse) => {
                     clearRejoinTimeout();
@@ -107,8 +110,8 @@ export function usePlayerRejoin({
                         localStorage.setItem(
                             PLAYER_SESSION_KEY,
                             JSON.stringify({
-                                roomCode: storedSession.roomCode,
-                                name: res.player.name ?? storedSession.name,
+                                roomCode: activeSession.roomCode,
+                                name: res.player.name ?? activeSession.name,
                                 playerId: res.player.id,
                             }),
                         );

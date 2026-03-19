@@ -24,7 +24,6 @@ registerHttpRoutes(app);
 
 io.on("connection", (socket) => {
     console.log("socket connected", socket.id);
-    console.log("[DEBUG] Socket connected, waiting for createRoom event...");
     registerLobbyHandlers(io, socket);
     registerGameHandlers(io, socket);
 });

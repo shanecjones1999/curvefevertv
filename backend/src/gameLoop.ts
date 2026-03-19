@@ -1,7 +1,12 @@
 import { getRoom } from "./rooms";
 import { TypedServer } from "./socket/events";
 import { GameState, Player } from "./types";
-import { GAME_HEIGHT, GAME_WIDTH } from "./config";
+import {
+    GAME_HEIGHT,
+    GAME_WIDTH,
+    MIN_SPAWN_DISTANCE,
+    SPAWN_WALL_MARGIN,
+} from "./config";
 
 const TICK_RATE = 60;
 const MS_PER_TICK = 1000 / TICK_RATE;
@@ -16,7 +21,7 @@ const ROUND_START_NO_TRAIL_TICKS = 120;
 const roundStartNoTrailMap = new Map<string, number>();
 const ROUND_RESTART_DELAY_MS = 2000;
 const pendingRoundRestartMap = new Map<string, NodeJS.Timeout>();
-const SPAWN_WALL_MARGIN = 180;
+const MAX_SPAWN_ATTEMPTS = 40;
 
 function calculateTargetScore(playerCount: number) {
     return Math.max(10, playerCount * 10 - 10);
@@ -30,11 +35,69 @@ function randomCoordinateAwayFromWalls(arenaSize: number, wallMargin: number) {
     return wallMargin + Math.random() * usableSize;
 }
 
-export function generateSpawnPosition() {
+function distanceSquared(
+    first: { x: number; y: number },
+    second: { x: number; y: number },
+) {
+    const dx = first.x - second.x;
+    const dy = first.y - second.y;
+    return dx * dx + dy * dy;
+}
+
+function getClosestSpawnDistanceSquared(
+    candidate: { x: number; y: number },
+    occupiedSpawnPositions: Array<{ x: number; y: number }>,
+) {
+    if (occupiedSpawnPositions.length === 0) {
+        return Number.POSITIVE_INFINITY;
+    }
+
+    let closestDistanceSquared = Number.POSITIVE_INFINITY;
+    for (const occupiedSpawnPosition of occupiedSpawnPositions) {
+        closestDistanceSquared = Math.min(
+            closestDistanceSquared,
+            distanceSquared(candidate, occupiedSpawnPosition),
+        );
+    }
+
+    return closestDistanceSquared;
+}
+
+function randomSpawnPosition() {
     return {
         x: randomCoordinateAwayFromWalls(GAME_WIDTH, SPAWN_WALL_MARGIN),
         y: randomCoordinateAwayFromWalls(GAME_HEIGHT, SPAWN_WALL_MARGIN),
     };
+}
+
+export function generateSpawnPosition(
+    occupiedSpawnPositions: Array<{ x: number; y: number }> = [],
+) {
+    const minAllowedDistanceSquared = MIN_SPAWN_DISTANCE * MIN_SPAWN_DISTANCE;
+    let fallbackSpawnPosition = randomSpawnPosition();
+    let fallbackDistanceSquared = getClosestSpawnDistanceSquared(
+        fallbackSpawnPosition,
+        occupiedSpawnPositions,
+    );
+
+    for (let attempt = 0; attempt < MAX_SPAWN_ATTEMPTS; attempt++) {
+        const candidateSpawnPosition = randomSpawnPosition();
+        const closestDistanceSquared = getClosestSpawnDistanceSquared(
+            candidateSpawnPosition,
+            occupiedSpawnPositions,
+        );
+
+        if (closestDistanceSquared >= minAllowedDistanceSquared) {
+            return candidateSpawnPosition;
+        }
+
+        if (closestDistanceSquared > fallbackDistanceSquared) {
+            fallbackSpawnPosition = candidateSpawnPosition;
+            fallbackDistanceSquared = closestDistanceSquared;
+        }
+    }
+
+    return fallbackSpawnPosition;
 }
 
 function ensureTrailSegment(p: Player) {
@@ -424,6 +487,7 @@ export function restartRound(
     options?: { battleRoyaleEliminatedPlayerIds?: Set<string> },
 ) {
     const eliminatedIds = options?.battleRoyaleEliminatedPlayerIds;
+    const occupiedSpawnPositions: Array<{ x: number; y: number }> = [];
 
     for (const p of players) {
         const isEliminated = eliminatedIds?.has(p.id) ?? false;
@@ -436,7 +500,8 @@ export function restartRound(
             continue;
         }
 
-        const spawn = generateSpawnPosition();
+        const spawn = generateSpawnPosition(occupiedSpawnPositions);
+        occupiedSpawnPositions.push(spawn);
         p.alive = true;
         p.x = spawn.x;
         p.y = spawn.y;

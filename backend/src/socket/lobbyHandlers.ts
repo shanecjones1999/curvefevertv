@@ -71,7 +71,13 @@ export function registerLobbyHandlers(io: TypedServer, socket: TypedSocket) {
         const room = getRoom(roomCode);
         if (!room) return cb?.({ ok: false, error: "Room not found" });
 
-        const spawn = generateSpawnPosition();
+        const occupiedSpawnPositions = Array.from(room.players.values()).map(
+            (existingPlayer) => ({
+                x: existingPlayer.x,
+                y: existingPlayer.y,
+            }),
+        );
+        const spawn = generateSpawnPosition(occupiedSpawnPositions);
 
         const player: Player = {
             id: crypto.randomUUID(),

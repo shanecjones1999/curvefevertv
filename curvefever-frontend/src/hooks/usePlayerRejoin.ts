@@ -16,11 +16,13 @@ type JoinRoomResponse = {
         name: string;
     };
     error?: string;
+    errorCode?: string;
 };
 
 type LobbyStateResponse = {
     ok: boolean;
     error?: string;
+    errorCode?: string;
 };
 
 type UsePlayerRejoinParams = {
@@ -137,9 +139,8 @@ export function usePlayerRejoin({
                             res?.error ?? "Unknown error",
                         );
 
-                        const shouldDropPlayerId = (res?.error ?? "")
-                            .toLowerCase()
-                            .includes("player not found in room");
+                        const shouldDropPlayerId =
+                            res?.errorCode === "PLAYER_NOT_FOUND_IN_ROOM";
 
                         socket.emit(
                             "requestLobbyState",

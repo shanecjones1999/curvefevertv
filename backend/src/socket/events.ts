@@ -19,6 +19,14 @@ interface RoundLeaderboardEntry {
     score: number;
 }
 
+export type SocketErrorCode =
+    | "ROOM_CODE_INVALID"
+    | "ROOM_NOT_FOUND"
+    | "NAME_REQUIRED"
+    | "REJOIN_PAYLOAD_INVALID"
+    | "PLAYER_NOT_FOUND_IN_ROOM"
+    | "LEAVE_ROOM_FAILED";
+
 export interface LobbyStatePayload {
     players: Player[];
     gameMode: GameMode;
@@ -39,6 +47,7 @@ export interface ClientToServerEvents {
         cb?: (response: {
             ok: boolean;
             error?: string;
+            errorCode?: SocketErrorCode;
             roomCode?: string;
             players?: Player[];
             state?: RoomState;
@@ -52,6 +61,7 @@ export interface ClientToServerEvents {
         cb?: (response: {
             ok: boolean;
             error?: string;
+            errorCode?: SocketErrorCode;
             player?: Player;
         }) => void,
     ) => void;
@@ -60,6 +70,7 @@ export interface ClientToServerEvents {
         cb?: (response: {
             ok: boolean;
             error?: string;
+            errorCode?: SocketErrorCode;
             player?: Player;
             state?: RoomState;
         }) => void,
@@ -69,6 +80,7 @@ export interface ClientToServerEvents {
         cb?: (response: {
             ok: boolean;
             error?: string;
+            errorCode?: SocketErrorCode;
             players?: Player[];
             state?: RoomState;
             gameMode?: GameMode;
@@ -97,7 +109,11 @@ export interface ClientToServerEvents {
     ) => void;
     leaveRoom: (
         data: { roomCode: string; playerId?: string },
-        cb?: (response: { ok: boolean; error?: string }) => void,
+        cb?: (response: {
+            ok: boolean;
+            error?: string;
+            errorCode?: SocketErrorCode;
+        }) => void,
     ) => void;
 }
 

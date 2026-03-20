@@ -32,9 +32,18 @@ export function registerLobbyHandlers(io: TypedServer, socket: TypedSocket) {
     socket.on("reconnectHost", (data: { roomCode: string }, cb) => {
         const roomCode = normalizeRoomCode(data?.roomCode);
         if (!roomCode)
-            return cb?.({ ok: false, error: "Room code must be 4 letters" });
+            return cb?.({
+                ok: false,
+                error: "Room code must be 4 letters",
+                errorCode: "ROOM_CODE_INVALID",
+            });
         const room = getRoom(roomCode);
-        if (!room) return cb?.({ ok: false, error: "Room not found" });
+        if (!room)
+            return cb?.({
+                ok: false,
+                error: "Room not found",
+                errorCode: "ROOM_NOT_FOUND",
+            });
 
         room.hostSocketId = socket.id;
         socket.join(room.code);
@@ -66,15 +75,25 @@ export function registerLobbyHandlers(io: TypedServer, socket: TypedSocket) {
                 return cb?.({
                     ok: false,
                     error: "Room code must be 4 letters",
+                    errorCode: "ROOM_CODE_INVALID",
                 });
 
             const normalizedName = data?.name?.trim();
             if (!normalizedName) {
-                return cb?.({ ok: false, error: "Name is required" });
+                return cb?.({
+                    ok: false,
+                    error: "Name is required",
+                    errorCode: "NAME_REQUIRED",
+                });
             }
 
             const room = getRoom(roomCode);
-            if (!room) return cb?.({ ok: false, error: "Room not found" });
+            if (!room)
+                return cb?.({
+                    ok: false,
+                    error: "Room not found",
+                    errorCode: "ROOM_NOT_FOUND",
+                });
 
             const requestedPlayerId =
                 typeof data?.playerId === "string" && data.playerId.trim()
@@ -168,13 +187,18 @@ export function registerLobbyHandlers(io: TypedServer, socket: TypedSocket) {
                 return cb?.({
                     ok: false,
                     error: "roomCode (4 letters) and playerId required",
+                    errorCode: "REJOIN_PAYLOAD_INVALID",
                 });
             }
 
             const room = getRoom(roomCode);
             if (!room) {
                 console.log(`[rejoinRoom] Room not found: ${roomCode}`);
-                return cb?.({ ok: false, error: "Room not found" });
+                return cb?.({
+                    ok: false,
+                    error: "Room not found",
+                    errorCode: "ROOM_NOT_FOUND",
+                });
             }
 
             const existingPlayer = room.players.get(data.playerId);
@@ -183,7 +207,11 @@ export function registerLobbyHandlers(io: TypedServer, socket: TypedSocket) {
                     `[rejoinRoom] Player not found in room: ${data.playerId} in ${roomCode}. Players in room:`,
                     Array.from(room.players.keys()),
                 );
-                return cb?.({ ok: false, error: "Player not found in room" });
+                return cb?.({
+                    ok: false,
+                    error: "Player not found in room",
+                    errorCode: "PLAYER_NOT_FOUND_IN_ROOM",
+                });
             }
 
             console.log(
@@ -211,9 +239,18 @@ export function registerLobbyHandlers(io: TypedServer, socket: TypedSocket) {
     socket.on("requestLobbyState", (data: { roomCode: string }, cb) => {
         const roomCode = normalizeRoomCode(data?.roomCode);
         if (!roomCode)
-            return cb?.({ ok: false, error: "Room code must be 4 letters" });
+            return cb?.({
+                ok: false,
+                error: "Room code must be 4 letters",
+                errorCode: "ROOM_CODE_INVALID",
+            });
         const room = getRoom(roomCode);
-        if (!room) return cb?.({ ok: false, error: "Room not found" });
+        if (!room)
+            return cb?.({
+                ok: false,
+                error: "Room not found",
+                errorCode: "ROOM_NOT_FOUND",
+            });
         cb?.({
             ok: true,
             players: Array.from(room.players.values()),
@@ -239,10 +276,16 @@ export function registerLobbyHandlers(io: TypedServer, socket: TypedSocket) {
                 return cb?.({
                     ok: false,
                     error: "Room code must be 4 letters",
+                    errorCode: "ROOM_CODE_INVALID",
                 });
 
             const room = getRoom(roomCode);
-            if (!room) return cb?.({ ok: false, error: "Room not found" });
+            if (!room)
+                return cb?.({
+                    ok: false,
+                    error: "Room not found",
+                    errorCode: "ROOM_NOT_FOUND",
+                });
 
             if (data.playerId) {
                 const departingSocketId = room.players.get(
@@ -250,7 +293,11 @@ export function registerLobbyHandlers(io: TypedServer, socket: TypedSocket) {
                 )?.socketId;
                 const updated = leaveRoom(roomCode, data.playerId);
                 if (!updated)
-                    return cb?.({ ok: false, error: "Failed to leave room" });
+                    return cb?.({
+                        ok: false,
+                        error: "Failed to leave room",
+                        errorCode: "LEAVE_ROOM_FAILED",
+                    });
                 if (departingSocketId) {
                     unbindSocket(departingSocketId);
                 }

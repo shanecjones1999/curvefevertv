@@ -48,7 +48,7 @@ export interface ClientToServerEvents {
         }) => void,
     ) => void;
     joinRoom: (
-        data: { roomCode: string; name: string },
+        data: { roomCode: string; name: string; playerId?: string },
         cb?: (response: {
             ok: boolean;
             error?: string;

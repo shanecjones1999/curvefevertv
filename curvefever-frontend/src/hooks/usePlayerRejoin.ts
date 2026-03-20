@@ -18,6 +18,11 @@ type JoinRoomResponse = {
     error?: string;
 };
 
+type LobbyStateResponse = {
+    ok: boolean;
+    error?: string;
+};
+
 type UsePlayerRejoinParams = {
     storedSession: PlayerSession | null;
     playerIdRef: React.MutableRefObject<string | null>;
@@ -67,7 +72,7 @@ export function usePlayerRejoin({
         };
 
         const rejoinFromSession = () => {
-            const activeSession = storedSession ?? getStoredPlayerSession();
+            const activeSession = getStoredPlayerSession() ?? storedSession;
             const activePlayerId =
                 playerIdRef.current ?? activeSession?.playerId ?? null;
 
@@ -98,12 +103,16 @@ export function usePlayerRejoin({
                     clearRejoinTimeout();
                     if (rejoinResolved) return;
                     console.log("[PlayerController] rejoinRoom response:", res);
-                    if (res?.ok && res.player?.id) {
+
+                    const finalizeRejoin = (
+                        playerId: string,
+                        playerName: string,
+                    ) => {
                         console.log(
                             "[PlayerController] Successfully rejoined room",
                         );
                         rejoinResolved = true;
-                        playerIdRef.current = res.player.id;
+                        playerIdRef.current = playerId;
                         setJoined(true);
                         setIsRejoining(false);
                         setRejoinError(null);
@@ -111,18 +120,70 @@ export function usePlayerRejoin({
                             PLAYER_SESSION_KEY,
                             JSON.stringify({
                                 roomCode: activeSession.roomCode,
-                                name: res.player.name ?? activeSession.name,
-                                playerId: res.player.id,
+                                name: playerName,
+                                playerId,
                             }),
+                        );
+                    };
+
+                    if (res?.ok && res.player?.id) {
+                        finalizeRejoin(
+                            res.player.id,
+                            res.player.name ?? activeSession.name,
                         );
                     } else {
                         console.log(
                             "[PlayerController] Rejoin failed:",
                             res?.error ?? "Unknown error",
                         );
-                        failRejoin(
-                            res?.error ??
-                                "Could not reconnect. Please rejoin the room.",
+
+                        const shouldDropPlayerId = (res?.error ?? "")
+                            .toLowerCase()
+                            .includes("player not found in room");
+
+                        socket.emit(
+                            "requestLobbyState",
+                            { roomCode: activeSession.roomCode },
+                            (lobbyRes: LobbyStateResponse) => {
+                                if (!lobbyRes?.ok) {
+                                    failRejoin(
+                                        res?.error ??
+                                            "Could not reconnect. Please rejoin the room.",
+                                    );
+                                    return;
+                                }
+
+                                socket.emit(
+                                    "joinRoom",
+                                    {
+                                        roomCode: activeSession.roomCode,
+                                        name: activeSession.name,
+                                        playerId: shouldDropPlayerId
+                                            ? undefined
+                                            : activePlayerId,
+                                    },
+                                    (joinRes: JoinRoomResponse) => {
+                                        if (
+                                            joinRes?.ok &&
+                                            joinRes.player?.id &&
+                                            !rejoinResolved
+                                        ) {
+                                            finalizeRejoin(
+                                                joinRes.player.id,
+                                                joinRes.player.name ??
+                                                    activeSession.name,
+                                            );
+                                            return;
+                                        }
+
+                                        failRejoin(
+                                            joinRes?.error ??
+                                                res?.error ??
+                                                "Could not reconnect. Please rejoin the room.",
+                                        );
+                                    },
+                                );
+                            },
                         );
                     }
                 },

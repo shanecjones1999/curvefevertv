@@ -155,9 +155,20 @@ export default function PlayerController({ onLeave }: Props) {
             return;
         }
 
+        const activeSession = getStoredPlayerSession();
+        const candidatePlayerId =
+            playerIdRef.current ??
+            (activeSession?.roomCode === normalizedRoomCode
+                ? activeSession.playerId
+                : null);
+
         socket.emit(
             EVENTS.JOIN_ROOM,
-            { roomCode: normalizedRoomCode, name: normalizedName },
+            {
+                roomCode: normalizedRoomCode,
+                name: normalizedName,
+                playerId: candidatePlayerId ?? undefined,
+            },
             (res: JoinRoomResponse) => {
                 if (res?.ok && res.player?.id) {
                     playerIdRef.current = res.player.id;

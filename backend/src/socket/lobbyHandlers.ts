@@ -58,54 +58,100 @@ export function registerLobbyHandlers(io: TypedServer, socket: TypedSocket) {
         });
     });
 
-    socket.on("joinRoom", (data: { roomCode: string; name: string }, cb) => {
-        const roomCode = normalizeRoomCode(data?.roomCode);
-        if (!roomCode)
-            return cb?.({ ok: false, error: "Room code must be 4 letters" });
+    socket.on(
+        "joinRoom",
+        (data: { roomCode: string; name: string; playerId?: string }, cb) => {
+            const roomCode = normalizeRoomCode(data?.roomCode);
+            if (!roomCode)
+                return cb?.({
+                    ok: false,
+                    error: "Room code must be 4 letters",
+                });
 
-        const normalizedName = data?.name?.trim();
-        if (!normalizedName) {
-            return cb?.({ ok: false, error: "Name is required" });
-        }
+            const normalizedName = data?.name?.trim();
+            if (!normalizedName) {
+                return cb?.({ ok: false, error: "Name is required" });
+            }
 
-        const room = getRoom(roomCode);
-        if (!room) return cb?.({ ok: false, error: "Room not found" });
+            const room = getRoom(roomCode);
+            if (!room) return cb?.({ ok: false, error: "Room not found" });
 
-        const occupiedSpawnPositions = Array.from(room.players.values()).map(
-            (existingPlayer) => ({
+            const requestedPlayerId =
+                typeof data?.playerId === "string" && data.playerId.trim()
+                    ? data.playerId.trim()
+                    : null;
+
+            const disconnectedPlayerById = requestedPlayerId
+                ? room.players.get(requestedPlayerId)
+                : null;
+            const disconnectedPlayerByName = Array.from(
+                room.players.values(),
+            ).find(
+                (existingPlayer) =>
+                    !existingPlayer.socketId &&
+                    existingPlayer.name.trim().toLowerCase() ===
+                        normalizedName.toLowerCase(),
+            );
+
+            const reclaimCandidate =
+                disconnectedPlayerById && !disconnectedPlayerById.socketId
+                    ? disconnectedPlayerById
+                    : disconnectedPlayerByName;
+
+            if (reclaimCandidate) {
+                reclaimCandidate.socketId = socket.id;
+                reclaimCandidate.turnLeftHeld = false;
+                reclaimCandidate.turnRightHeld = false;
+                reclaimCandidate.name = normalizedName;
+
+                socket.join(room.code);
+                bindSocketToRoom(socket.id, room.code);
+                bindSocketToPlayer(socket.id, reclaimCandidate.id);
+
+                console.log(
+                    `[joinRoom] Reclaimed player ${reclaimCandidate.id} in room ${room.code}`,
+                );
+                cb?.({ ok: true, player: reclaimCandidate });
+                emitLobbyUpdate(io, room.code);
+                return;
+            }
+
+            const occupiedSpawnPositions = Array.from(
+                room.players.values(),
+            ).map((existingPlayer) => ({
                 x: existingPlayer.x,
                 y: existingPlayer.y,
-            }),
-        );
-        const spawn = generateSpawnPosition(occupiedSpawnPositions);
+            }));
+            const spawn = generateSpawnPosition(occupiedSpawnPositions);
 
-        const player: Player = {
-            id: crypto.randomUUID(),
-            name: normalizedName,
-            score: 0,
-            socketId: socket.id,
-            color: undefined,
-            alive: true,
-            x: spawn.x,
-            y: spawn.y,
-            direction: Math.random() * Math.PI * 2,
-            speed: 2.5,
-            trail: [],
-            turnLeftHeld: false,
-            turnRightHeld: false,
-        };
+            const player: Player = {
+                id: crypto.randomUUID(),
+                name: normalizedName,
+                score: 0,
+                socketId: socket.id,
+                color: undefined,
+                alive: true,
+                x: spawn.x,
+                y: spawn.y,
+                direction: Math.random() * Math.PI * 2,
+                speed: 2.5,
+                trail: [],
+                turnLeftHeld: false,
+                turnRightHeld: false,
+            };
 
-        joinRoom(room.code, player);
-        socket.join(room.code);
-        bindSocketToRoom(socket.id, room.code);
-        bindSocketToPlayer(socket.id, player.id);
-        console.log(
-            `[joinRoom] Added player ${player.id} to room ${room.code}`,
-        );
-        cb?.({ ok: true, player });
-        io.to(room.code).emit("playerJoined", { player });
-        emitLobbyUpdate(io, room.code);
-    });
+            joinRoom(room.code, player);
+            socket.join(room.code);
+            bindSocketToRoom(socket.id, room.code);
+            bindSocketToPlayer(socket.id, player.id);
+            console.log(
+                `[joinRoom] Added player ${player.id} to room ${room.code}`,
+            );
+            cb?.({ ok: true, player });
+            io.to(room.code).emit("playerJoined", { player });
+            emitLobbyUpdate(io, room.code);
+        },
+    );
 
     socket.on(
         "rejoinRoom",

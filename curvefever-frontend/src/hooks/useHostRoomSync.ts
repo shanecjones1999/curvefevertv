@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import socket from "../socket";
 import { EVENTS } from "../events";
 import { HOST_SESSION_KEY } from "../constants/storage";
-import type { GameMode, Player } from "../types";
+import type { GameMode, Player, PowerUp } from "../types";
 import type { GameConfig, GameOverPayload } from "../components/host/types";
 
 type ReconnectHostResponse = {
@@ -12,6 +12,7 @@ type ReconnectHostResponse = {
     state?: "lobby" | "playing" | "finished";
     gameMode?: GameMode;
     targetScore?: number;
+    powerUpsEnabled?: boolean;
     gameConfig?: GameConfig;
     error?: string;
 };
@@ -24,6 +25,8 @@ type UseHostRoomSyncParams = {
     setStartError: React.Dispatch<React.SetStateAction<string | null>>;
     setTargetScore: React.Dispatch<React.SetStateAction<number | null>>;
     setGameMode: React.Dispatch<React.SetStateAction<GameMode>>;
+    setPowerUpsEnabled: React.Dispatch<React.SetStateAction<boolean>>;
+    setPowerUps: React.Dispatch<React.SetStateAction<PowerUp[]>>;
     setGameOverData: React.Dispatch<
         React.SetStateAction<GameOverPayload | null>
     >;
@@ -38,6 +41,8 @@ export function useHostRoomSync({
     setStartError,
     setTargetScore,
     setGameMode,
+    setPowerUpsEnabled,
+    setPowerUps,
     setGameOverData,
     setGameConfig,
 }: UseHostRoomSyncParams) {
@@ -66,6 +71,12 @@ export function useHostRoomSync({
             }
             if (incoming === "classic") {
                 setGameMode("classic");
+            }
+        };
+
+        const applyPowerUpsEnabled = (incoming?: boolean) => {
+            if (typeof incoming === "boolean") {
+                setPowerUpsEnabled(incoming);
             }
         };
 
@@ -119,6 +130,7 @@ export function useHostRoomSync({
                             }
                             applyGameMode(res.gameMode);
                             applyTargetScore(res.targetScore);
+                            applyPowerUpsEnabled(res.powerUpsEnabled);
                             applyGameConfig(res.gameConfig);
                             if (res.state === "finished") {
                                 const fallbackLeaderboard = (res.players ?? [])
@@ -180,11 +192,13 @@ export function useHostRoomSync({
                 players: Player[];
                 gameMode?: GameMode;
                 targetScore?: number;
+                powerUpsEnabled?: boolean;
                 gameConfig?: GameConfig;
             }) => {
                 setPlayers(data.players);
                 applyGameMode(data.gameMode);
                 applyTargetScore(data.targetScore);
+                applyPowerUpsEnabled(data.powerUpsEnabled);
                 applyGameConfig(data.gameConfig);
             },
         );
@@ -194,11 +208,14 @@ export function useHostRoomSync({
             (data?: {
                 gameMode?: GameMode;
                 targetScore?: number;
+                powerUpsEnabled?: boolean;
                 gameConfig?: GameConfig;
             }) => {
                 applyGameMode(data?.gameMode);
                 applyTargetScore(data?.targetScore);
+                applyPowerUpsEnabled(data?.powerUpsEnabled);
                 applyGameConfig(data?.gameConfig);
+                setPowerUps([]);
                 setGameOverData(null);
                 setPlaying(true);
             },
@@ -211,14 +228,20 @@ export function useHostRoomSync({
                 gameMode?: GameMode;
                 targetScore?: number;
                 arena?: GameConfig;
+                powerUpsEnabled?: boolean;
+                powerUps?: PowerUp[];
             }) => {
                 if (state?.arena) {
                     applyGameConfig(state.arena);
                 }
                 applyGameMode(state?.gameMode);
                 applyTargetScore(state?.targetScore);
+                applyPowerUpsEnabled(state?.powerUpsEnabled);
                 if (state && Array.isArray(state.players)) {
                     setPlayers(state.players);
+                }
+                if (Array.isArray(state?.powerUps)) {
+                    setPowerUps(state.powerUps);
                 }
             },
         );
@@ -257,6 +280,8 @@ export function useHostRoomSync({
         setStartError,
         setTargetScore,
         setGameMode,
+        setPowerUpsEnabled,
+        setPowerUps,
         setGameOverData,
         setGameConfig,
     ]);

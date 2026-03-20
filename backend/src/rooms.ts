@@ -28,6 +28,7 @@ export function createRoom(hostSocketId: string) {
         state: "lobby",
         targetScore: undefined,
         gameMode: "classic",
+        powerUpsEnabled: false,
         battleRoyaleEliminatedPlayerIds: new Set<string>(),
         game: null,
     };

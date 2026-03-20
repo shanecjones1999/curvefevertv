@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import socket from "./socket";
 import { EVENTS } from "./events";
-import type { GameMode, Player } from "./types";
+import type { GameMode, Player, PowerUp } from "./types";
 import PhaserGame from "./PhaserGame";
 import { DEFAULT_GAME_HEIGHT, DEFAULT_GAME_WIDTH } from "./gameConfig";
 import { PLAYER_COLORS, DISCONNECTED_DOT_COLOR } from "./constants/gameUi";
@@ -17,6 +17,7 @@ type StartGameResponse = {
     ok: boolean;
     gameMode?: GameMode;
     targetScore?: number;
+    powerUpsEnabled?: boolean;
     gameConfig?: GameConfig;
     error?: string;
 };
@@ -24,6 +25,12 @@ type StartGameResponse = {
 type SetGameModeResponse = {
     ok: boolean;
     gameMode?: GameMode;
+    error?: string;
+};
+
+type SetPowerUpsEnabledResponse = {
+    ok: boolean;
+    powerUpsEnabled?: boolean;
     error?: string;
 };
 
@@ -54,6 +61,8 @@ export default function Host({ onLeave }: Props) {
     const [copiedCode, setCopiedCode] = useState(false);
     const [targetScore, setTargetScore] = useState<number | null>(null);
     const [gameMode, setGameMode] = useState<GameMode>("classic");
+    const [powerUpsEnabled, setPowerUpsEnabled] = useState(false);
+    const [powerUps, setPowerUps] = useState<PowerUp[]>([]);
     const [gameOverData, setGameOverData] = useState<GameOverPayload | null>(
         null,
     );
@@ -153,6 +162,8 @@ export default function Host({ onLeave }: Props) {
         setStartError,
         setTargetScore,
         setGameMode,
+        setPowerUpsEnabled,
+        setPowerUps,
         setGameOverData,
         setGameConfig,
     });
@@ -169,13 +180,17 @@ export default function Host({ onLeave }: Props) {
         if (!roomCode) return;
         socket.emit(
             "startGame",
-            { roomCode, gameMode },
+            { roomCode, gameMode, powerUpsEnabled },
             (res: StartGameResponse) => {
                 if (res?.ok) {
                     setStartError(null);
                     setGameOverData(null);
+                    setPowerUps([]);
                     if (res.gameMode) {
                         setGameMode(res.gameMode);
+                    }
+                    if (typeof res.powerUpsEnabled === "boolean") {
+                        setPowerUpsEnabled(res.powerUpsEnabled);
                     }
                     if (typeof res.targetScore === "number") {
                         setTargetScore(Math.floor(res.targetScore));
@@ -186,6 +201,29 @@ export default function Host({ onLeave }: Props) {
                     setPlaying(true);
                 } else {
                     setStartError(res?.error ?? "Unable to start game");
+                }
+            },
+        );
+    }
+
+    function handlePowerUpsEnabledChange(nextEnabled: boolean) {
+        setPowerUpsEnabled(nextEnabled);
+
+        if (!roomCode || playing) return;
+
+        socket.emit(
+            EVENTS.SET_POWER_UPS_ENABLED,
+            { roomCode, powerUpsEnabled: nextEnabled },
+            (res: SetPowerUpsEnabledResponse) => {
+                if (!res?.ok) {
+                    setStartError(
+                        res?.error ?? "Unable to update power-up setting",
+                    );
+                    return;
+                }
+                setStartError(null);
+                if (typeof res.powerUpsEnabled === "boolean") {
+                    setPowerUpsEnabled(res.powerUpsEnabled);
                 }
             },
         );
@@ -260,6 +298,7 @@ export default function Host({ onLeave }: Props) {
             copiedCode={copiedCode}
             roomCode={roomCode}
             gameMode={gameMode}
+            powerUpsEnabled={powerUpsEnabled}
             effectiveTargetScore={effectiveTargetScore}
             playing={playing}
             playersCount={players.length}
@@ -267,6 +306,7 @@ export default function Host({ onLeave }: Props) {
             onLeaveGame={handleLeaveGame}
             onCopyGameCode={handleCopyGameCode}
             onGameModeChange={handleGameModeChange}
+            onPowerUpsEnabledChange={handlePowerUpsEnabledChange}
             onStartGame={handleStartGame}
         />
     );
@@ -304,6 +344,7 @@ export default function Host({ onLeave }: Props) {
                 <div className="game-stage">
                     <PhaserGame
                         players={players}
+                        powerUps={powerUps}
                         width={gameConfig.width}
                         height={gameConfig.height}
                     />

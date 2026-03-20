@@ -1,6 +1,6 @@
 import { getRoom } from "./rooms";
 import { TypedServer } from "./socket/events";
-import { GameState, Player } from "./types";
+import { GameState, Player, PowerUp, PowerUpType } from "./types";
 import {
     GAME_HEIGHT,
     GAME_WIDTH,
@@ -22,6 +22,16 @@ const roundStartNoTrailMap = new Map<string, number>();
 const ROUND_RESTART_DELAY_MS = 2000;
 const pendingRoundRestartMap = new Map<string, NodeJS.Timeout>();
 const MAX_SPAWN_ATTEMPTS = 40;
+const BASE_PLAYER_SPEED = 2.5;
+const POWER_UP_SPAWN_INTERVAL_TICKS = 240;
+const MAX_POWER_UPS_PER_ROOM = 3;
+const POWER_UP_PICKUP_RADIUS = 14;
+const POWER_UP_EFFECT_DURATION_TICKS = 300;
+const SPEED_UP_MULTIPLIER = 1.4;
+const SLOW_DOWN_MULTIPLIER = 0.7;
+
+const roomPowerUpsMap = new Map<string, PowerUp[]>();
+const roomLastPowerUpSpawnTickMap = new Map<string, number>();
 
 function calculateTargetScore(playerCount: number) {
     return Math.max(10, playerCount * 10 - 10);
@@ -196,7 +206,7 @@ function movePlayer(
     height: number,
     suppressTrail: boolean,
 ) {
-    const speed = p.speed ?? 2.5;
+    const speed = p.speed ?? BASE_PLAYER_SPEED;
     // simple forward movement using direction (radians)
     const oldX = p.x;
     const oldY = p.y;
@@ -254,6 +264,118 @@ function movePlayer(
     }
 }
 
+function getRoomPowerUps(roomCode: string) {
+    const existing = roomPowerUpsMap.get(roomCode);
+    if (existing) return existing;
+    const created: PowerUp[] = [];
+    roomPowerUpsMap.set(roomCode, created);
+    return created;
+}
+
+function createPowerUpId(roomCode: string, tickCount: number) {
+    return `${roomCode}-${tickCount}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function randomPowerUpType(): PowerUpType {
+    return Math.random() < 0.5 ? "speed-up" : "slow-down";
+}
+
+function maybeSpawnPowerUp(
+    roomCode: string,
+    players: Player[],
+    tickCount: number,
+) {
+    const powerUps = getRoomPowerUps(roomCode);
+    if (powerUps.length >= MAX_POWER_UPS_PER_ROOM) {
+        return;
+    }
+
+    const lastSpawnTick = roomLastPowerUpSpawnTickMap.get(roomCode) ?? 0;
+    if (tickCount - lastSpawnTick < POWER_UP_SPAWN_INTERVAL_TICKS) {
+        return;
+    }
+
+    const occupiedPositions = [
+        ...players.map((player) => ({ x: player.x, y: player.y })),
+        ...powerUps.map((powerUp) => ({ x: powerUp.x, y: powerUp.y })),
+    ];
+    const spawn = generateSpawnPosition(occupiedPositions);
+
+    powerUps.push({
+        id: createPowerUpId(roomCode, tickCount),
+        type: randomPowerUpType(),
+        x: spawn.x,
+        y: spawn.y,
+    });
+    roomLastPowerUpSpawnTickMap.set(roomCode, tickCount);
+}
+
+function applyPowerUpEffect(
+    player: Player,
+    powerUpType: PowerUpType,
+    tickCount: number,
+) {
+    const multiplier =
+        powerUpType === "speed-up" ? SPEED_UP_MULTIPLIER : SLOW_DOWN_MULTIPLIER;
+    player.speed = BASE_PLAYER_SPEED * multiplier;
+    player.speedEffectExpiresAtTick =
+        tickCount + POWER_UP_EFFECT_DURATION_TICKS;
+}
+
+function clearExpiredSpeedEffects(players: Player[], tickCount: number) {
+    for (const player of players) {
+        if (typeof player.speedEffectExpiresAtTick !== "number") {
+            continue;
+        }
+        if (tickCount < player.speedEffectExpiresAtTick) {
+            continue;
+        }
+        player.speed = BASE_PLAYER_SPEED;
+        player.speedEffectExpiresAtTick = undefined;
+    }
+}
+
+function applyPowerUpCollections(
+    roomCode: string,
+    players: Player[],
+    tickCount: number,
+) {
+    const powerUps = getRoomPowerUps(roomCode);
+    if (powerUps.length === 0) return;
+
+    const remaining: PowerUp[] = [];
+    const pickedPowerUpIds = new Set<string>();
+
+    for (const powerUp of powerUps) {
+        let collectedByPlayer: Player | null = null;
+
+        for (const player of players) {
+            if (!player.alive) continue;
+            const dx = player.x - powerUp.x;
+            const dy = player.y - powerUp.y;
+            const distSq = dx * dx + dy * dy;
+            if (distSq <= POWER_UP_PICKUP_RADIUS * POWER_UP_PICKUP_RADIUS) {
+                collectedByPlayer = player;
+                break;
+            }
+        }
+
+        if (!collectedByPlayer) {
+            remaining.push(powerUp);
+            continue;
+        }
+
+        if (pickedPowerUpIds.has(powerUp.id)) {
+            continue;
+        }
+
+        applyPowerUpEffect(collectedByPlayer, powerUp.type, tickCount);
+        pickedPowerUpIds.add(powerUp.id);
+    }
+
+    roomPowerUpsMap.set(roomCode, remaining);
+}
+
 function buildGameState(roomCode: string): GameState | null {
     const room = getRoom(roomCode);
     if (!room) return null;
@@ -283,11 +405,13 @@ function buildGameState(roomCode: string): GameState | null {
             height: GAME_HEIGHT,
         },
         players,
+        powerUps: getRoomPowerUps(roomCode),
         gameMode: room.gameMode,
         targetScore:
             room.gameMode === "classic"
                 ? (room.targetScore ?? calculateTargetScore(room.players.size))
                 : undefined,
+        powerUpsEnabled: room.powerUpsEnabled,
     };
 }
 
@@ -497,6 +621,8 @@ export function restartRound(
             p.isFloating = false;
             p.turnLeftHeld = false;
             p.turnRightHeld = false;
+            p.speed = BASE_PLAYER_SPEED;
+            p.speedEffectExpiresAtTick = undefined;
             continue;
         }
 
@@ -514,6 +640,8 @@ export function restartRound(
         p.isFloating = false;
         p.turnLeftHeld = false;
         p.turnRightHeld = false;
+        p.speed = BASE_PLAYER_SPEED;
+        p.speedEffectExpiresAtTick = undefined;
     }
 }
 
@@ -523,6 +651,8 @@ export function startGameLoop(roomCode: string, io: TypedServer) {
     restartGraceMap.set(roomCode, restartGracePeriod);
     roundStartNoTrailMap.set(roomCode, ROUND_START_NO_TRAIL_TICKS);
     roomTickCounterMap.set(roomCode, 0);
+    roomPowerUpsMap.set(roomCode, []);
+    roomLastPowerUpSpawnTickMap.set(roomCode, 0);
 
     const tick = () => {
         const room = getRoom(roomCode);
@@ -551,6 +681,15 @@ export function startGameLoop(roomCode: string, io: TypedServer) {
             roundStartNoTrailMap.set(roomCode, noTrailTicksRemaining - 1);
         }
 
+        const players = Array.from(room.players.values());
+        clearExpiredSpeedEffects(players, currentTickCount);
+
+        if (room.powerUpsEnabled) {
+            maybeSpawnPowerUp(roomCode, players, currentTickCount);
+        } else {
+            roomPowerUpsMap.set(roomCode, []);
+        }
+
         for (const p of room.players.values()) {
             if (!p.alive) continue;
 
@@ -563,6 +702,10 @@ export function startGameLoop(roomCode: string, io: TypedServer) {
             movePlayer(p, GAME_WIDTH, GAME_HEIGHT, suppressTrailThisTick);
         }
 
+        if (room.powerUpsEnabled) {
+            applyPowerUpCollections(roomCode, players, currentTickCount);
+        }
+
         // Decrement grace period counter
         const graceTicksRemaining = restartGraceMap.get(roomCode) ?? 0;
         if (graceTicksRemaining > 0) {
@@ -570,7 +713,6 @@ export function startGameLoop(roomCode: string, io: TypedServer) {
         }
 
         // Check for collisions and determine round winner
-        const players = Array.from(room.players.values());
         const { deadPlayers: deadPlayerIds, deathReasons } = detectCollisions(
             players,
             graceTicksRemaining,
@@ -647,6 +789,11 @@ export function startGameLoop(roomCode: string, io: TypedServer) {
                             battleRoyaleEliminatedPlayerIds:
                                 latestRoom.battleRoyaleEliminatedPlayerIds,
                         });
+                        roomPowerUpsMap.set(roomCode, []);
+                        roomLastPowerUpSpawnTickMap.set(
+                            roomCode,
+                            roomTickCounterMap.get(roomCode) ?? 0,
+                        );
                         restartGraceMap.set(roomCode, restartGracePeriod);
                         roundStartNoTrailMap.set(
                             roomCode,
@@ -738,6 +885,11 @@ export function startGameLoop(roomCode: string, io: TypedServer) {
                             latestRoom.players.values(),
                         );
                         restartRound(latestPlayers);
+                        roomPowerUpsMap.set(roomCode, []);
+                        roomLastPowerUpSpawnTickMap.set(
+                            roomCode,
+                            roomTickCounterMap.get(roomCode) ?? 0,
+                        );
                         restartGraceMap.set(roomCode, restartGracePeriod);
                         roundStartNoTrailMap.set(
                             roomCode,
@@ -779,4 +931,6 @@ export function stopGameLoop(roomCode: string) {
     restartGraceMap.delete(roomCode);
     roundStartNoTrailMap.delete(roomCode);
     roomTickCounterMap.delete(roomCode);
+    roomPowerUpsMap.delete(roomCode);
+    roomLastPowerUpSpawnTickMap.delete(roomCode);
 }

@@ -5,6 +5,7 @@ export const EVENTS = {
     JOIN_ROOM: "joinRoom",
     START_GAME: "startGame",
     SET_GAME_MODE: "setGameMode",
+    SET_POWER_UPS_ENABLED: "setPowerUpsEnabled",
     LEAVE_ROOM: "leaveRoom",
 
     // Server -> Client

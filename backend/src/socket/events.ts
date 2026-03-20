@@ -23,6 +23,7 @@ export interface LobbyStatePayload {
     players: Player[];
     gameMode: GameMode;
     targetScore?: number;
+    powerUpsEnabled: boolean;
     gameConfig: GameConfigPayload;
 }
 
@@ -44,6 +45,7 @@ export interface ClientToServerEvents {
             state?: RoomState;
             gameMode?: GameMode;
             targetScore?: number;
+            powerUpsEnabled?: boolean;
             gameConfig?: GameConfigPayload;
         }) => void,
     ) => void;
@@ -73,6 +75,7 @@ export interface ClientToServerEvents {
             state?: RoomState;
             gameMode?: GameMode;
             targetScore?: number;
+            powerUpsEnabled?: boolean;
             gameConfig?: GameConfigPayload;
         }) => void,
     ) => void;
@@ -85,13 +88,26 @@ export interface ClientToServerEvents {
             gameMode?: GameMode;
         }) => void,
     ) => void;
+    setPowerUpsEnabled: (
+        data: { roomCode: string; powerUpsEnabled?: boolean },
+        cb?: (response: {
+            ok: boolean;
+            error?: string;
+            powerUpsEnabled?: boolean;
+        }) => void,
+    ) => void;
     startGame: (
-        data: { roomCode: string; gameMode?: GameMode },
+        data: {
+            roomCode: string;
+            gameMode?: GameMode;
+            powerUpsEnabled?: boolean;
+        },
         cb?: (response: {
             ok: boolean;
             error?: string;
             gameMode?: GameMode;
             targetScore?: number;
+            powerUpsEnabled?: boolean;
             gameConfig?: GameConfigPayload;
         }) => void,
     ) => void;
@@ -107,6 +123,7 @@ export interface ServerToClientEvents {
     startGame: (payload: {
         gameMode: GameMode;
         targetScore?: number;
+        powerUpsEnabled: boolean;
         gameConfig: GameConfigPayload;
     }) => void;
     gameState: (payload: GameState) => void;

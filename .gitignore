@@ -24,6 +24,7 @@ shared-types/*.js.map
 .env
 .env.*
 *.local
+!**/.env.example
 
 # Local HTTPS dev certificates
 /certs/

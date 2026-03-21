@@ -2,24 +2,22 @@ import crypto from "crypto";
 import { GAME_HEIGHT, GAME_WIDTH } from "../config";
 import { calculateTargetScore, normalizeRoomCode } from "../domain/gameRules";
 import { generateSpawnPosition } from "../gameLoop";
-import { createRoom, deleteRoom, getRoom, joinRoom, leaveRoom } from "../rooms";
+import {
+    createRoom,
+    deleteRoom,
+    findPlayerBySocketId,
+    getRoom,
+    joinRoom,
+    leaveRoom,
+} from "../rooms";
 import { Player } from "../types";
 import { TypedServer, TypedSocket } from "./events";
 import { emitLobbyUpdate } from "./lobbyEmitter";
-import {
-    bindSocketToPlayer,
-    bindSocketToRoom,
-    getPlayerIdBySocket,
-    getRoomCodeBySocket,
-    unbindSocket,
-    unbindSocketFromRoom,
-} from "./sessionRegistry";
 
 export function registerLobbyHandlers(io: TypedServer, socket: TypedSocket) {
     socket.on("createRoom", (_data, cb) => {
         const room = createRoom(socket.id);
         socket.join(room.code);
-        bindSocketToRoom(socket.id, room.code);
         cb?.({
             roomCode: room.code,
             gameConfig: {
@@ -47,7 +45,6 @@ export function registerLobbyHandlers(io: TypedServer, socket: TypedSocket) {
 
         room.hostSocketId = socket.id;
         socket.join(room.code);
-        bindSocketToRoom(socket.id, room.code);
 
         cb?.({
             ok: true,
@@ -95,27 +92,41 @@ export function registerLobbyHandlers(io: TypedServer, socket: TypedSocket) {
                     errorCode: "ROOM_NOT_FOUND",
                 });
 
+            // --- Reclaim logic ---
             const requestedPlayerId =
                 typeof data?.playerId === "string" && data.playerId.trim()
                     ? data.playerId.trim()
                     : null;
 
-            const disconnectedPlayerById = requestedPlayerId
+            // 1. Try by explicit player ID
+            const playerById = requestedPlayerId
                 ? room.players.get(requestedPlayerId)
                 : null;
-            const disconnectedPlayerByName = Array.from(
-                room.players.values(),
-            ).find(
-                (existingPlayer) =>
-                    !existingPlayer.socketId &&
-                    existingPlayer.name.trim().toLowerCase() ===
-                        normalizedName.toLowerCase(),
-            );
 
-            const reclaimCandidate =
-                disconnectedPlayerById && !disconnectedPlayerById.socketId
-                    ? disconnectedPlayerById
-                    : disconnectedPlayerByName;
+            let reclaimCandidate: Player | undefined;
+
+            if (playerById) {
+                if (!playerById.socketId) {
+                    // Disconnected — reclaim
+                    reclaimCandidate = playerById;
+                } else if (playerById.socketId === socket.id) {
+                    // Already connected on this socket (idempotent)
+                    cb?.({ ok: true, player: playerById });
+                    return;
+                }
+                // If connected on a *different* active socket, fall through
+                // to name-match or new-player logic rather than blocking.
+            }
+
+            // 2. Try by name match (disconnected only)
+            if (!reclaimCandidate) {
+                reclaimCandidate = Array.from(room.players.values()).find(
+                    (p) =>
+                        !p.socketId &&
+                        p.name.trim().toLowerCase() ===
+                            normalizedName.toLowerCase(),
+                );
+            }
 
             if (reclaimCandidate) {
                 reclaimCandidate.socketId = socket.id;
@@ -124,8 +135,6 @@ export function registerLobbyHandlers(io: TypedServer, socket: TypedSocket) {
                 reclaimCandidate.name = normalizedName;
 
                 socket.join(room.code);
-                bindSocketToRoom(socket.id, room.code);
-                bindSocketToPlayer(socket.id, reclaimCandidate.id);
 
                 console.log(
                     `[joinRoom] Reclaimed player ${reclaimCandidate.id} in room ${room.code}`,
@@ -135,6 +144,7 @@ export function registerLobbyHandlers(io: TypedServer, socket: TypedSocket) {
                 return;
             }
 
+            // 3. Create a brand-new player
             const occupiedSpawnPositions = Array.from(
                 room.players.values(),
             ).map((existingPlayer) => ({
@@ -161,77 +171,11 @@ export function registerLobbyHandlers(io: TypedServer, socket: TypedSocket) {
 
             joinRoom(room.code, player);
             socket.join(room.code);
-            bindSocketToRoom(socket.id, room.code);
-            bindSocketToPlayer(socket.id, player.id);
             console.log(
                 `[joinRoom] Added player ${player.id} to room ${room.code}`,
             );
             cb?.({ ok: true, player });
             io.to(room.code).emit("playerJoined", { player });
-            emitLobbyUpdate(io, room.code);
-        },
-    );
-
-    socket.on(
-        "rejoinRoom",
-        (data: { roomCode: string; playerId: string; name?: string }, cb) => {
-            const roomCode = normalizeRoomCode(data?.roomCode);
-            console.log(
-                `[rejoinRoom] Attempt for player ${data?.playerId} in room ${roomCode}`,
-            );
-
-            if (!roomCode || !data?.playerId) {
-                console.log(
-                    `[rejoinRoom] Invalid request: missing roomCode or playerId`,
-                );
-                return cb?.({
-                    ok: false,
-                    error: "roomCode (4 letters) and playerId required",
-                    errorCode: "REJOIN_PAYLOAD_INVALID",
-                });
-            }
-
-            const room = getRoom(roomCode);
-            if (!room) {
-                console.log(`[rejoinRoom] Room not found: ${roomCode}`);
-                return cb?.({
-                    ok: false,
-                    error: "Room not found",
-                    errorCode: "ROOM_NOT_FOUND",
-                });
-            }
-
-            const existingPlayer = room.players.get(data.playerId);
-            if (!existingPlayer) {
-                console.log(
-                    `[rejoinRoom] Player not found in room: ${data.playerId} in ${roomCode}. Players in room:`,
-                    Array.from(room.players.keys()),
-                );
-                return cb?.({
-                    ok: false,
-                    error: "Player not found in room",
-                    errorCode: "PLAYER_NOT_FOUND_IN_ROOM",
-                });
-            }
-
-            console.log(
-                `[rejoinRoom] Successfully rejoining player ${data.playerId} (${existingPlayer.name}) to room ${roomCode}`,
-            );
-            const previousSocketId = existingPlayer.socketId;
-            if (previousSocketId && previousSocketId !== socket.id) {
-                unbindSocket(previousSocketId);
-            }
-            existingPlayer.socketId = socket.id;
-            existingPlayer.turnLeftHeld = false;
-            existingPlayer.turnRightHeld = false;
-            if (typeof data.name === "string" && data.name.trim()) {
-                existingPlayer.name = data.name.trim();
-            }
-            socket.join(room.code);
-            bindSocketToRoom(socket.id, room.code);
-            bindSocketToPlayer(socket.id, existingPlayer.id);
-
-            cb?.({ ok: true, player: existingPlayer, state: room.state });
             emitLobbyUpdate(io, room.code);
         },
     );
@@ -288,9 +232,6 @@ export function registerLobbyHandlers(io: TypedServer, socket: TypedSocket) {
                 });
 
             if (data.playerId) {
-                const departingSocketId = room.players.get(
-                    data.playerId,
-                )?.socketId;
                 const updated = leaveRoom(roomCode, data.playerId);
                 if (!updated)
                     return cb?.({
@@ -298,23 +239,11 @@ export function registerLobbyHandlers(io: TypedServer, socket: TypedSocket) {
                         error: "Failed to leave room",
                         errorCode: "LEAVE_ROOM_FAILED",
                     });
-                if (departingSocketId) {
-                    unbindSocket(departingSocketId);
-                }
-                if (getPlayerIdBySocket(socket.id) === data.playerId) {
-                    unbindSocket(socket.id);
-                }
                 socket.leave(room.code);
                 emitLobbyUpdate(io, roomCode);
                 return cb?.({ ok: true });
             }
 
-            for (const player of room.players.values()) {
-                if (player.socketId) {
-                    unbindSocket(player.socketId);
-                }
-            }
-            unbindSocketFromRoom(socket.id);
             const success = deleteRoom(roomCode);
             if (success) {
                 io.to(roomCode).emit("roomClosed");
@@ -326,32 +255,18 @@ export function registerLobbyHandlers(io: TypedServer, socket: TypedSocket) {
 
     socket.on("disconnect", () => {
         console.log("socket disconnect", socket.id);
-        const roomCode = getRoomCodeBySocket(socket.id);
-        const playerId = getPlayerIdBySocket(socket.id);
 
-        unbindSocket(socket.id);
-
-        if (!roomCode) return;
-
-        const room = getRoom(roomCode);
-        if (!room) return;
-
-        if (room.hostSocketId === socket.id) {
+        // Check if it was a player
+        const result = findPlayerBySocketId(socket.id);
+        if (result) {
             console.log(
-                `[disconnect] Host disconnected from room ${room.code}`,
+                `[disconnect] Player ${result.player.id} (${result.player.name}) disconnected from room ${result.room.code}`,
             );
+            result.player.socketId = null;
+            emitLobbyUpdate(io, result.room.code);
             return;
         }
 
-        if (!playerId) return;
-
-        const player = room.players.get(playerId);
-        if (player && player.socketId === socket.id) {
-            console.log(
-                `[disconnect] Player ${player.id} (${player.name}) disconnected from room ${room.code}`,
-            );
-            player.socketId = null;
-            emitLobbyUpdate(io, room.code);
-        }
+        // Host disconnect is a no-op (they can reconnect via reconnectHost)
     });
 }

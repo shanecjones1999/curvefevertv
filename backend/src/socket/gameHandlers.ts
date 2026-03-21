@@ -5,19 +5,18 @@ import {
     sanitizeGameMode,
 } from "../domain/gameRules";
 import { restartRound, startGameLoop } from "../gameLoop";
-import { getRoom } from "../rooms";
+import { findPlayerBySocketId, getRoom } from "../rooms";
 import { GameMode, InputPayload } from "../types";
 import { TypedServer, TypedSocket } from "./events";
 import { emitLobbyUpdate } from "./lobbyEmitter";
-import { getPlayerBySocket } from "./sessionRegistry";
 
 export function registerGameHandlers(io: TypedServer, socket: TypedSocket) {
     socket.on("input", (payload: InputPayload) => {
-        const player = getPlayerBySocket(socket.id);
-        if (!player || !player.alive) return;
+        const result = findPlayerBySocketId(socket.id);
+        if (!result || !result.player.alive) return;
 
-        player.turnLeftHeld = Boolean(payload?.turnLeft);
-        player.turnRightHeld = Boolean(payload?.turnRight);
+        result.player.turnLeftHeld = Boolean(payload?.turnLeft);
+        result.player.turnRightHeld = Boolean(payload?.turnRight);
     });
 
     socket.on(

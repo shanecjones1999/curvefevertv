@@ -61,3 +61,24 @@ export function deleteRoom(code: string) {
 export function listRooms() {
     return Array.from(rooms.values());
 }
+
+export function findPlayerBySocketId(
+    socketId: string,
+): { room: Room; player: Player } | null {
+    for (const room of rooms.values()) {
+        for (const player of room.players.values()) {
+            if (player.socketId === socketId) return { room, player };
+        }
+    }
+    return null;
+}
+
+export function findRoomBySocketId(socketId: string): Room | null {
+    for (const room of rooms.values()) {
+        if (room.hostSocketId === socketId) return room;
+        for (const player of room.players.values()) {
+            if (player.socketId === socketId) return room;
+        }
+    }
+    return null;
+}

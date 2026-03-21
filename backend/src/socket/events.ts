@@ -23,7 +23,6 @@ export type SocketErrorCode =
     | "ROOM_CODE_INVALID"
     | "ROOM_NOT_FOUND"
     | "NAME_REQUIRED"
-    | "REJOIN_PAYLOAD_INVALID"
     | "PLAYER_NOT_FOUND_IN_ROOM"
     | "LEAVE_ROOM_FAILED";
 
@@ -63,16 +62,6 @@ export interface ClientToServerEvents {
             error?: string;
             errorCode?: SocketErrorCode;
             player?: Player;
-        }) => void,
-    ) => void;
-    rejoinRoom: (
-        data: { roomCode: string; playerId: string; name?: string },
-        cb?: (response: {
-            ok: boolean;
-            error?: string;
-            errorCode?: SocketErrorCode;
-            player?: Player;
-            state?: RoomState;
         }) => void,
     ) => void;
     requestLobbyState: (

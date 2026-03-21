@@ -16,7 +16,6 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server<ClientToServerEvents, ServerToClientEvents>(server, {
     cors: { origin: CORS_ORIGIN },
-    transports: ["websocket"],
 });
 console.log("Socket.IO initialized");
 

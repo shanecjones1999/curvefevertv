@@ -1,4 +1,52 @@
-# React + TypeScript + Vite
+# Curvefever Frontend
+
+## Local HTTPS for iPhone testing
+
+1. Generate trusted local certs with `mkcert`.
+2. Start backend on `3001`.
+3. Start Vite on LAN (`0.0.0.0`) with HTTPS certs.
+
+```bash
+brew install mkcert
+mkcert -install
+
+cd /Users/shane/Desktop/curvefevertv
+mkdir -p certs
+mkcert -key-file certs/dev-key.pem -cert-file certs/dev-cert.pem localhost 127.0.0.1 ::1
+
+cd backend
+npm install
+npm run dev
+
+cd ../curvefever-frontend
+npm install
+npm run dev
+```
+
+The Vite config auto-enables HTTPS when these files exist:
+
+- `../certs/dev-key.pem`
+- `../certs/dev-cert.pem`
+
+Open on your iPhone using:
+
+- `https://<your-mac-lan-ip>:5173`
+
+If you need a custom cert location:
+
+```bash
+VITE_SSL_KEY=/absolute/path/to/key.pem VITE_SSL_CERT=/absolute/path/to/cert.pem npm run dev
+```
+
+If you need to bypass proxying and connect directly to backend:
+
+```bash
+VITE_BACKEND_URL=https://<your-mac-lan-ip>:3001 npm run dev
+```
+
+By default, the socket client uses same-origin `/socket.io`, and Vite proxies it to `http://127.0.0.1:3001`.
+
+## React + TypeScript + Vite Template Notes
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 

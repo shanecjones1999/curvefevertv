@@ -25,6 +25,12 @@ shared-types/*.js.map
 .env.*
 *.local
 
+# Local HTTPS dev certificates
+/certs/
+backend/certs/
+curvefever-frontend/certs/
+*.pem
+
 # Editor/OS files
 .vscode/*
 !.vscode/extensions.json

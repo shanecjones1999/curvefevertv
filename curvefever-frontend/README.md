@@ -12,7 +12,8 @@ mkcert -install
 
 cd /Users/shane/Desktop/curvefevertv
 mkdir -p certs
-mkcert -key-file certs/dev-key.pem -cert-file certs/dev-cert.pem localhost 127.0.0.1 ::1
+LAN_IP=192.168.1.23
+mkcert -key-file certs/dev-key.pem -cert-file certs/dev-cert.pem localhost 127.0.0.1 ::1 "$LAN_IP"
 
 cd backend
 npm install
@@ -32,6 +33,8 @@ Open on your iPhone using:
 
 - `https://<your-mac-lan-ip>:5173`
 
+Important: the host you open in Safari must be included in the cert SANs. If your LAN IP changes, regenerate the cert with the new IP.
+
 If you need a custom cert location:
 
 ```bash
@@ -41,7 +44,7 @@ VITE_SSL_KEY=/absolute/path/to/key.pem VITE_SSL_CERT=/absolute/path/to/cert.pem 
 If you need to bypass proxying and connect directly to backend:
 
 ```bash
-VITE_BACKEND_URL=https://<your-mac-lan-ip>:3001 npm run dev
+VITE_BACKEND_URL=http://<your-mac-lan-ip>:3001 npm run dev
 ```
 
 By default, the socket client uses same-origin `/socket.io`, and Vite proxies it to `http://127.0.0.1:3001`.

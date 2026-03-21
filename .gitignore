@@ -29,7 +29,9 @@ shared-types/*.js.map
 /certs/
 backend/certs/
 curvefever-frontend/certs/
-*.pem
+/certs/*.pem
+backend/certs/*.pem
+curvefever-frontend/certs/*.pem
 
 # Editor/OS files
 .vscode/*

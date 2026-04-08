@@ -329,6 +329,14 @@
   margin-inline: auto;
 }
 
+.host-setting-row {
+  width: min(100%, 540px);
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  margin-inline: auto;
+}
+
 .host-mode-label {
   color: var(--cf-text-soft);
   font-weight: 700;

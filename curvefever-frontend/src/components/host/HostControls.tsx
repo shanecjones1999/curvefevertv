@@ -4,6 +4,7 @@ type Props = {
     copiedCode: boolean;
     roomCode: string | null;
     gameMode: GameMode;
+    powerUpsEnabled: boolean;
     effectiveTargetScore: number;
     playing: boolean;
     playersCount: number;
@@ -14,6 +15,7 @@ type Props = {
     onLeaveGame: () => void;
     onCopyGameCode: () => void;
     onGameModeChange: (gameMode: GameMode) => void;
+    onPowerUpsEnabledChange: (enabled: boolean) => void;
     onStartGame: () => void;
     onToggleFullscreen: () => void;
 };
@@ -22,6 +24,7 @@ export default function HostControls({
     copiedCode,
     roomCode,
     gameMode,
+    powerUpsEnabled,
     effectiveTargetScore,
     playing,
     playersCount,
@@ -32,6 +35,7 @@ export default function HostControls({
     onLeaveGame,
     onCopyGameCode,
     onGameModeChange,
+    onPowerUpsEnabledChange,
     onStartGame,
     onToggleFullscreen,
 }: Props) {
@@ -107,6 +111,31 @@ export default function HostControls({
                         disabled={playing}
                     >
                         Battle Royale
+                    </button>
+                </div>
+            </div>
+
+            <div className="panel-row host-setting-row">
+                <div
+                    className="host-mode-toggle"
+                    role="group"
+                    aria-label="Enable power ups"
+                >
+                    <button
+                        type="button"
+                        className={`host-mode-option ${!powerUpsEnabled ? "is-active" : ""}`}
+                        onClick={() => onPowerUpsEnabledChange(false)}
+                        disabled={playing}
+                    >
+                        Power-Ups Off
+                    </button>
+                    <button
+                        type="button"
+                        className={`host-mode-option ${powerUpsEnabled ? "is-active" : ""}`}
+                        onClick={() => onPowerUpsEnabledChange(true)}
+                        disabled={playing}
+                    >
+                        Power-Ups On
                     </button>
                 </div>
             </div>

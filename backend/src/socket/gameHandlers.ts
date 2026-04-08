@@ -47,8 +47,41 @@ export function registerGameHandlers(io: TypedServer, socket: TypedSocket) {
     );
 
     socket.on(
+        "setPowerUpsEnabled",
+        (data: { roomCode: string; powerUpsEnabled?: boolean }, cb) => {
+            const roomCode = normalizeRoomCode(data?.roomCode);
+            if (!roomCode)
+                return cb?.({
+                    ok: false,
+                    error: "Room code must be 4 letters",
+                });
+            const room = getRoom(roomCode);
+            if (!room) return cb?.({ ok: false, error: "Room not found" });
+            if (room.hostSocketId !== socket.id)
+                return cb?.({ ok: false, error: "Not host" });
+            if (room.state === "playing") {
+                return cb?.({
+                    ok: false,
+                    error: "Cannot change power-up setting during an active game",
+                });
+            }
+
+            room.powerUpsEnabled = Boolean(data?.powerUpsEnabled);
+            emitLobbyUpdate(io, room.code);
+            cb?.({ ok: true, powerUpsEnabled: room.powerUpsEnabled });
+        },
+    );
+
+    socket.on(
         "startGame",
-        (data: { roomCode: string; gameMode?: GameMode }, cb) => {
+        (
+            data: {
+                roomCode: string;
+                gameMode?: GameMode;
+                powerUpsEnabled?: boolean;
+            },
+            cb,
+        ) => {
             const roomCode = normalizeRoomCode(data?.roomCode);
             if (!roomCode)
                 return cb?.({
@@ -65,6 +98,7 @@ export function registerGameHandlers(io: TypedServer, socket: TypedSocket) {
 
             const gameMode = sanitizeGameMode(data?.gameMode);
             room.gameMode = gameMode;
+            room.powerUpsEnabled = Boolean(data?.powerUpsEnabled);
 
             const targetScore =
                 gameMode === "classic"
@@ -85,6 +119,7 @@ export function registerGameHandlers(io: TypedServer, socket: TypedSocket) {
             io.to(room.code).emit("startGame", {
                 gameMode,
                 targetScore,
+                powerUpsEnabled: room.powerUpsEnabled,
                 gameConfig: {
                     width: GAME_WIDTH,
                     height: GAME_HEIGHT,
@@ -94,6 +129,7 @@ export function registerGameHandlers(io: TypedServer, socket: TypedSocket) {
                 ok: true,
                 gameMode,
                 targetScore,
+                powerUpsEnabled: room.powerUpsEnabled,
                 gameConfig: {
                     width: GAME_WIDTH,
                     height: GAME_HEIGHT,

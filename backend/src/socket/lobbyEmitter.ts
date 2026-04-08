@@ -14,6 +14,7 @@ export function emitLobbyUpdate(io: TypedServer, roomCode: string) {
             room.gameMode === "classic"
                 ? (room.targetScore ?? calculateTargetScore(room.players.size))
                 : undefined,
+        powerUpsEnabled: room.powerUpsEnabled,
         gameConfig: {
             width: GAME_WIDTH,
             height: GAME_HEIGHT,

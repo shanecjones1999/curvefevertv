@@ -51,6 +51,7 @@ export function registerLobbyHandlers(io: TypedServer, socket: TypedSocket) {
                     ? (room.targetScore ??
                       calculateTargetScore(room.players.size))
                     : undefined,
+            powerUpsEnabled: room.powerUpsEnabled,
             gameConfig: {
                 width: GAME_WIDTH,
                 height: GAME_HEIGHT,
@@ -178,6 +179,7 @@ export function registerLobbyHandlers(io: TypedServer, socket: TypedSocket) {
                     ? (room.targetScore ??
                       calculateTargetScore(room.players.size))
                     : undefined,
+            powerUpsEnabled: room.powerUpsEnabled,
             gameConfig: {
                 width: GAME_WIDTH,
                 height: GAME_HEIGHT,

@@ -20,6 +20,16 @@ export interface Player {
     isFloating?: boolean;
     turnLeftHeld?: boolean;
     turnRightHeld?: boolean;
+    speedEffectExpiresAtTick?: number;
+}
+
+export type PowerUpType = "speed-up" | "slow-down";
+
+export interface PowerUp {
+    id: string;
+    type: PowerUpType;
+    x: number;
+    y: number;
 }
 
 export type GameMode = "classic" | "battle-royale";
@@ -33,6 +43,7 @@ export interface Room {
     state: RoomState;
     targetScore?: number;
     gameMode: GameMode;
+    powerUpsEnabled: boolean;
     battleRoyaleEliminatedPlayerIds?: Set<string>;
     game?: GameState | null;
 }
@@ -44,8 +55,10 @@ export interface GameState {
         height: number;
     };
     players: Player[];
+    powerUps: PowerUp[];
     gameMode: GameMode;
     targetScore?: number;
+    powerUpsEnabled: boolean;
 }
 
 export interface InputPayload {

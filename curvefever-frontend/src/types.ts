@@ -19,6 +19,15 @@ export interface Player {
     gapStartDistance?: number;
 }
 
+export type PowerUpType = "speed-up" | "slow-down";
+
+export interface PowerUp {
+    id: string;
+    type: PowerUpType;
+    x: number;
+    y: number;
+}
+
 export type GameMode = "classic" | "battle-royale";
 
 export type RoomState = "lobby" | "playing" | "finished";
@@ -38,8 +47,10 @@ export interface GameState {
         height: number;
     };
     players: Player[];
+    powerUps?: PowerUp[];
     gameMode: GameMode;
     targetScore?: number;
+    powerUpsEnabled?: boolean;
 }
 
 export interface InputPayload {

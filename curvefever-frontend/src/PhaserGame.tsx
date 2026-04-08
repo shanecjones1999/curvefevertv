@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import Phaser from "phaser";
-import type { Player } from "./types";
+import type { Player, PowerUp } from "./types";
 import {
     DEFAULT_GAME_HEIGHT,
     DEFAULT_GAME_WIDTH,
@@ -10,6 +10,7 @@ import { PLAYER_COLORS } from "./constants/gameUi";
 
 interface PhaserGameProps {
     players: Player[];
+    powerUps?: PowerUp[];
     width?: number;
     height?: number;
     className?: string;
@@ -17,7 +18,9 @@ interface PhaserGameProps {
 
 class CurvefeverScene extends Phaser.Scene {
     players: Player[] = [];
+    powerUps: PowerUp[] = [];
     playerSprites: Map<string, Phaser.GameObjects.Graphics> = new Map();
+    powerUpSprites: Map<string, Phaser.GameObjects.Graphics> = new Map();
 
     constructor() {
         super("CurvefeverScene");
@@ -25,6 +28,7 @@ class CurvefeverScene extends Phaser.Scene {
 
     create() {
         this.playerSprites.clear();
+        this.powerUpSprites.clear();
         this.cameras.main.setBackgroundColor("#222");
         // Defensive: always use array
         const players = Array.isArray(this.players) ? this.players : [];
@@ -38,6 +42,10 @@ class CurvefeverScene extends Phaser.Scene {
             g.y = p.y;
             this.playerSprites.set(p.id, g);
         });
+    }
+
+    setPowerUps(powerUps: PowerUp[] = []) {
+        this.powerUps = Array.isArray(powerUps) ? powerUps : [];
     }
 
     setPlayers(players: Player[] = []) {
@@ -107,6 +115,42 @@ class CurvefeverScene extends Phaser.Scene {
         });
     }
 
+    updatePowerUps(powerUps: PowerUp[] = []) {
+        if (!this.add) return;
+        this.powerUps = Array.isArray(powerUps) ? powerUps : [];
+
+        const incomingPowerUpIds = new Set(
+            this.powerUps.map((powerUp) => powerUp.id),
+        );
+        for (const [powerUpId, graphic] of this.powerUpSprites.entries()) {
+            if (!incomingPowerUpIds.has(powerUpId)) {
+                graphic.destroy();
+                this.powerUpSprites.delete(powerUpId);
+            }
+        }
+
+        this.powerUps.forEach((powerUp) => {
+            let graphic = this.powerUpSprites.get(powerUp.id);
+            if (!graphic) {
+                graphic = this.add.graphics();
+                this.powerUpSprites.set(powerUp.id, graphic);
+            }
+
+            const fillColor =
+                powerUp.type === "speed-up"
+                    ? Phaser.Display.Color.HexStringToColor("#44d37f").color
+                    : Phaser.Display.Color.HexStringToColor("#ff8a4c").color;
+
+            graphic.clear();
+            graphic.fillStyle(fillColor, 1);
+            graphic.fillCircle(0, 0, 10);
+            graphic.lineStyle(2, 0xffffff, 0.8);
+            graphic.strokeCircle(0, 0, 10);
+            graphic.x = powerUp.x;
+            graphic.y = powerUp.y;
+        });
+    }
+
     update() {
         // No-op: all updates are handled via updatePlayers
     }
@@ -114,6 +158,7 @@ class CurvefeverScene extends Phaser.Scene {
 
 export default function PhaserGame({
     players,
+    powerUps = [],
     width = DEFAULT_GAME_WIDTH,
     height = DEFAULT_GAME_HEIGHT,
     className,
@@ -156,6 +201,12 @@ export default function PhaserGame({
             sceneRef.current.updatePlayers(players);
         }
     }, [players]);
+
+    useEffect(() => {
+        if (sceneRef.current && sceneRef.current.powerUpSprites) {
+            sceneRef.current.updatePowerUps(powerUps);
+        }
+    }, [powerUps]);
 
     return (
         <div className={`phaser-shell ${className ?? ""}`.trim()}>

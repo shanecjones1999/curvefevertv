@@ -137,6 +137,14 @@
   flex-wrap: wrap;
 }
 
+.panel-header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
 .panel-row {
   display: flex;
   align-items: center;

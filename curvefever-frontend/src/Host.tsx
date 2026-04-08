@@ -29,6 +29,16 @@ type SetGameModeResponse = {
 
 type Props = { onLeave: () => void };
 
+type FullscreenCapableElement = HTMLElement & {
+    webkitRequestFullscreen?: () => Promise<void> | void;
+};
+
+type FullscreenCapableDocument = Document & {
+    webkitExitFullscreen?: () => Promise<void> | void;
+    webkitFullscreenElement?: Element | null;
+    webkitFullscreenEnabled?: boolean;
+};
+
 const PLAYER_COLOR_CLASS_BY_HEX: Record<string, string> = PLAYER_COLORS.reduce(
     (map, color, index) => {
         map[color.toLowerCase()] = `bar-color-${index}`;
@@ -62,6 +72,22 @@ export default function Host({ onLeave }: Props) {
         height: DEFAULT_GAME_HEIGHT,
     });
     const hasRequestedRoomCreation = useRef(false);
+    const hostPlayingScreenRef = useRef<HTMLDivElement | null>(null);
+    const [isFullscreen, setIsFullscreen] = useState(() =>
+        Boolean(
+            document.fullscreenElement ??
+                (document as FullscreenCapableDocument)
+                    .webkitFullscreenElement ??
+                null,
+        ),
+    );
+    const [isFullscreenSupported] = useState(() =>
+        Boolean(
+            document.fullscreenEnabled ??
+                (document as FullscreenCapableDocument)
+                    .webkitFullscreenEnabled,
+        ),
+    );
 
     const playerColorById = useMemo(() => {
         const colorById = new Map<string, string>();
@@ -158,6 +184,36 @@ export default function Host({ onLeave }: Props) {
     });
 
     useEffect(() => {
+        const fullscreenDocument = document as FullscreenCapableDocument;
+
+        const syncFullscreenState = () => {
+            const fullscreenElement =
+                document.fullscreenElement ??
+                fullscreenDocument.webkitFullscreenElement ??
+                null;
+            setIsFullscreen(Boolean(fullscreenElement));
+        };
+
+        syncFullscreenState();
+        document.addEventListener("fullscreenchange", syncFullscreenState);
+        document.addEventListener(
+            "webkitfullscreenchange",
+            syncFullscreenState as EventListener,
+        );
+
+        return () => {
+            document.removeEventListener(
+                "fullscreenchange",
+                syncFullscreenState,
+            );
+            document.removeEventListener(
+                "webkitfullscreenchange",
+                syncFullscreenState as EventListener,
+            );
+        };
+    }, []);
+
+    useEffect(() => {
         if (!copiedCode) return;
         const timeoutId = window.setTimeout(() => {
             setCopiedCode(false);
@@ -228,6 +284,42 @@ export default function Host({ onLeave }: Props) {
         onLeave();
     }
 
+    async function handleFullscreenToggle() {
+        const fullscreenDocument = document as FullscreenCapableDocument;
+
+        if (!isFullscreenSupported) return;
+
+        const activeFullscreenElement =
+            document.fullscreenElement ??
+            fullscreenDocument.webkitFullscreenElement ??
+            null;
+
+        if (activeFullscreenElement) {
+            if (document.exitFullscreen) {
+                await document.exitFullscreen();
+                return;
+            }
+            if (fullscreenDocument.webkitExitFullscreen) {
+                await fullscreenDocument.webkitExitFullscreen();
+            }
+            return;
+        }
+
+        const element = hostPlayingScreenRef.current;
+        if (!element) return;
+
+        const fullscreenElement = element as FullscreenCapableElement;
+
+        if (element.requestFullscreen) {
+            await element.requestFullscreen();
+            return;
+        }
+
+        if (fullscreenElement.webkitRequestFullscreen) {
+            await fullscreenElement.webkitRequestFullscreen();
+        }
+    }
+
     async function handleCopyGameCode() {
         if (!roomCode) return;
 
@@ -264,10 +356,14 @@ export default function Host({ onLeave }: Props) {
             playing={playing}
             playersCount={players.length}
             startError={startError}
+            isFullscreen={isFullscreen}
+            isFullscreenSupported={isFullscreenSupported}
+            showFullscreenControl={playing}
             onLeaveGame={handleLeaveGame}
             onCopyGameCode={handleCopyGameCode}
             onGameModeChange={handleGameModeChange}
             onStartGame={handleStartGame}
+            onToggleFullscreen={handleFullscreenToggle}
         />
     );
 
@@ -288,7 +384,7 @@ export default function Host({ onLeave }: Props) {
 
     return (
         <main className="page-shell page-shell-host-playing">
-            <div className="host-playing-screen">
+            <div className="host-playing-screen" ref={hostPlayingScreenRef}>
                 <div className="host-side-column">
                     <section className="panel host-panel host-control-panel">
                         {hostControls}

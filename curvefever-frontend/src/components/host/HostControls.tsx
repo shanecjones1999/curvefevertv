@@ -8,10 +8,14 @@ type Props = {
     playing: boolean;
     playersCount: number;
     startError: string | null;
+    isFullscreen: boolean;
+    isFullscreenSupported: boolean;
+    showFullscreenControl: boolean;
     onLeaveGame: () => void;
     onCopyGameCode: () => void;
     onGameModeChange: (gameMode: GameMode) => void;
     onStartGame: () => void;
+    onToggleFullscreen: () => void;
 };
 
 export default function HostControls({
@@ -22,10 +26,14 @@ export default function HostControls({
     playing,
     playersCount,
     startError,
+    isFullscreen,
+    isFullscreenSupported,
+    showFullscreenControl,
     onLeaveGame,
     onCopyGameCode,
     onGameModeChange,
     onStartGame,
+    onToggleFullscreen,
 }: Props) {
     return (
         <>
@@ -33,12 +41,23 @@ export default function HostControls({
                 <div>
                     <p className="eyebrow">Host Console</p>
                 </div>
-                <button
-                    className="ui-button ui-button-ghost"
-                    onClick={onLeaveGame}
-                >
-                    Leave Game
-                </button>
+                <div className="panel-header-actions">
+                    {showFullscreenControl && (
+                        <button
+                            className="ui-button ui-button-ghost"
+                            onClick={onToggleFullscreen}
+                            disabled={!isFullscreenSupported}
+                        >
+                            {isFullscreen ? "Exit Fullscreen" : "Fullscreen"}
+                        </button>
+                    )}
+                    <button
+                        className="ui-button ui-button-ghost"
+                        onClick={onLeaveGame}
+                    >
+                        Leave Game
+                    </button>
+                </div>
             </div>
 
             <div className="panel-row">

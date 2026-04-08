@@ -97,8 +97,6 @@ export default function PlayerController({ onLeave }: Props) {
     usePlayerRejoin({
         storedSession,
         playerIdRef,
-        stopSendingInput,
-        onLeave,
         setJoined,
         setIsRejoining,
         setRejoinError,
@@ -142,6 +140,43 @@ export default function PlayerController({ onLeave }: Props) {
         };
     }, [joined, handleLeftDown, handleLeftUp, handleRightDown, handleRightUp]);
 
+    // If the host deletes the room, depart
+    useEffect(() => {
+        const handleRoomClosed = () => {
+            alert("Room has been closed by the host.");
+            playerIdRef.current = null;
+            setJoined(false);
+            setIsRejoining(false);
+            localStorage.removeItem(PLAYER_SESSION_KEY);
+            onLeave();
+        };
+        socket.on(EVENTS.ROOM_CLOSED, handleRoomClosed);
+        return () => {
+            socket.off(EVENTS.ROOM_CLOSED, handleRoomClosed);
+        };
+    }, [onLeave]);
+
+    // Re-bind socket on mid-session reconnect (e.g. phone sleep/wake)
+    // useEffect(() => {
+    //     if (!joined) return;
+
+    //     const handleReconnect = () => {
+    //         const playerId = playerIdRef.current;
+    //         if (!playerId || !roomCode) return;
+
+    //         socket.emit(
+    //             EVENTS.JOIN_ROOM,
+    //             { roomCode, name, playerId },
+    //             () => {},
+    //         );
+    //     };
+
+    //     socket.on("connect", handleReconnect);
+    //     return () => {
+    //         socket.off("connect", handleReconnect);
+    //     };
+    // }, [joined, roomCode, name]);
+
     function handleJoin() {
         const normalizedRoomCode = sanitizeRoomCodeInput(roomCode);
         if (!ROOM_CODE_REGEX.test(normalizedRoomCode)) {
@@ -157,7 +192,11 @@ export default function PlayerController({ onLeave }: Props) {
 
         socket.emit(
             EVENTS.JOIN_ROOM,
-            { roomCode: normalizedRoomCode, name: normalizedName },
+            {
+                roomCode: normalizedRoomCode,
+                name: normalizedName,
+                playerId: playerIdRef.current ?? undefined,
+            },
             (res: JoinRoomResponse) => {
                 if (res?.ok && res.player?.id) {
                     playerIdRef.current = res.player.id;

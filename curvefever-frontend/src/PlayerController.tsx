@@ -4,6 +4,7 @@ import { EVENTS } from "./events";
 import { PLAYER_SESSION_KEY } from "./constants/storage";
 import { ROOM_CODE_REGEX, sanitizeRoomCodeInput } from "./utils/roomCode";
 import { getStoredPlayerSession } from "./utils/playerSession";
+import { getRequestedRoomCodeFromUrl } from "./utils/joinLink";
 import PlayerJoinForm from "./components/player/PlayerJoinForm";
 import PlayerLiveControls from "./components/player/PlayerLiveControls";
 import { usePlayerRejoin } from "./hooks/usePlayerRejoin";
@@ -23,14 +24,18 @@ type Props = { onLeave: () => void };
 
 export default function PlayerController({ onLeave }: Props) {
     const storedSession = useMemo(() => getStoredPlayerSession(), []);
-    const [roomCode, setRoomCode] = useState(storedSession?.roomCode ?? "");
+    const requestedRoomCode = useMemo(() => getRequestedRoomCodeFromUrl(), []);
+    const rejoinSession = requestedRoomCode ? null : storedSession;
+    const [roomCode, setRoomCode] = useState(
+        requestedRoomCode ?? storedSession?.roomCode ?? "",
+    );
     const [name, setName] = useState(storedSession?.name ?? "");
     const [joined, setJoined] = useState(false);
     const [leftPressed, setLeftPressed] = useState(false);
     const [rightPressed, setRightPressed] = useState(false);
-    const [isRejoining, setIsRejoining] = useState(!!storedSession);
+    const [isRejoining, setIsRejoining] = useState(Boolean(rejoinSession));
     const [rejoinError, setRejoinError] = useState<string | null>(null);
-    const playerIdRef = useRef<string | null>(storedSession?.playerId ?? null);
+    const playerIdRef = useRef<string | null>(rejoinSession?.playerId ?? null);
     const pressRef = useRef<{ left: boolean; right: boolean }>({
         left: false,
         right: false,
@@ -95,7 +100,7 @@ export default function PlayerController({ onLeave }: Props) {
     }, [emitInput, stopSendingInput]);
 
     usePlayerRejoin({
-        storedSession,
+        storedSession: rejoinSession,
         playerIdRef,
         stopSendingInput,
         onLeave,

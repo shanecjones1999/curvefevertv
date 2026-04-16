@@ -1,25 +1,36 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import "./App.css";
 import Host from "./Host";
 import PlayerController from "./PlayerController";
+import { getRequestedRoleFromUrl } from "./utils/joinLink";
 
 const ROLE_KEY = "curvefever:role";
 
 function App() {
     const [role, setRole] = useState<"none" | "host" | "phone">(() => {
+        const requestedRole = getRequestedRoleFromUrl();
+        if (requestedRole) return requestedRole;
+
         const stored = localStorage.getItem(ROLE_KEY);
         if (stored === "host" || stored === "phone") return stored;
         return "none";
     });
 
+    useEffect(() => {
+        if (role === "none") {
+            localStorage.removeItem(ROLE_KEY);
+            return;
+        }
+
+        localStorage.setItem(ROLE_KEY, role);
+    }, [role]);
+
     function selectRole(nextRole: "host" | "phone") {
         setRole(nextRole);
-        localStorage.setItem(ROLE_KEY, nextRole);
     }
 
     function clearRole() {
         setRole("none");
-        localStorage.removeItem(ROLE_KEY);
     }
 
     if (role === "host") return <Host onLeave={clearRole} />;

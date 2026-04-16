@@ -1,8 +1,10 @@
 import type { GameMode } from "../../types";
+import HostJoinQr from "./HostJoinQr";
 
 type Props = {
     copiedCode: boolean;
     roomCode: string | null;
+    joinUrl: string | null;
     gameMode: GameMode;
     effectiveTargetScore: number;
     playing: boolean;
@@ -21,6 +23,7 @@ type Props = {
 export default function HostControls({
     copiedCode,
     roomCode,
+    joinUrl,
     gameMode,
     effectiveTargetScore,
     playing,
@@ -85,6 +88,8 @@ export default function HostControls({
                         : "Battle Royale · Last player standing"}
                 </div>
             </div>
+
+            <HostJoinQr joinUrl={playing ? null : joinUrl} />
 
             <div className="panel-row host-mode-row">
                 <div

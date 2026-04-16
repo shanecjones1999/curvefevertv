@@ -12,6 +12,7 @@ import HostLeaderboard from "./components/host/HostLeaderboard";
 import HostGameOverOverlay from "./components/host/HostGameOverOverlay";
 import type { GameConfig, GameOverPayload } from "./components/host/types";
 import { useHostRoomSync } from "./hooks/useHostRoomSync";
+import { buildPlayerJoinUrl } from "./utils/joinLink";
 
 type StartGameResponse = {
     ok: boolean;
@@ -76,16 +77,14 @@ export default function Host({ onLeave }: Props) {
     const [isFullscreen, setIsFullscreen] = useState(() =>
         Boolean(
             document.fullscreenElement ??
-                (document as FullscreenCapableDocument)
-                    .webkitFullscreenElement ??
-                null,
+            (document as FullscreenCapableDocument).webkitFullscreenElement ??
+            null,
         ),
     );
     const [isFullscreenSupported] = useState(() =>
         Boolean(
             document.fullscreenEnabled ??
-                (document as FullscreenCapableDocument)
-                    .webkitFullscreenEnabled,
+            (document as FullscreenCapableDocument).webkitFullscreenEnabled,
         ),
     );
 
@@ -146,6 +145,13 @@ export default function Host({ onLeave }: Props) {
     }, [gameMode, players]);
     const effectiveTargetScore =
         targetScore ?? Math.max(10, players.length * 10 - 10);
+    const joinUrl = useMemo(() => {
+        if (!roomCode) {
+            return null;
+        }
+
+        return buildPlayerJoinUrl(roomCode);
+    }, [roomCode]);
     const displayLeaderboard = useMemo(() => {
         const source =
             gameOverData?.leaderboard && gameOverData.leaderboard.length > 0
@@ -351,6 +357,7 @@ export default function Host({ onLeave }: Props) {
         <HostControls
             copiedCode={copiedCode}
             roomCode={roomCode}
+            joinUrl={joinUrl}
             gameMode={gameMode}
             effectiveTargetScore={effectiveTargetScore}
             playing={playing}

@@ -1,8 +1,10 @@
 import type { GameMode } from "../../types";
+import HostJoinQr from "./HostJoinQr";
 
 type Props = {
     copiedCode: boolean;
     roomCode: string | null;
+    joinUrl: string | null;
     gameMode: GameMode;
     effectiveTargetScore: number;
     playing: boolean;
@@ -10,7 +12,6 @@ type Props = {
     startError: string | null;
     isFullscreen: boolean;
     isFullscreenSupported: boolean;
-    showFullscreenControl: boolean;
     onLeaveGame: () => void;
     onCopyGameCode: () => void;
     onGameModeChange: (gameMode: GameMode) => void;
@@ -21,6 +22,7 @@ type Props = {
 export default function HostControls({
     copiedCode,
     roomCode,
+    joinUrl,
     gameMode,
     effectiveTargetScore,
     playing,
@@ -28,7 +30,6 @@ export default function HostControls({
     startError,
     isFullscreen,
     isFullscreenSupported,
-    showFullscreenControl,
     onLeaveGame,
     onCopyGameCode,
     onGameModeChange,
@@ -42,15 +43,13 @@ export default function HostControls({
                     <p className="eyebrow">Host Console</p>
                 </div>
                 <div className="panel-header-actions">
-                    {showFullscreenControl && (
-                        <button
-                            className="ui-button ui-button-ghost"
-                            onClick={onToggleFullscreen}
-                            disabled={!isFullscreenSupported}
-                        >
-                            {isFullscreen ? "Exit Fullscreen" : "Fullscreen"}
-                        </button>
-                    )}
+                    <button
+                        className="ui-button ui-button-ghost"
+                        onClick={onToggleFullscreen}
+                        disabled={!isFullscreenSupported}
+                    >
+                        {isFullscreen ? "Exit Fullscreen" : "Fullscreen"}
+                    </button>
                     <button
                         className="ui-button ui-button-ghost"
                         onClick={onLeaveGame}
@@ -85,6 +84,8 @@ export default function HostControls({
                         : "Battle Royale · Last player standing"}
                 </div>
             </div>
+
+            <HostJoinQr joinUrl={playing ? null : joinUrl} />
 
             <div className="panel-row host-mode-row">
                 <div

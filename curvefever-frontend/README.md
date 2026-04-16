@@ -2,18 +2,13 @@
 
 ## Local HTTPS for iPhone testing
 
-1. Generate trusted local certs with `mkcert`.
+1. Install `mkcert` once.
 2. Start backend on `3001`.
-3. Start Vite on LAN (`0.0.0.0`) with HTTPS certs.
+3. Start Vite on LAN (`0.0.0.0`).
 
 ```bash
 brew install mkcert
 mkcert -install
-
-cd /Users/shane/Desktop/curvefevertv
-mkdir -p certs
-LAN_IP=192.168.1.23
-mkcert -key-file certs/dev-key.pem -cert-file certs/dev-cert.pem localhost 127.0.0.1 ::1 "$LAN_IP"
 
 cd backend
 npm install
@@ -24,16 +19,17 @@ npm install
 npm run dev
 ```
 
-The Vite config auto-enables HTTPS when these files exist:
-
-- `../certs/dev-key.pem`
-- `../certs/dev-cert.pem`
+The Vite config will auto-generate and refresh `../certs/dev-key.pem` and
+`../certs/dev-cert.pem` with `mkcert`, including all current local IPv4 LAN
+addresses on your Mac. If your LAN IP changes, the next `npm run dev` will
+refresh the cert automatically.
 
 Open on your iPhone using:
 
 - `https://<your-mac-lan-ip>:5173`
 
-Important: the host you open in Safari must be included in the cert SANs. If your LAN IP changes, regenerate the cert with the new IP.
+Important: `mkcert -install` must have been run on the Mac that is serving the
+site. If `mkcert` is missing, Vite falls back to any existing cert files.
 
 If you need a custom cert location:
 

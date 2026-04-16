@@ -12,6 +12,7 @@ import HostLeaderboard from "./components/host/HostLeaderboard";
 import HostGameOverOverlay from "./components/host/HostGameOverOverlay";
 import type { GameConfig, GameOverPayload } from "./components/host/types";
 import { useHostRoomSync } from "./hooks/useHostRoomSync";
+import { buildPlayerJoinUrl } from "./utils/joinLink";
 
 type StartGameResponse = {
     ok: boolean;
@@ -72,20 +73,18 @@ export default function Host({ onLeave }: Props) {
         height: DEFAULT_GAME_HEIGHT,
     });
     const hasRequestedRoomCreation = useRef(false);
-    const hostPlayingScreenRef = useRef<HTMLDivElement | null>(null);
+    const hostScreenRef = useRef<HTMLElement | null>(null);
     const [isFullscreen, setIsFullscreen] = useState(() =>
         Boolean(
             document.fullscreenElement ??
-                (document as FullscreenCapableDocument)
-                    .webkitFullscreenElement ??
-                null,
+            (document as FullscreenCapableDocument).webkitFullscreenElement ??
+            null,
         ),
     );
     const [isFullscreenSupported] = useState(() =>
         Boolean(
             document.fullscreenEnabled ??
-                (document as FullscreenCapableDocument)
-                    .webkitFullscreenEnabled,
+            (document as FullscreenCapableDocument).webkitFullscreenEnabled,
         ),
     );
 
@@ -146,6 +145,13 @@ export default function Host({ onLeave }: Props) {
     }, [gameMode, players]);
     const effectiveTargetScore =
         targetScore ?? Math.max(10, players.length * 10 - 10);
+    const joinUrl = useMemo(() => {
+        if (!roomCode) {
+            return null;
+        }
+
+        return buildPlayerJoinUrl(roomCode);
+    }, [roomCode]);
     const displayLeaderboard = useMemo(() => {
         const source =
             gameOverData?.leaderboard && gameOverData.leaderboard.length > 0
@@ -305,7 +311,7 @@ export default function Host({ onLeave }: Props) {
             return;
         }
 
-        const element = hostPlayingScreenRef.current;
+        const element = hostScreenRef.current;
         if (!element) return;
 
         const fullscreenElement = element as FullscreenCapableElement;
@@ -348,28 +354,28 @@ export default function Host({ onLeave }: Props) {
     }
 
     const hostControls = (
-        <HostControls
-            copiedCode={copiedCode}
-            roomCode={roomCode}
+            <HostControls
+                copiedCode={copiedCode}
+                roomCode={roomCode}
+                joinUrl={joinUrl}
             gameMode={gameMode}
             effectiveTargetScore={effectiveTargetScore}
             playing={playing}
             playersCount={players.length}
-            startError={startError}
-            isFullscreen={isFullscreen}
-            isFullscreenSupported={isFullscreenSupported}
-            showFullscreenControl={playing}
-            onLeaveGame={handleLeaveGame}
-            onCopyGameCode={handleCopyGameCode}
-            onGameModeChange={handleGameModeChange}
-            onStartGame={handleStartGame}
+                startError={startError}
+                isFullscreen={isFullscreen}
+                isFullscreenSupported={isFullscreenSupported}
+                onLeaveGame={handleLeaveGame}
+                onCopyGameCode={handleCopyGameCode}
+                onGameModeChange={handleGameModeChange}
+                onStartGame={handleStartGame}
             onToggleFullscreen={handleFullscreenToggle}
         />
     );
 
     if (!playing) {
         return (
-            <main className="page-shell">
+            <main className="page-shell" ref={hostScreenRef}>
                 <section className="panel host-panel">
                     {hostControls}
                     <HostPlayerList
@@ -383,8 +389,11 @@ export default function Host({ onLeave }: Props) {
     }
 
     return (
-        <main className="page-shell page-shell-host-playing">
-            <div className="host-playing-screen" ref={hostPlayingScreenRef}>
+        <main
+            className="page-shell page-shell-host-playing"
+            ref={hostScreenRef}
+        >
+            <div className="host-playing-screen">
                 <div className="host-side-column">
                     <section className="panel host-panel host-control-panel">
                         {hostControls}

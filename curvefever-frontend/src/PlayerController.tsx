@@ -7,6 +7,7 @@ import { getStoredPlayerSession } from "./utils/playerSession";
 import { getRequestedRoomCodeFromUrl } from "./utils/joinLink";
 import PlayerJoinForm from "./components/player/PlayerJoinForm";
 import PlayerLiveControls from "./components/player/PlayerLiveControls";
+import { LeaveGameIcon } from "./components/ActionIcons";
 import { usePlayerRejoin } from "./hooks/usePlayerRejoin";
 
 const INPUT_SEND_INTERVAL_MS = 16;
@@ -242,10 +243,12 @@ export default function PlayerController({ onLeave }: Props) {
                         <h2 className="title title-small">Join as Player</h2>
                     </div>
                     <button
-                        className="ui-button ui-button-ghost"
+                        className="ui-button ui-button-ghost ui-icon-button"
                         onClick={handleLeaveGame}
+                        aria-label="Leave game"
+                        title="Leave game"
                     >
-                        Leave Game
+                        <LeaveGameIcon className="ui-button-icon" />
                     </button>
                 </div>
 

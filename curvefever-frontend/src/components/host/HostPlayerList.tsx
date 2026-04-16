@@ -1,18 +1,20 @@
 import type { Player } from "../../types";
 
 type Props = {
+    className?: string;
     players: Player[];
     getPlayerRowClassName: (player: Player) => string;
     getPlayerDotColor: (player: Player) => string;
 };
 
 export default function HostPlayerList({
+    className,
     players,
     getPlayerRowClassName,
     getPlayerDotColor,
 }: Props) {
     return (
-        <section className="panel inset-panel">
+        <section className={`panel inset-panel ${className ?? ""}`.trim()}>
             <h3 className="section-title">Players ({players.length})</h3>
             <ul className="player-list">
                 {players.length === 0 && (

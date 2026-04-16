@@ -1,4 +1,6 @@
+import type { ReactNode } from "react";
 import type { GameMode } from "../../types";
+import { FullscreenIcon, LeaveGameIcon } from "../ActionIcons";
 import HostJoinQr from "./HostJoinQr";
 
 type Props = {
@@ -12,6 +14,8 @@ type Props = {
     startError: string | null;
     isFullscreen: boolean;
     isFullscreenSupported: boolean;
+    layout?: "lobby" | "sidebar";
+    playersSlot?: ReactNode;
     onLeaveGame: () => void;
     onCopyGameCode: () => void;
     onGameModeChange: (gameMode: GameMode) => void;
@@ -30,12 +34,140 @@ export default function HostControls({
     startError,
     isFullscreen,
     isFullscreenSupported,
+    layout = "sidebar",
+    playersSlot = null,
     onLeaveGame,
     onCopyGameCode,
     onGameModeChange,
     onStartGame,
     onToggleFullscreen,
 }: Props) {
+    const fullscreenLabel = isFullscreen
+        ? "Exit fullscreen"
+        : "Enter fullscreen";
+    const qrJoinUrl = playing ? null : joinUrl;
+    const scoreText =
+        gameMode === "classic"
+            ? `Race to ${effectiveTargetScore} pts`
+            : "Battle Royale · Last player standing";
+    const gameModeToggle = (
+        <div
+            className="host-mode-toggle"
+            role="group"
+            aria-label="Select game mode"
+        >
+            <button
+                type="button"
+                className={`host-mode-option ${gameMode === "classic" ? "is-active" : ""}`}
+                onClick={() => onGameModeChange("classic")}
+                disabled={playing}
+            >
+                Classic
+            </button>
+            <button
+                type="button"
+                className={`host-mode-option ${gameMode === "battle-royale" ? "is-active" : ""}`}
+                onClick={() => onGameModeChange("battle-royale")}
+                disabled={playing}
+            >
+                Battle Royale
+            </button>
+        </div>
+    );
+
+    if (layout === "lobby") {
+        return (
+            <>
+                <div className="panel-header host-lobby-header">
+                    <div>
+                        <p className="eyebrow">Host Console</p>
+                    </div>
+                    <div className="panel-header-actions">
+                        <button
+                            className="ui-button ui-button-ghost ui-icon-button"
+                            onClick={onToggleFullscreen}
+                            disabled={!isFullscreenSupported}
+                            aria-label={
+                                isFullscreenSupported
+                                    ? fullscreenLabel
+                                    : "Fullscreen unavailable"
+                            }
+                            title={
+                                isFullscreenSupported
+                                    ? fullscreenLabel
+                                    : "Fullscreen unavailable"
+                            }
+                        >
+                            <FullscreenIcon
+                                active={isFullscreen}
+                                className="ui-button-icon"
+                            />
+                        </button>
+                        <button
+                            className="ui-button ui-button-ghost ui-icon-button"
+                            onClick={onLeaveGame}
+                            aria-label="Leave game"
+                            title="Leave game"
+                        >
+                            <LeaveGameIcon className="ui-button-icon" />
+                        </button>
+                    </div>
+                </div>
+
+                <div className="host-lobby-share-row">
+                    <div className="host-lobby-share-main">
+                        <button
+                            type="button"
+                            className="status-pill room-code-pill room-code-button"
+                            onClick={onCopyGameCode}
+                            disabled={!roomCode}
+                            title={
+                                roomCode
+                                    ? "Click to copy game code"
+                                    : "No game code available"
+                            }
+                        >
+                            <span className="room-code-label">
+                                {copiedCode ? "Copied!" : "Game Code"}
+                            </span>
+                            <span className="room-code-value">
+                                {roomCode ?? "------"}
+                            </span>
+                        </button>
+                        <div
+                            className="status-pill target-score-pill host-lobby-score-pill"
+                            role="status"
+                        >
+                            {scoreText}
+                        </div>
+                    </div>
+
+                    <HostJoinQr joinUrl={qrJoinUrl} />
+                </div>
+
+                {playersSlot}
+
+                <div className="host-lobby-action-section">
+                    <div className="host-lobby-action-row">
+                        <div className="host-lobby-game-mode">
+                            {gameModeToggle}
+                        </div>
+                        {!playing && (
+                            <button
+                                className="ui-button host-lobby-start-button"
+                                onClick={onStartGame}
+                                disabled={playersCount < 1}
+                            >
+                                Start Game
+                            </button>
+                        )}
+                    </div>
+                    {startError && <div className="error-text">{startError}</div>}
+                </div>
+            </>
+        );
+    }
+
     return (
         <>
             <div className="panel-header">
@@ -44,72 +176,68 @@ export default function HostControls({
                 </div>
                 <div className="panel-header-actions">
                     <button
-                        className="ui-button ui-button-ghost"
+                        className="ui-button ui-button-ghost ui-icon-button"
                         onClick={onToggleFullscreen}
                         disabled={!isFullscreenSupported}
+                        aria-label={
+                            isFullscreenSupported
+                                ? fullscreenLabel
+                                : "Fullscreen unavailable"
+                        }
+                        title={
+                            isFullscreenSupported
+                                ? fullscreenLabel
+                                : "Fullscreen unavailable"
+                        }
                     >
-                        {isFullscreen ? "Exit Fullscreen" : "Fullscreen"}
+                        <FullscreenIcon
+                            active={isFullscreen}
+                            className="ui-button-icon"
+                        />
                     </button>
                     <button
-                        className="ui-button ui-button-ghost"
+                        className="ui-button ui-button-ghost ui-icon-button"
                         onClick={onLeaveGame}
+                        aria-label="Leave game"
+                        title="Leave game"
                     >
-                        Leave Game
+                        <LeaveGameIcon className="ui-button-icon" />
                     </button>
                 </div>
             </div>
 
-            <div className="panel-row">
-                <button
-                    type="button"
-                    className="status-pill room-code-pill room-code-button"
-                    onClick={onCopyGameCode}
-                    disabled={!roomCode}
-                    title={
-                        roomCode
-                            ? "Click to copy game code"
-                            : "No game code available"
-                    }
-                >
-                    <span className="room-code-label">
-                        {copiedCode ? "Copied!" : "Game Code"}
-                    </span>
-                    <span className="room-code-value">
-                        {roomCode ?? "------"}
-                    </span>
-                </button>
-                <div className="status-pill target-score-pill" role="status">
-                    {gameMode === "classic"
-                        ? `Race to ${effectiveTargetScore} pts`
-                        : "Battle Royale · Last player standing"}
-                </div>
-            </div>
+            <div className="host-lobby-overview">
+                <div className="host-lobby-meta">
+                    <div className="panel-row host-room-row">
+                        <button
+                            type="button"
+                            className="status-pill room-code-pill room-code-button"
+                            onClick={onCopyGameCode}
+                            disabled={!roomCode}
+                            title={
+                                roomCode
+                                    ? "Click to copy game code"
+                                    : "No game code available"
+                            }
+                        >
+                            <span className="room-code-label">
+                                {copiedCode ? "Copied!" : "Game Code"}
+                            </span>
+                            <span className="room-code-value">
+                                {roomCode ?? "------"}
+                            </span>
+                        </button>
+                        <div className="status-pill target-score-pill" role="status">
+                            {scoreText}
+                        </div>
+                    </div>
 
-            <HostJoinQr joinUrl={playing ? null : joinUrl} />
-
-            <div className="panel-row host-mode-row">
-                <div
-                    className="host-mode-toggle"
-                    role="group"
-                    aria-label="Select game mode"
-                >
-                    <button
-                        type="button"
-                        className={`host-mode-option ${gameMode === "classic" ? "is-active" : ""}`}
-                        onClick={() => onGameModeChange("classic")}
-                        disabled={playing}
-                    >
-                        Classic
-                    </button>
-                    <button
-                        type="button"
-                        className={`host-mode-option ${gameMode === "battle-royale" ? "is-active" : ""}`}
-                        onClick={() => onGameModeChange("battle-royale")}
-                        disabled={playing}
-                    >
-                        Battle Royale
-                    </button>
+                    <div className="panel-row host-mode-row">
+                        {gameModeToggle}
+                    </div>
                 </div>
+
+                <HostJoinQr joinUrl={qrJoinUrl} />
             </div>
 
             {(!playing || startError) && (

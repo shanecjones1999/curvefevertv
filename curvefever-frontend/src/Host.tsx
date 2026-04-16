@@ -354,35 +354,44 @@ export default function Host({ onLeave }: Props) {
     }
 
     const hostControls = (
-            <HostControls
-                copiedCode={copiedCode}
-                roomCode={roomCode}
-                joinUrl={joinUrl}
+        <HostControls
+            copiedCode={copiedCode}
+            roomCode={roomCode}
+            joinUrl={joinUrl}
             gameMode={gameMode}
             effectiveTargetScore={effectiveTargetScore}
             playing={playing}
             playersCount={players.length}
-                startError={startError}
-                isFullscreen={isFullscreen}
-                isFullscreenSupported={isFullscreenSupported}
-                onLeaveGame={handleLeaveGame}
-                onCopyGameCode={handleCopyGameCode}
-                onGameModeChange={handleGameModeChange}
-                onStartGame={handleStartGame}
+            startError={startError}
+            isFullscreen={isFullscreen}
+            isFullscreenSupported={isFullscreenSupported}
+            layout={playing ? "sidebar" : "lobby"}
+            playersSlot={
+                !playing ? (
+                    <HostPlayerList
+                        className="host-lobby-player-panel"
+                        players={players}
+                        getPlayerRowClassName={getPlayerRowClassName}
+                        getPlayerDotColor={getPlayerDotColor}
+                    />
+                ) : null
+            }
+            onLeaveGame={handleLeaveGame}
+            onCopyGameCode={handleCopyGameCode}
+            onGameModeChange={handleGameModeChange}
+            onStartGame={handleStartGame}
             onToggleFullscreen={handleFullscreenToggle}
         />
     );
 
     if (!playing) {
         return (
-            <main className="page-shell" ref={hostScreenRef}>
-                <section className="panel host-panel">
+            <main
+                className="page-shell page-shell-host-lobby"
+                ref={hostScreenRef}
+            >
+                <section className="panel host-panel host-lobby-panel">
                     {hostControls}
-                    <HostPlayerList
-                        players={players}
-                        getPlayerRowClassName={getPlayerRowClassName}
-                        getPlayerDotColor={getPlayerDotColor}
-                    />
                 </section>
             </main>
         );

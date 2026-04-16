@@ -17,6 +17,10 @@
   padding-top: clamp(0.5rem, 1.2vw, 1rem);
 }
 
+.page-shell-host-lobby {
+  width: min(100%, 1200px);
+}
+
 .panel {
   background: linear-gradient(160deg, rgba(14, 19, 39, 0.85), rgba(10, 13, 28, 0.92));
   border: 1px solid rgba(110, 158, 255, 0.24);
@@ -250,6 +254,21 @@
   box-shadow: none;
 }
 
+.ui-icon-button {
+  width: 44px;
+  min-width: 44px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ui-button-icon {
+  width: 1.15rem;
+  height: 1.15rem;
+  display: block;
+}
+
 .ui-button-danger {
   border-color: rgba(255, 92, 130, 0.45);
   background: linear-gradient(150deg, rgba(168, 35, 75, 0.95), rgba(127, 22, 61, 0.95));
@@ -322,67 +341,48 @@
 }
 
 .host-mode-row {
-  width: min(100%, 540px);
+  width: 100%;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  margin-inline: auto;
 }
 
 .host-join-qr {
-  width: min(100%, 320px);
-  margin-inline: auto;
+  width: fit-content;
   display: grid;
   justify-items: center;
-  gap: 0.6rem;
-  padding: 0.85rem;
-  border-radius: 1rem;
-  border: 1px solid rgba(135, 188, 255, 0.28);
-  background: linear-gradient(160deg, rgba(11, 22, 50, 0.76), rgba(15, 29, 65, 0.58));
-}
-
-.host-join-qr-copy {
-  display: grid;
-  gap: 0.2rem;
-  text-align: center;
+  gap: 0.35rem;
+  align-content: start;
 }
 
 .host-join-qr-label {
   margin: 0;
-  color: #ebf5ff;
-  font-weight: 800;
-  letter-spacing: 0.04em;
+  color: var(--cf-text-soft);
+  font-weight: 700;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  font-size: 0.8rem;
-}
-
-.host-join-qr-text,
-.host-join-qr-hint {
-  margin: 0;
-  color: var(--cf-text-muted);
-  font-size: 0.83rem;
-  line-height: 1.45;
-  text-align: center;
+  font-size: 0.68rem;
+  line-height: 1;
 }
 
 .host-join-qr-frame {
   display: inline-flex;
-  border-radius: 1rem;
-  padding: 0.55rem;
+  border-radius: 0.8rem;
+  padding: 0.35rem;
   background: #f6fbff;
-  border: 1px solid rgba(174, 215, 255, 0.7);
-  box-shadow: 0 12px 28px rgba(6, 13, 31, 0.32);
+  border: 1px solid rgba(174, 215, 255, 0.5);
+  box-shadow: 0 8px 18px rgba(6, 13, 31, 0.22);
 }
 
 .host-join-qr-image,
 .host-join-qr-placeholder {
-  width: min(100%, 224px);
+  width: min(100%, 168px);
   aspect-ratio: 1;
   display: block;
 }
 
 .host-join-qr-image {
-  border-radius: 0.55rem;
+  border-radius: 0.4rem;
 }
 
 .host-join-qr-placeholder {
@@ -735,10 +735,90 @@
   height: fit-content;
 }
 
+.host-lobby-panel {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.host-lobby-player-panel {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 0.6rem;
+  height: fit-content;
+  width: 100%;
+}
+
+.host-lobby-player-panel .section-title {
+  margin-bottom: 0;
+}
+
+.host-lobby-player-panel .player-list {
+  max-height: clamp(220px, 42vh, 440px);
+  overflow: auto;
+  padding-right: 0.2rem;
+  scrollbar-gutter: stable;
+  align-content: start;
+}
+
+.host-lobby-header {
+  align-items: center;
+}
+
+.host-lobby-share-row {
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: 0.55rem;
+  align-items: start;
+  justify-content: center;
+}
+
+.host-lobby-share-main {
+  display: grid;
+  gap: 0.55rem;
+  min-width: 0;
+  justify-items: center;
+}
+
+.host-lobby-score-pill {
+  width: fit-content;
+}
+
+.host-lobby-share-main .room-code-button {
+  width: auto;
+  max-width: 100%;
+  justify-self: center;
+}
+
+.host-lobby-action-section {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.host-lobby-action-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.9rem;
+  flex-wrap: wrap;
+}
+
+.host-lobby-game-mode {
+  flex: 1 1 360px;
+  min-width: min(100%, 320px);
+}
+
+.host-lobby-start-button {
+  min-width: 160px;
+}
+
 .host-panel .panel-header {
   justify-content: center;
   align-items: center;
   text-align: center;
+}
+
+.host-panel .host-lobby-overview {
+  justify-items: center;
 }
 
 .host-panel .panel-row,
@@ -806,7 +886,32 @@
   -webkit-touch-callout: none;
 }
 
+@media (max-width: 980px) {
+  .host-lobby-share-row {
+    grid-template-columns: 1fr;
+  }
+
+  .host-lobby-player-panel {
+    min-height: 0;
+  }
+
+  .host-lobby-player-panel .player-list {
+    max-height: none;
+    overflow: visible;
+    padding-right: 0;
+  }
+}
+
 @media (max-width: 680px) {
+  .host-lobby-action-row {
+    align-items: stretch;
+  }
+
+  .host-lobby-game-mode,
+  .host-lobby-start-button {
+    width: 100%;
+  }
+
   .panel-row,
   .panel-row-bottom {
     align-items: stretch;

@@ -23,7 +23,7 @@ export default function HostJoinQr({ joinUrl }: Props) {
         void QRCode.toDataURL(joinUrl, {
             errorCorrectionLevel: "M",
             margin: 1,
-            width: 224,
+            width: 168,
             color: {
                 dark: "#10214f",
                 light: "#f6fbff",
@@ -58,13 +58,7 @@ export default function HostJoinQr({ joinUrl }: Props) {
             role="group"
             aria-label="Phone join QR code"
         >
-            <div className="host-join-qr-copy">
-                <p className="host-join-qr-label">Scan to join</p>
-                <p className="host-join-qr-text">
-                    Open this on a phone camera to jump straight into the player
-                    screen.
-                </p>
-            </div>
+            <p className="host-join-qr-label">Scan to join</p>
             <div className="host-join-qr-frame" aria-hidden="true">
                 {qrCode?.joinUrl === joinUrl ? (
                     <img

@@ -73,7 +73,7 @@ export default function Host({ onLeave }: Props) {
         height: DEFAULT_GAME_HEIGHT,
     });
     const hasRequestedRoomCreation = useRef(false);
-    const hostPlayingScreenRef = useRef<HTMLDivElement | null>(null);
+    const hostScreenRef = useRef<HTMLElement | null>(null);
     const [isFullscreen, setIsFullscreen] = useState(() =>
         Boolean(
             document.fullscreenElement ??
@@ -311,7 +311,7 @@ export default function Host({ onLeave }: Props) {
             return;
         }
 
-        const element = hostPlayingScreenRef.current;
+        const element = hostScreenRef.current;
         if (!element) return;
 
         const fullscreenElement = element as FullscreenCapableElement;
@@ -354,29 +354,28 @@ export default function Host({ onLeave }: Props) {
     }
 
     const hostControls = (
-        <HostControls
-            copiedCode={copiedCode}
-            roomCode={roomCode}
-            joinUrl={joinUrl}
+            <HostControls
+                copiedCode={copiedCode}
+                roomCode={roomCode}
+                joinUrl={joinUrl}
             gameMode={gameMode}
             effectiveTargetScore={effectiveTargetScore}
             playing={playing}
             playersCount={players.length}
-            startError={startError}
-            isFullscreen={isFullscreen}
-            isFullscreenSupported={isFullscreenSupported}
-            showFullscreenControl={playing}
-            onLeaveGame={handleLeaveGame}
-            onCopyGameCode={handleCopyGameCode}
-            onGameModeChange={handleGameModeChange}
-            onStartGame={handleStartGame}
+                startError={startError}
+                isFullscreen={isFullscreen}
+                isFullscreenSupported={isFullscreenSupported}
+                onLeaveGame={handleLeaveGame}
+                onCopyGameCode={handleCopyGameCode}
+                onGameModeChange={handleGameModeChange}
+                onStartGame={handleStartGame}
             onToggleFullscreen={handleFullscreenToggle}
         />
     );
 
     if (!playing) {
         return (
-            <main className="page-shell">
+            <main className="page-shell" ref={hostScreenRef}>
                 <section className="panel host-panel">
                     {hostControls}
                     <HostPlayerList
@@ -390,8 +389,11 @@ export default function Host({ onLeave }: Props) {
     }
 
     return (
-        <main className="page-shell page-shell-host-playing">
-            <div className="host-playing-screen" ref={hostPlayingScreenRef}>
+        <main
+            className="page-shell page-shell-host-playing"
+            ref={hostScreenRef}
+        >
+            <div className="host-playing-screen">
                 <div className="host-side-column">
                     <section className="panel host-panel host-control-panel">
                         {hostControls}

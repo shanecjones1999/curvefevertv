@@ -65,6 +65,7 @@ export default function Host({ onLeave }: Props) {
     const [copiedCode, setCopiedCode] = useState(false);
     const [targetScore, setTargetScore] = useState<number | null>(null);
     const [gameMode, setGameMode] = useState<GameMode>("classic");
+    const [roundStartRemainingMs, setRoundStartRemainingMs] = useState(0);
     const [gameOverData, setGameOverData] = useState<GameOverPayload | null>(
         null,
     );
@@ -176,6 +177,8 @@ export default function Host({ onLeave }: Props) {
     const winnerName =
         displayLeaderboard.find((entry) => entry.id === gameOverData?.winnerId)
             ?.name ?? displayLeaderboard[0]?.name;
+    const roundStartCountdown =
+        roundStartRemainingMs > 0 ? Math.ceil(roundStartRemainingMs / 1000) : 0;
 
     useHostRoomSync({
         hasRequestedRoomCreation,
@@ -185,6 +188,7 @@ export default function Host({ onLeave }: Props) {
         setStartError,
         setTargetScore,
         setGameMode,
+        setRoundStartRemainingMs,
         setGameOverData,
         setGameConfig,
     });
@@ -287,6 +291,7 @@ export default function Host({ onLeave }: Props) {
         setRoomCode(null);
         setPlayers([]);
         setPlaying(false);
+        setRoundStartRemainingMs(0);
         onLeave();
     }
 
@@ -421,6 +426,14 @@ export default function Host({ onLeave }: Props) {
                         width={gameConfig.width}
                         height={gameConfig.height}
                     />
+                    {roundStartCountdown > 0 && !gameOverData && (
+                        <div className="round-start-overlay" aria-live="polite">
+                            <p className="round-start-label">Round starting</p>
+                            <p className="round-start-countdown">
+                                {roundStartCountdown}
+                            </p>
+                        </div>
+                    )}
                 </div>
 
                 {gameOverData && (

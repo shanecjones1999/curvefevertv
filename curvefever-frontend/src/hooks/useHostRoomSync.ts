@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import socket from "../socket";
 import { EVENTS } from "../events";
 import { HOST_SESSION_KEY } from "../constants/storage";
-import type { GameMode, Player } from "../types";
+import type { GameMode, GameState, Player } from "../types";
 import type { GameConfig, GameOverPayload } from "../components/host/types";
 
 type ReconnectHostResponse = {
@@ -26,6 +26,7 @@ type UseHostRoomSyncParams = {
     setStartError: React.Dispatch<React.SetStateAction<string | null>>;
     setTargetScore: React.Dispatch<React.SetStateAction<number | null>>;
     setGameMode: React.Dispatch<React.SetStateAction<GameMode>>;
+    setRoundStartRemainingMs: React.Dispatch<React.SetStateAction<number>>;
     setGameOverData: React.Dispatch<
         React.SetStateAction<GameOverPayload | null>
     >;
@@ -40,6 +41,7 @@ export function useHostRoomSync({
     setStartError,
     setTargetScore,
     setGameMode,
+    setRoundStartRemainingMs,
     setGameOverData,
     setGameConfig,
 }: UseHostRoomSyncParams) {
@@ -123,6 +125,7 @@ export function useHostRoomSync({
                             applyTargetScore(res.targetScore);
                             applyGameConfig(res.gameConfig);
                             if (res.state === "finished") {
+                                setRoundStartRemainingMs(0);
                                 const fallbackLeaderboard = (res.players ?? [])
                                     .map((player) => ({
                                         id: player.id,
@@ -156,6 +159,9 @@ export function useHostRoomSync({
                                 setPlaying(true);
                             } else {
                                 setGameOverData(null);
+                                if (res.state !== "playing") {
+                                    setRoundStartRemainingMs(0);
+                                }
                                 setPlaying(res.state === "playing");
                             }
                         } else {
@@ -192,6 +198,7 @@ export function useHostRoomSync({
                 applyGameMode(data.gameMode);
                 applyTargetScore(data.targetScore);
                 applyGameConfig(data.gameConfig);
+                setRoundStartRemainingMs(0);
             },
         );
 
@@ -212,17 +219,15 @@ export function useHostRoomSync({
 
         socket.on(
             EVENTS.GAME_STATE,
-            (state?: {
-                players?: Player[];
-                gameMode?: GameMode;
-                targetScore?: number;
-                arena?: GameConfig;
-            }) => {
+            (state?: GameState) => {
                 if (state?.arena) {
                     applyGameConfig(state.arena);
                 }
                 applyGameMode(state?.gameMode);
                 applyTargetScore(state?.targetScore);
+                setRoundStartRemainingMs(
+                    Math.max(0, state?.roundStartRemainingMs ?? 0),
+                );
                 if (state && Array.isArray(state.players)) {
                     setPlayers(state.players);
                 }
@@ -235,6 +240,7 @@ export function useHostRoomSync({
             if (data?.leaderboard && Array.isArray(data.leaderboard)) {
                 setGameOverData(data);
             }
+            setRoundStartRemainingMs(0);
             setPlaying(true);
         });
 
@@ -263,6 +269,7 @@ export function useHostRoomSync({
         setStartError,
         setTargetScore,
         setGameMode,
+        setRoundStartRemainingMs,
         setGameOverData,
         setGameConfig,
     ]);

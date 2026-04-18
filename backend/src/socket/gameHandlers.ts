@@ -4,7 +4,7 @@ import {
     normalizeRoomCode,
     sanitizeGameMode,
 } from "../domain/gameRules";
-import { restartRound, startGameLoop } from "../gameLoop";
+import { buildGameState, restartRound, startGameLoop } from "../gameLoop";
 import { getRoom } from "../rooms";
 import { GameMode, InputPayload } from "../types";
 import { TypedServer, TypedSocket } from "./events";
@@ -90,6 +90,10 @@ export function registerGameHandlers(io: TypedServer, socket: TypedSocket) {
                     height: GAME_HEIGHT,
                 },
             });
+            const state = buildGameState(room.code);
+            if (state) {
+                io.to(room.code).emit("gameState", state);
+            }
             cb?.({
                 ok: true,
                 gameMode,

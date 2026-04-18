@@ -4,6 +4,7 @@ export interface Player {
     score: number;
     socketId: string | null;
     color?: string;
+    teamId?: number;
     alive: boolean;
     x: number;
     y: number;
@@ -22,9 +23,20 @@ export interface Player {
     turnRightHeld?: boolean;
 }
 
-export type GameMode = "classic" | "battle-royale";
+export type GameMode = "classic" | "battle-royale" | "teams";
 
 export type RoomState = "lobby" | "playing" | "finished";
+
+export interface LeaderboardEntry {
+    id: string;
+    name: string;
+    score: number;
+    color?: string;
+    alive?: boolean;
+    teamId?: number;
+    playerCount?: number;
+    kind?: "player" | "team";
+}
 
 export interface Room {
     code: string;
@@ -33,6 +45,7 @@ export interface Room {
     state: RoomState;
     targetScore?: number;
     gameMode: GameMode;
+    teamCount: number;
     battleRoyaleEliminatedPlayerIds?: Set<string>;
     game?: GameState | null;
 }
@@ -46,6 +59,7 @@ export interface GameState {
     players: Player[];
     gameMode: GameMode;
     targetScore?: number;
+    teamCount?: number;
     roundStartRemainingMs?: number;
 }
 

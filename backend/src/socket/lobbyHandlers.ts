@@ -5,7 +5,12 @@ import {
     buildBattleRoyaleLeaderboard,
     buildClassicLeaderboard,
 } from "../domain/leaderboard";
-import { generateSpawnPosition } from "../gameLoop";
+import {
+    buildTeamLeaderboard,
+    chooseBalancedTeam,
+    rebalancePlayersForTeamMode,
+} from "../domain/teamMode";
+import { generateSpawnPosition, stopGameLoop } from "../gameLoop";
 import { createRoom, deleteRoom, getRoom, joinRoom, leaveRoom } from "../rooms";
 import { Player } from "../types";
 import { TypedServer, TypedSocket } from "./events";
@@ -52,15 +57,11 @@ export function registerLobbyHandlers(io: TypedServer, socket: TypedSocket) {
                           players,
                           room.battleRoyaleEliminatedPlayerIds,
                       )
+                    : room.gameMode === "teams"
+                      ? buildTeamLeaderboard(players)
                     : buildClassicLeaderboard(players)
                 : undefined;
-        const winnerId =
-            room.state === "finished" && room.gameMode === "battle-royale"
-                ? players.find(
-                      (player) =>
-                          !room.battleRoyaleEliminatedPlayerIds?.has(player.id),
-                  )?.id ?? null
-                : leaderboard?.[0]?.id ?? null;
+        const winnerId = leaderboard?.[0]?.id ?? null;
 
         cb?.({
             ok: true,
@@ -70,11 +71,22 @@ export function registerLobbyHandlers(io: TypedServer, socket: TypedSocket) {
             gameMode: room.gameMode,
             winnerId,
             leaderboard,
-            targetScore:
-                room.gameMode === "classic"
-                    ? (room.targetScore ??
-                      calculateTargetScore(room.players.size))
-                    : undefined,
+            targetScore: (() => {
+                if (room.gameMode === "classic") {
+                    return (
+                        room.targetScore ?? calculateTargetScore(room.players.size)
+                    );
+                }
+                if (room.gameMode === "teams") {
+                    const activeTeamCount = buildTeamLeaderboard(players).length;
+                    return (
+                        room.targetScore ??
+                        calculateTargetScore(activeTeamCount)
+                    );
+                }
+                return undefined;
+            })(),
+            teamCount: room.teamCount,
             gameConfig: {
                 width: GAME_WIDTH,
                 height: GAME_HEIGHT,
@@ -109,6 +121,13 @@ export function registerLobbyHandlers(io: TypedServer, socket: TypedSocket) {
             score: 0,
             socketId: socket.id,
             color: undefined,
+            teamId:
+                room.gameMode === "teams"
+                    ? chooseBalancedTeam(
+                          Array.from(room.players.values()),
+                          room.teamCount,
+                      )
+                    : undefined,
             alive: true,
             x: spawn.x,
             y: spawn.y,
@@ -197,17 +216,77 @@ export function registerLobbyHandlers(io: TypedServer, socket: TypedSocket) {
             players: Array.from(room.players.values()),
             state: room.state,
             gameMode: room.gameMode,
-            targetScore:
-                room.gameMode === "classic"
-                    ? (room.targetScore ??
-                      calculateTargetScore(room.players.size))
-                    : undefined,
+            targetScore: (() => {
+                if (room.gameMode === "classic") {
+                    return (
+                        room.targetScore ?? calculateTargetScore(room.players.size)
+                    );
+                }
+                if (room.gameMode === "teams") {
+                    return (
+                        room.targetScore ??
+                        calculateTargetScore(
+                            buildTeamLeaderboard(Array.from(room.players.values()))
+                                .length,
+                        )
+                    );
+                }
+                return undefined;
+            })(),
+            teamCount: room.teamCount,
             gameConfig: {
                 width: GAME_WIDTH,
                 height: GAME_HEIGHT,
             },
         });
     });
+
+    socket.on(
+        "switchTeam",
+        (data: { roomCode: string; teamId: number }, cb) => {
+            const roomCode = normalizeRoomCode(data?.roomCode);
+            if (!roomCode)
+                return cb?.({
+                    ok: false,
+                    error: "Room code must be 4 letters",
+                });
+
+            const room = getRoom(roomCode);
+            if (!room) return cb?.({ ok: false, error: "Room not found" });
+            if (room.gameMode !== "teams") {
+                return cb?.({ ok: false, error: "Team mode is not enabled" });
+            }
+            if (room.state !== "lobby") {
+                return cb?.({
+                    ok: false,
+                    error: "Teams can only change in the lobby",
+                });
+            }
+
+            const playerId = getPlayerIdBySocket(socket.id);
+            if (!playerId) {
+                return cb?.({ ok: false, error: "Player not found" });
+            }
+
+            const player = room.players.get(playerId);
+            if (!player || player.socketId !== socket.id) {
+                return cb?.({ ok: false, error: "Player not found" });
+            }
+
+            if (!Number.isInteger(data?.teamId)) {
+                return cb?.({ ok: false, error: "Invalid team selection" });
+            }
+
+            const teamId = data.teamId;
+            if (teamId < 1 || teamId > room.teamCount) {
+                return cb?.({ ok: false, error: "Invalid team selection" });
+            }
+
+            player.teamId = teamId;
+            emitLobbyUpdate(io, room.code);
+            cb?.({ ok: true, player, teamCount: room.teamCount });
+        },
+    );
 
     socket.on(
         "leaveRoom",
@@ -246,6 +325,7 @@ export function registerLobbyHandlers(io: TypedServer, socket: TypedSocket) {
                 }
             }
             unbindSocketFromRoom(socket.id);
+            stopGameLoop(roomCode);
             const success = deleteRoom(roomCode);
             if (success) {
                 io.to(roomCode).emit("roomClosed");

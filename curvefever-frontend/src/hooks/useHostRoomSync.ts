@@ -2,8 +2,9 @@ import { useEffect } from "react";
 import socket from "../socket";
 import { EVENTS } from "../events";
 import { HOST_SESSION_KEY } from "../constants/storage";
-import type { GameMode, GameState, Player } from "../types";
+import type { GameMode, GameState, LeaderboardEntry, Player } from "../types";
 import type { GameConfig, GameOverPayload } from "../components/host/types";
+import { buildTeamLeaderboard } from "../utils/teamMode";
 
 type ReconnectHostResponse = {
     ok: boolean;
@@ -14,6 +15,7 @@ type ReconnectHostResponse = {
     winnerId?: string | null;
     leaderboard?: GameOverPayload["leaderboard"];
     targetScore?: number;
+    teamCount?: number;
     gameConfig?: GameConfig;
     error?: string;
 };
@@ -26,6 +28,7 @@ type UseHostRoomSyncParams = {
     setStartError: React.Dispatch<React.SetStateAction<string | null>>;
     setTargetScore: React.Dispatch<React.SetStateAction<number | null>>;
     setGameMode: React.Dispatch<React.SetStateAction<GameMode>>;
+    setTeamCount: React.Dispatch<React.SetStateAction<number>>;
     setRoundStartRemainingMs: React.Dispatch<React.SetStateAction<number>>;
     setGameOverData: React.Dispatch<
         React.SetStateAction<GameOverPayload | null>
@@ -41,6 +44,7 @@ export function useHostRoomSync({
     setStartError,
     setTargetScore,
     setGameMode,
+    setTeamCount,
     setRoundStartRemainingMs,
     setGameOverData,
     setGameConfig,
@@ -68,9 +72,50 @@ export function useHostRoomSync({
                 setGameMode("battle-royale");
                 return;
             }
+            if (incoming === "teams") {
+                setGameMode("teams");
+                return;
+            }
             if (incoming === "classic") {
                 setGameMode("classic");
             }
+        };
+
+        const applyTeamCount = (incoming?: number) => {
+            if (typeof incoming !== "number") return;
+            if (!Number.isInteger(incoming) || incoming < 2 || incoming > 5) {
+                return;
+            }
+            setTeamCount(incoming);
+        };
+
+        const buildFallbackLeaderboard = (
+            players: Player[],
+            gameMode?: GameMode,
+        ): LeaderboardEntry[] => {
+            if (gameMode === "teams") {
+                return buildTeamLeaderboard(players);
+            }
+
+            return players
+                .map((player) => ({
+                    id: player.id,
+                    name: player.name,
+                    score: player.score ?? 0,
+                    color: player.color,
+                    alive: player.alive,
+                    socketId: player.socketId,
+                    teamId: player.teamId,
+                    kind: "player" as const,
+                }))
+                .sort(
+                    (firstPlayer, secondPlayer) =>
+                        (gameMode === "battle-royale"
+                            ? Number(secondPlayer.alive) -
+                              Number(firstPlayer.alive)
+                            : secondPlayer.score - firstPlayer.score) ||
+                        firstPlayer.name.localeCompare(secondPlayer.name),
+                );
         };
 
         const requestCreateRoom = () => {
@@ -123,27 +168,14 @@ export function useHostRoomSync({
                             }
                             applyGameMode(res.gameMode);
                             applyTargetScore(res.targetScore);
+                            applyTeamCount(res.teamCount);
                             applyGameConfig(res.gameConfig);
                             if (res.state === "finished") {
                                 setRoundStartRemainingMs(0);
-                                const fallbackLeaderboard = (res.players ?? [])
-                                    .map((player) => ({
-                                        id: player.id,
-                                        name: player.name,
-                                        score: player.score ?? 0,
-                                        color: player.color,
-                                        alive: player.alive,
-                                    }))
-                                    .sort(
-                                        (firstPlayer, secondPlayer) =>
-                                            (res.gameMode === "battle-royale"
-                                                ? Number(secondPlayer.alive) -
-                                                  Number(firstPlayer.alive)
-                                                : secondPlayer.score -
-                                                  firstPlayer.score) ||
-                                            firstPlayer.name.localeCompare(
-                                                secondPlayer.name,
-                                            ),
+                                const fallbackLeaderboard =
+                                    buildFallbackLeaderboard(
+                                        res.players ?? [],
+                                        res.gameMode,
                                     );
                                 setGameOverData({
                                     winnerId:
@@ -153,6 +185,7 @@ export function useHostRoomSync({
                                         null,
                                     gameMode: res.gameMode,
                                     targetScore: res.targetScore,
+                                    teamCount: res.teamCount,
                                     leaderboard:
                                         res.leaderboard ?? fallbackLeaderboard,
                                 });
@@ -192,11 +225,13 @@ export function useHostRoomSync({
                 players: Player[];
                 gameMode?: GameMode;
                 targetScore?: number;
+                teamCount?: number;
                 gameConfig?: GameConfig;
             }) => {
                 setPlayers(data.players);
                 applyGameMode(data.gameMode);
                 applyTargetScore(data.targetScore);
+                applyTeamCount(data.teamCount);
                 applyGameConfig(data.gameConfig);
                 setRoundStartRemainingMs(0);
             },
@@ -207,10 +242,12 @@ export function useHostRoomSync({
             (data?: {
                 gameMode?: GameMode;
                 targetScore?: number;
+                teamCount?: number;
                 gameConfig?: GameConfig;
             }) => {
                 applyGameMode(data?.gameMode);
                 applyTargetScore(data?.targetScore);
+                applyTeamCount(data?.teamCount);
                 applyGameConfig(data?.gameConfig);
                 setGameOverData(null);
                 setPlaying(true);
@@ -225,6 +262,7 @@ export function useHostRoomSync({
                 }
                 applyGameMode(state?.gameMode);
                 applyTargetScore(state?.targetScore);
+                applyTeamCount(state?.teamCount);
                 setRoundStartRemainingMs(
                     Math.max(0, state?.roundStartRemainingMs ?? 0),
                 );
@@ -237,6 +275,7 @@ export function useHostRoomSync({
         socket.on(EVENTS.GAME_OVER, (data?: GameOverPayload) => {
             applyGameMode(data?.gameMode);
             applyTargetScore(data?.targetScore);
+            applyTeamCount(data?.teamCount);
             if (data?.leaderboard && Array.isArray(data.leaderboard)) {
                 setGameOverData(data);
             }
@@ -269,6 +308,7 @@ export function useHostRoomSync({
         setStartError,
         setTargetScore,
         setGameMode,
+        setTeamCount,
         setRoundStartRemainingMs,
         setGameOverData,
         setGameConfig,

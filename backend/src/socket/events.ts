@@ -1,28 +1,23 @@
 import { Server, Socket } from "socket.io";
-import { GameMode, GameState, InputPayload, Player, RoomState } from "../types";
+import {
+    GameMode,
+    GameState,
+    InputPayload,
+    LeaderboardEntry,
+    Player,
+    RoomState,
+} from "../types";
 
 interface GameConfigPayload {
     width: number;
     height: number;
 }
 
-interface ScoreboardEntry {
-    id: string;
-    name: string;
-    score: number;
-    color?: string;
-}
-
-interface RoundLeaderboardEntry {
-    id: string;
-    name: string;
-    score: number;
-}
-
 export interface LobbyStatePayload {
     players: Player[];
     gameMode: GameMode;
     targetScore?: number;
+    teamCount?: number;
     gameConfig: GameConfigPayload;
 }
 
@@ -44,8 +39,9 @@ export interface ClientToServerEvents {
             state?: RoomState;
             gameMode?: GameMode;
             winnerId?: string | null;
-            leaderboard?: ScoreboardEntry[];
+            leaderboard?: LeaderboardEntry[];
             targetScore?: number;
+            teamCount?: number;
             gameConfig?: GameConfigPayload;
         }) => void,
     ) => void;
@@ -75,26 +71,38 @@ export interface ClientToServerEvents {
             state?: RoomState;
             gameMode?: GameMode;
             targetScore?: number;
+            teamCount?: number;
             gameConfig?: GameConfigPayload;
         }) => void,
     ) => void;
     input: (payload: InputPayload) => void;
     setGameMode: (
-        data: { roomCode: string; gameMode?: GameMode },
+        data: { roomCode: string; gameMode?: GameMode; teamCount?: number },
         cb?: (response: {
             ok: boolean;
             error?: string;
             gameMode?: GameMode;
+            teamCount?: number;
         }) => void,
     ) => void;
     startGame: (
-        data: { roomCode: string; gameMode?: GameMode },
+        data: { roomCode: string; gameMode?: GameMode; teamCount?: number },
         cb?: (response: {
             ok: boolean;
             error?: string;
             gameMode?: GameMode;
             targetScore?: number;
+            teamCount?: number;
             gameConfig?: GameConfigPayload;
+        }) => void,
+    ) => void;
+    switchTeam: (
+        data: { roomCode: string; teamId: number },
+        cb?: (response: {
+            ok: boolean;
+            error?: string;
+            player?: Player;
+            teamCount?: number;
         }) => void,
     ) => void;
     leaveRoom: (
@@ -109,6 +117,7 @@ export interface ServerToClientEvents {
     startGame: (payload: {
         gameMode: GameMode;
         targetScore?: number;
+        teamCount?: number;
         gameConfig: GameConfigPayload;
     }) => void;
     gameState: (payload: GameState) => void;
@@ -116,14 +125,15 @@ export interface ServerToClientEvents {
         winnerId: string | null;
         gameMode?: GameMode;
         eliminatedPlayerIds?: string[];
-        leaderboard?: RoundLeaderboardEntry[];
+        leaderboard?: LeaderboardEntry[];
     }) => void;
     roundRestart: () => void;
     gameOver: (payload: {
         winnerId: string | null;
         gameMode: GameMode;
         targetScore?: number;
-        leaderboard: ScoreboardEntry[];
+        teamCount?: number;
+        leaderboard: LeaderboardEntry[];
     }) => void;
     roomClosed: () => void;
 }

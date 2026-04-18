@@ -44,6 +44,61 @@
   gap: 0.9rem;
 }
 
+.lobbyState {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.lobbyMessage {
+  margin: 0;
+  text-align: center;
+  color: rgba(224, 237, 255, 0.88);
+  font-weight: 600;
+}
+
+.teamSelector {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.teamSelectorLabel {
+  margin: 0;
+  text-align: center;
+  color: rgba(183, 202, 239, 0.88);
+  font-size: 0.9rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.teamSelectorGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 0.65rem;
+}
+
+.teamButton {
+  min-height: 54px;
+  border-radius: 0.85rem;
+  border: 1px solid rgba(126, 178, 255, 0.35);
+  background: rgba(10, 17, 39, 0.76);
+  color: #eaf2ff;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 120ms ease, border-color 160ms ease, background-color 160ms ease;
+}
+
+.teamButton:hover {
+  transform: translateY(-1px);
+  border-color: rgba(151, 195, 255, 0.7);
+  background: rgba(43, 102, 255, 0.22);
+}
+
+.teamButtonActive {
+  border-color: rgba(146, 197, 255, 0.95);
+  background: rgba(43, 102, 255, 0.35);
+}
+
 .leaveWrap {
   display: flex;
   justify-content: center;

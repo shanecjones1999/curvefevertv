@@ -2,15 +2,17 @@ import type { ReactNode } from "react";
 import type { GameMode } from "../../types";
 import { FullscreenIcon, LeaveGameIcon } from "../ActionIcons";
 import HostJoinQr from "./HostJoinQr";
+import { MAX_TEAMS, MIN_TEAMS } from "../../utils/teamMode";
 
 type Props = {
     copiedCode: boolean;
     roomCode: string | null;
     joinUrl: string | null;
     gameMode: GameMode;
+    teamCount: number;
     effectiveTargetScore: number;
     playing: boolean;
-    playersCount: number;
+    canStart: boolean;
     startError: string | null;
     isFullscreen: boolean;
     isFullscreenSupported: boolean;
@@ -19,6 +21,7 @@ type Props = {
     onLeaveGame: () => void;
     onCopyGameCode: () => void;
     onGameModeChange: (gameMode: GameMode) => void;
+    onTeamCountChange: (teamCount: number) => void;
     onStartGame: () => void;
     onToggleFullscreen: () => void;
 };
@@ -28,9 +31,10 @@ export default function HostControls({
     roomCode,
     joinUrl,
     gameMode,
+    teamCount,
     effectiveTargetScore,
     playing,
-    playersCount,
+    canStart,
     startError,
     isFullscreen,
     isFullscreenSupported,
@@ -39,6 +43,7 @@ export default function HostControls({
     onLeaveGame,
     onCopyGameCode,
     onGameModeChange,
+    onTeamCountChange,
     onStartGame,
     onToggleFullscreen,
 }: Props) {
@@ -49,6 +54,8 @@ export default function HostControls({
     const scoreText =
         gameMode === "classic"
             ? `Race to ${effectiveTargetScore} pts`
+            : gameMode === "teams"
+              ? `Teams · First to ${effectiveTargetScore} pts`
             : "Battle Royale · Last player standing";
     const gameModeToggle = (
         <div
@@ -66,6 +73,14 @@ export default function HostControls({
             </button>
             <button
                 type="button"
+                className={`host-mode-option ${gameMode === "teams" ? "is-active" : ""}`}
+                onClick={() => onGameModeChange("teams")}
+                disabled={playing}
+            >
+                Teams
+            </button>
+            <button
+                type="button"
                 className={`host-mode-option ${gameMode === "battle-royale" ? "is-active" : ""}`}
                 onClick={() => onGameModeChange("battle-royale")}
                 disabled={playing}
@@ -74,6 +89,33 @@ export default function HostControls({
             </button>
         </div>
     );
+    const teamCountSelector =
+        gameMode === "teams" ? (
+            <div className="host-team-count">
+                <span className="host-team-count-label">Teams</span>
+                <div className="host-team-count-options" role="group">
+                    {Array.from(
+                        { length: MAX_TEAMS - MIN_TEAMS + 1 },
+                        (_, index) => {
+                            const value = MIN_TEAMS + index;
+                            return (
+                                <button
+                                    key={value}
+                                    type="button"
+                                    className={`host-team-count-option ${
+                                        teamCount === value ? "is-active" : ""
+                                    }`}
+                                    onClick={() => onTeamCountChange(value)}
+                                    disabled={playing}
+                                >
+                                    {value}
+                                </button>
+                            );
+                        },
+                    )}
+                </div>
+            </div>
+        ) : null;
 
     if (layout === "lobby") {
         return (
@@ -147,19 +189,20 @@ export default function HostControls({
 
                 {playersSlot}
 
-                <div className="host-lobby-action-section">
-                    <div className="host-lobby-action-row">
-                        <div className="host-lobby-game-mode">
-                            {gameModeToggle}
-                        </div>
-                        {!playing && (
-                            <button
-                                className="ui-button host-lobby-start-button"
-                                onClick={onStartGame}
-                                disabled={playersCount < 1}
-                            >
-                                Start Game
-                            </button>
+                    <div className="host-lobby-action-section">
+                        <div className="host-lobby-action-row">
+                            <div className="host-lobby-game-mode">
+                                {gameModeToggle}
+                                {teamCountSelector}
+                            </div>
+                            {!playing && (
+                                <button
+                                    className="ui-button host-lobby-start-button"
+                                    onClick={onStartGame}
+                                    disabled={!canStart}
+                                >
+                                    Start Game
+                                </button>
                         )}
                     </div>
                     {startError && <div className="error-text">{startError}</div>}
@@ -234,6 +277,7 @@ export default function HostControls({
 
                     <div className="panel-row host-mode-row">
                         {gameModeToggle}
+                        {teamCountSelector}
                     </div>
                 </div>
 
@@ -246,7 +290,7 @@ export default function HostControls({
                         <button
                             className="ui-button"
                             onClick={onStartGame}
-                            disabled={playersCount < 1}
+                            disabled={!canStart}
                         >
                             Start Game
                         </button>

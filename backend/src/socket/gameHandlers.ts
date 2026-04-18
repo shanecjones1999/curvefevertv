@@ -3,7 +3,12 @@ import {
     calculateTargetScore,
     normalizeRoomCode,
     sanitizeGameMode,
+    sanitizeTeamCount,
 } from "../domain/gameRules";
+import {
+    buildTeamLeaderboard,
+    rebalancePlayersForTeamMode,
+} from "../domain/teamMode";
 import { buildGameState, restartRound, startGameLoop } from "../gameLoop";
 import { getRoom } from "../rooms";
 import { GameMode, InputPayload } from "../types";
@@ -22,7 +27,10 @@ export function registerGameHandlers(io: TypedServer, socket: TypedSocket) {
 
     socket.on(
         "setGameMode",
-        (data: { roomCode: string; gameMode?: GameMode }, cb) => {
+        (
+            data: { roomCode: string; gameMode?: GameMode; teamCount?: number },
+            cb,
+        ) => {
             const roomCode = normalizeRoomCode(data?.roomCode);
             if (!roomCode)
                 return cb?.({
@@ -41,14 +49,29 @@ export function registerGameHandlers(io: TypedServer, socket: TypedSocket) {
             }
 
             room.gameMode = sanitizeGameMode(data?.gameMode);
+            room.teamCount = sanitizeTeamCount(data?.teamCount ?? room.teamCount);
+            if (room.gameMode === "teams") {
+                rebalancePlayersForTeamMode(
+                    Array.from(room.players.values()),
+                    room.teamCount,
+                    { preserveExisting: true },
+                );
+            }
             emitLobbyUpdate(io, room.code);
-            cb?.({ ok: true, gameMode: room.gameMode });
+            cb?.({
+                ok: true,
+                gameMode: room.gameMode,
+                teamCount: room.teamCount,
+            });
         },
     );
 
     socket.on(
         "startGame",
-        (data: { roomCode: string; gameMode?: GameMode }, cb) => {
+        (
+            data: { roomCode: string; gameMode?: GameMode; teamCount?: number },
+            cb,
+        ) => {
             const roomCode = normalizeRoomCode(data?.roomCode);
             if (!roomCode)
                 return cb?.({
@@ -65,14 +88,32 @@ export function registerGameHandlers(io: TypedServer, socket: TypedSocket) {
 
             const gameMode = sanitizeGameMode(data?.gameMode);
             room.gameMode = gameMode;
+            room.teamCount = sanitizeTeamCount(data?.teamCount ?? room.teamCount);
+
+            const players = Array.from(room.players.values());
+            if (gameMode === "teams") {
+                rebalancePlayersForTeamMode(players, room.teamCount, {
+                    preserveExisting: true,
+                });
+                const activeTeamCount = buildTeamLeaderboard(players).length;
+                if (activeTeamCount < 2) {
+                    return cb?.({
+                        ok: false,
+                        error: "Need players on at least 2 teams",
+                    });
+                }
+            }
 
             const targetScore =
-                gameMode === "classic"
-                    ? calculateTargetScore(room.players.size)
-                    : undefined;
+                gameMode === "battle-royale"
+                    ? undefined
+                    : calculateTargetScore(
+                          gameMode === "teams"
+                              ? buildTeamLeaderboard(players).length
+                              : room.players.size,
+                      );
             room.targetScore = targetScore;
             room.battleRoyaleEliminatedPlayerIds = new Set<string>();
-            const players = Array.from(room.players.values());
             for (const player of players) {
                 player.score = 0;
             }
@@ -85,6 +126,7 @@ export function registerGameHandlers(io: TypedServer, socket: TypedSocket) {
             io.to(room.code).emit("startGame", {
                 gameMode,
                 targetScore,
+                teamCount: room.teamCount,
                 gameConfig: {
                     width: GAME_WIDTH,
                     height: GAME_HEIGHT,
@@ -98,6 +140,7 @@ export function registerGameHandlers(io: TypedServer, socket: TypedSocket) {
                 ok: true,
                 gameMode,
                 targetScore,
+                teamCount: room.teamCount,
                 gameConfig: {
                     width: GAME_WIDTH,
                     height: GAME_HEIGHT,

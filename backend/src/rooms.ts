@@ -1,4 +1,5 @@
 import { Room, Player } from "./types";
+import { DEFAULT_TEAM_COUNT } from "./domain/teamMode";
 
 const rooms = new Map<string, Room>();
 const ROOM_CODE_LENGTH = 4;
@@ -28,6 +29,7 @@ export function createRoom(hostSocketId: string) {
         state: "lobby",
         targetScore: undefined,
         gameMode: "classic",
+        teamCount: DEFAULT_TEAM_COUNT,
         battleRoyaleEliminatedPlayerIds: new Set<string>(),
         game: null,
     };

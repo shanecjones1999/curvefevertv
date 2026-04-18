@@ -1,6 +1,6 @@
 # Curvefever TV — Design Document
 
-Last updated: 2026-03-18
+Last updated: 2026-04-18
 
 ## 1. Product Summary
 
@@ -21,6 +21,7 @@ Curvefever TV is a real-time multiplayer party game where:
 - Lobby updates with connection status
 - Two game modes:
   - `classic` (score race to target score)
+  - `teams` (host-selectable 2-5 teams with team scoring)
   - `battle-royale` (elimination until one remains)
 - Real-time game loop with collision detection
 - Round-over + delayed round restart
@@ -109,6 +110,7 @@ flowchart LR
 ### Player
 
 - `id`, `name`, `score`
+- `teamId` when the room is in team mode
 - `socketId` (nullable for disconnected players)
 - `alive`, `x`, `y`, `direction`, `speed`
 - Trail + gap fields used by server simulation
@@ -117,8 +119,9 @@ flowchart LR
 ### Room
 
 - `code`, `hostSocketId`, `players`, `state`
-- `gameMode`: `classic | battle-royale`
-- `targetScore` for classic mode
+- `gameMode`: `classic | teams | battle-royale`
+- `teamCount` for team mode (host-configurable `2-5`)
+- `targetScore` for score-race modes (`classic` and `teams`)
 - `battleRoyaleEliminatedPlayerIds` set
 - `game` snapshot reference (nullable)
 
@@ -133,6 +136,7 @@ flowchart LR
 - `requestLobbyState`
 - `input`
 - `setGameMode`
+- `switchTeam`
 - `startGame`
 - `leaveRoom`
 
@@ -182,6 +186,16 @@ flowchart LR
 - Round restarts continue until one survivor remains
 - On final survivor, emit `gameOver`
 
+### Teams
+
+- Host chooses `2-5` teams in the lobby
+- Joining players are auto-balanced to the team with the fewest players
+- Controllers can switch teams only while the room is in the lobby
+- Reducing the team count rebalances players from removed teams into remaining teams
+- Team leaderboard entries are shown for teams with at least one player
+- A surviving team gains `1` point each time another team is fully eliminated
+- Target score uses the classic formula with active team count instead of player count
+
 ## 9. Session + Reconnect Behavior
 
 - Host stores room session in localStorage (`curvefever:hostSession`)
@@ -201,4 +215,3 @@ flowchart LR
 - No anti-lag interpolation or client prediction layer yet
 - No replay or telemetry pipeline
 - No auth/rate-limiting protections for public deployment
-

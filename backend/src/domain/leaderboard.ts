@@ -1,16 +1,9 @@
-import { Player } from "../types";
-
-type ScoreboardEntry = {
-    id: string;
-    name: string;
-    score: number;
-    color?: string;
-};
+import { LeaderboardEntry, Player } from "../types";
 
 export function buildBattleRoyaleLeaderboard(
     players: Player[],
     eliminatedPlayerIds?: Iterable<string>,
-): ScoreboardEntry[] {
+): LeaderboardEntry[] {
     const eliminationOrder = Array.from(eliminatedPlayerIds ?? []);
     const eliminationIndexByPlayerId = new Map(
         eliminationOrder.map((playerId, index) => [playerId, index]),
@@ -22,6 +15,8 @@ export function buildBattleRoyaleLeaderboard(
             name: player.name,
             score: eliminationIndexByPlayerId.has(player.id) ? 0 : 1,
             color: player.color,
+            alive: !eliminationIndexByPlayerId.has(player.id),
+            kind: "player" as const,
         }))
         .sort((firstPlayer, secondPlayer) => {
             const firstEliminationIndex = eliminationIndexByPlayerId.get(
@@ -49,13 +44,15 @@ export function buildBattleRoyaleLeaderboard(
         });
 }
 
-export function buildClassicLeaderboard(players: Player[]): ScoreboardEntry[] {
+export function buildClassicLeaderboard(players: Player[]): LeaderboardEntry[] {
     return players
         .map((player) => ({
             id: player.id,
             name: player.name,
             score: player.score ?? 0,
             color: player.color,
+            alive: player.alive,
+            kind: "player" as const,
         }))
         .sort((firstPlayer, secondPlayer) => {
             if (secondPlayer.score !== firstPlayer.score) {

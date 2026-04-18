@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import socket from "./socket";
 import { EVENTS } from "./events";
-import type { GameMode, Player } from "./types";
+import type { GameMode, LeaderboardEntry, Player } from "./types";
 import PhaserGame from "./PhaserGame";
 import { DEFAULT_GAME_HEIGHT, DEFAULT_GAME_WIDTH } from "./gameConfig";
 import { PLAYER_COLORS, DISCONNECTED_DOT_COLOR } from "./constants/gameUi";
@@ -13,11 +13,13 @@ import HostGameOverOverlay from "./components/host/HostGameOverOverlay";
 import type { GameConfig, GameOverPayload } from "./components/host/types";
 import { useHostRoomSync } from "./hooks/useHostRoomSync";
 import { buildPlayerJoinUrl } from "./utils/joinLink";
+import { buildTeamLeaderboard, DEFAULT_TEAM_COUNT, getActiveTeamCount } from "./utils/teamMode";
 
 type StartGameResponse = {
     ok: boolean;
     gameMode?: GameMode;
     targetScore?: number;
+    teamCount?: number;
     gameConfig?: GameConfig;
     error?: string;
 };
@@ -25,6 +27,7 @@ type StartGameResponse = {
 type SetGameModeResponse = {
     ok: boolean;
     gameMode?: GameMode;
+    teamCount?: number;
     error?: string;
 };
 
@@ -65,6 +68,7 @@ export default function Host({ onLeave }: Props) {
     const [copiedCode, setCopiedCode] = useState(false);
     const [targetScore, setTargetScore] = useState<number | null>(null);
     const [gameMode, setGameMode] = useState<GameMode>("classic");
+    const [teamCount, setTeamCount] = useState(DEFAULT_TEAM_COUNT);
     const [roundStartRemainingMs, setRoundStartRemainingMs] = useState(0);
     const [gameOverData, setGameOverData] = useState<GameOverPayload | null>(
         null,
@@ -130,22 +134,54 @@ export default function Host({ onLeave }: Props) {
     };
 
     const leaderboard = useMemo(() => {
-        return [...players].sort((firstPlayer, secondPlayer) => {
-            if (gameMode === "battle-royale") {
+        if (gameMode === "teams") {
+            return buildTeamLeaderboard(players);
+        }
+
+        return [...players]
+            .map((player) => ({
+                id: player.id,
+                name: player.name,
+                score: player.score,
+                color: player.color,
+                alive: player.alive,
+                socketId: player.socketId,
+                teamId: player.teamId,
+                kind: "player" as const,
+            }))
+            .sort((firstPlayer, secondPlayer) => {
+                if (gameMode === "battle-royale") {
+                    return (
+                        Number(secondPlayer.alive) - Number(firstPlayer.alive) ||
+                        firstPlayer.name.localeCompare(secondPlayer.name)
+                    );
+                }
+
                 return (
-                    Number(secondPlayer.alive) - Number(firstPlayer.alive) ||
+                    secondPlayer.score - firstPlayer.score ||
                     firstPlayer.name.localeCompare(secondPlayer.name)
                 );
-            }
-
-            return (
-                secondPlayer.score - firstPlayer.score ||
-                firstPlayer.name.localeCompare(secondPlayer.name)
-            );
-        });
+            });
     }, [gameMode, players]);
+    const activeTeamCount = useMemo(() => getActiveTeamCount(players), [players]);
+    const teamPlayersByTeamId = useMemo(() => {
+        const groupedPlayers = new Map<number, Player[]>();
+        for (const player of players) {
+            if (typeof player.teamId !== "number") continue;
+            const teamPlayers = groupedPlayers.get(player.teamId) ?? [];
+            teamPlayers.push(player);
+            groupedPlayers.set(player.teamId, teamPlayers);
+        }
+        return groupedPlayers;
+    }, [players]);
+    const canStart =
+        gameMode === "teams" ? activeTeamCount >= 2 : players.length >= 1;
     const effectiveTargetScore =
-        targetScore ?? Math.max(10, players.length * 10 - 10);
+        targetScore ??
+        Math.max(
+            10,
+            (gameMode === "teams" ? activeTeamCount : players.length) * 10 - 10,
+        );
     const joinUrl = useMemo(() => {
         if (!roomCode) {
             return null;
@@ -161,7 +197,10 @@ export default function Host({ onLeave }: Props) {
 
         return source.map((entry, index) => {
             const fallbackColor = PLAYER_COLORS[index % PLAYER_COLORS.length];
-            const colorFromPlayer = playerColorById.get(entry.id);
+            const colorFromPlayer =
+                entry.kind === "team"
+                    ? entry.color
+                    : playerColorById.get(entry.id);
             const hasValidEntryColor =
                 typeof entry.color === "string" && /^#/.test(entry.color);
             return {
@@ -188,6 +227,7 @@ export default function Host({ onLeave }: Props) {
         setStartError,
         setTargetScore,
         setGameMode,
+        setTeamCount,
         setRoundStartRemainingMs,
         setGameOverData,
         setGameConfig,
@@ -235,7 +275,7 @@ export default function Host({ onLeave }: Props) {
         if (!roomCode) return;
         socket.emit(
             "startGame",
-            { roomCode, gameMode },
+            { roomCode, gameMode, teamCount },
             (res: StartGameResponse) => {
                 if (res?.ok) {
                     setStartError(null);
@@ -245,6 +285,9 @@ export default function Host({ onLeave }: Props) {
                     }
                     if (typeof res.targetScore === "number") {
                         setTargetScore(Math.floor(res.targetScore));
+                    }
+                    if (typeof res.teamCount === "number") {
+                        setTeamCount(res.teamCount);
                     }
                     if (res.gameConfig) {
                         setGameConfig(res.gameConfig);
@@ -264,7 +307,7 @@ export default function Host({ onLeave }: Props) {
 
         socket.emit(
             EVENTS.SET_GAME_MODE,
-            { roomCode, gameMode: nextGameMode },
+            { roomCode, gameMode: nextGameMode, teamCount },
             (res: SetGameModeResponse) => {
                 if (!res?.ok) {
                     setStartError(res?.error ?? "Unable to update game mode");
@@ -273,6 +316,32 @@ export default function Host({ onLeave }: Props) {
                 setStartError(null);
                 if (res.gameMode) {
                     setGameMode(res.gameMode);
+                }
+                if (typeof res.teamCount === "number") {
+                    setTeamCount(res.teamCount);
+                }
+            },
+        );
+    }
+
+    function handleTeamCountChange(nextTeamCount: number) {
+        setTeamCount(nextTeamCount);
+
+        if (!roomCode || playing || gameMode !== "teams") return;
+
+        socket.emit(
+            EVENTS.SET_GAME_MODE,
+            { roomCode, gameMode, teamCount: nextTeamCount },
+            (res: SetGameModeResponse) => {
+                if (!res?.ok) {
+                    setStartError(
+                        res?.error ?? "Unable to update number of teams",
+                    );
+                    return;
+                }
+                setStartError(null);
+                if (typeof res.teamCount === "number") {
+                    setTeamCount(res.teamCount);
                 }
             },
         );
@@ -291,9 +360,31 @@ export default function Host({ onLeave }: Props) {
         setRoomCode(null);
         setPlayers([]);
         setPlaying(false);
+        setTargetScore(null);
+        setGameMode("classic");
+        setTeamCount(DEFAULT_TEAM_COUNT);
+        setGameOverData(null);
         setRoundStartRemainingMs(0);
         onLeave();
     }
+
+    const getLeaderboardRowClassName = (entry: LeaderboardEntry) => {
+        if (entry.kind === "team") {
+            return `player-row ${entry.alive ? "" : "player-row-eliminated"}`.trim();
+        }
+
+        const player = players.find((candidate) => candidate.id === entry.id);
+        return player ? getPlayerRowClassName(player) : "player-row";
+    };
+
+    const getLeaderboardDotColor = (entry: LeaderboardEntry) => {
+        if (entry.kind === "team" && entry.color) {
+            return entry.color;
+        }
+
+        const player = players.find((candidate) => candidate.id === entry.id);
+        return player ? getPlayerDotColor(player) : entry.color ?? PLAYER_COLORS[0];
+    };
 
     async function handleFullscreenToggle() {
         const fullscreenDocument = document as FullscreenCapableDocument;
@@ -364,9 +455,10 @@ export default function Host({ onLeave }: Props) {
             roomCode={roomCode}
             joinUrl={joinUrl}
             gameMode={gameMode}
+            teamCount={teamCount}
             effectiveTargetScore={effectiveTargetScore}
             playing={playing}
-            playersCount={players.length}
+            canStart={canStart}
             startError={startError}
             isFullscreen={isFullscreen}
             isFullscreenSupported={isFullscreenSupported}
@@ -376,6 +468,8 @@ export default function Host({ onLeave }: Props) {
                     <HostPlayerList
                         className="host-lobby-player-panel"
                         players={players}
+                        gameMode={gameMode}
+                        teamCount={teamCount}
                         getPlayerRowClassName={getPlayerRowClassName}
                         getPlayerDotColor={getPlayerDotColor}
                     />
@@ -384,6 +478,7 @@ export default function Host({ onLeave }: Props) {
             onLeaveGame={handleLeaveGame}
             onCopyGameCode={handleCopyGameCode}
             onGameModeChange={handleGameModeChange}
+            onTeamCountChange={handleTeamCountChange}
             onStartGame={handleStartGame}
             onToggleFullscreen={handleFullscreenToggle}
         />
@@ -415,14 +510,19 @@ export default function Host({ onLeave }: Props) {
                     <HostLeaderboard
                         leaderboard={leaderboard}
                         gameMode={gameMode}
-                        getPlayerRowClassName={getPlayerRowClassName}
-                        getPlayerDotColor={getPlayerDotColor}
+                        getRowClassName={getLeaderboardRowClassName}
+                        getDotColor={getLeaderboardDotColor}
+                        getTeamPlayers={(teamId) =>
+                            teamPlayersByTeamId.get(teamId) ?? []
+                        }
                     />
                 </div>
 
                 <div className="game-stage">
                     <PhaserGame
                         players={players}
+                        gameMode={gameMode}
+                        showTeamLabels={gameMode === "teams" && roundStartCountdown > 0}
                         width={gameConfig.width}
                         height={gameConfig.height}
                     />

@@ -1,15 +1,22 @@
 import { useEffect, useRef } from "react";
 import Phaser from "phaser";
-import type { Player } from "./types";
+import type { GameMode, Player } from "./types";
 import {
     DEFAULT_GAME_HEIGHT,
     DEFAULT_GAME_WIDTH,
     PLAYER_TRAIL_WIDTH,
 } from "./gameConfig";
 import { PLAYER_COLORS } from "./constants/gameUi";
+import {
+    getTeamColor,
+    getTeamLabel,
+    getTeamSymbol,
+} from "./utils/teamMode";
 
 interface PhaserGameProps {
     players: Player[];
+    gameMode?: GameMode;
+    showTeamLabels?: boolean;
     width?: number;
     height?: number;
     className?: string;
@@ -18,6 +25,10 @@ interface PhaserGameProps {
 class CurvefeverScene extends Phaser.Scene {
     players: Player[] = [];
     playerSprites: Map<string, Phaser.GameObjects.Graphics> = new Map();
+    teamMode = false;
+    showTeamLabels = false;
+    markerTexts: Map<string, Phaser.GameObjects.Text> = new Map();
+    playerLabels: Map<string, Phaser.GameObjects.Text> = new Map();
 
     constructor() {
         super("CurvefeverScene");
@@ -25,6 +36,8 @@ class CurvefeverScene extends Phaser.Scene {
 
     create() {
         this.playerSprites.clear();
+        this.markerTexts.clear();
+        this.playerLabels.clear();
         this.cameras.main.setBackgroundColor("#222");
         // Defensive: always use array
         const players = Array.isArray(this.players) ? this.players : [];
@@ -45,6 +58,11 @@ class CurvefeverScene extends Phaser.Scene {
         // Do not call updatePlayers here; let React effect call it after scene is ready
     }
 
+    setDisplayMode(gameMode?: GameMode, showTeamLabels = false) {
+        this.teamMode = gameMode === "teams";
+        this.showTeamLabels = showTeamLabels;
+    }
+
     updatePlayers(players: Player[] = []) {
         if (!this.add) return;
         this.players = Array.isArray(players) ? players : [];
@@ -54,12 +72,22 @@ class CurvefeverScene extends Phaser.Scene {
         );
 
         for (const [key, graphic] of this.playerSprites.entries()) {
-            const playerId = key.endsWith("_trail")
-                ? key.slice(0, -"_trail".length)
-                : key;
+            const playerId = key.replace(/_trail$/, "");
             if (!incomingPlayerIds.has(playerId)) {
                 graphic.destroy();
                 this.playerSprites.delete(key);
+            }
+        }
+        for (const [playerId, markerText] of this.markerTexts.entries()) {
+            if (!incomingPlayerIds.has(playerId)) {
+                markerText.destroy();
+                this.markerTexts.delete(playerId);
+            }
+        }
+        for (const [playerId, playerLabel] of this.playerLabels.entries()) {
+            if (!incomingPlayerIds.has(playerId)) {
+                playerLabel.destroy();
+                this.playerLabels.delete(playerId);
             }
         }
 
@@ -104,6 +132,51 @@ class CurvefeverScene extends Phaser.Scene {
             g.fillCircle(0, 0, 8);
             g.x = p.x;
             g.y = p.y;
+
+            if (this.teamMode && typeof p.teamId === "number") {
+                let markerText = this.markerTexts.get(p.id);
+                if (!markerText) {
+                    markerText = this.add.text(0, 0, "", {
+                        color: getTeamColor(p.teamId),
+                        fontFamily:
+                            '"Inter", "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
+                        fontSize: "18px",
+                        fontStyle: "700",
+                        stroke: "#041122",
+                        strokeThickness: 4,
+                    });
+                    markerText.setOrigin(0.5, 1);
+                    this.markerTexts.set(p.id, markerText);
+                }
+                markerText.setText(getTeamSymbol(p.teamId));
+                markerText.setColor(getTeamColor(p.teamId));
+                markerText.setPosition(p.x, p.y - 14);
+                markerText.setVisible(true);
+
+                let playerLabel = this.playerLabels.get(p.id);
+                if (!playerLabel) {
+                    playerLabel = this.add.text(0, 0, "", {
+                        color: "#eef6ff",
+                        fontFamily:
+                            '"Inter", "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
+                        fontSize: "12px",
+                        fontStyle: "600",
+                        align: "center",
+                        stroke: "#041122",
+                        strokeThickness: 4,
+                    });
+                    playerLabel.setOrigin(0.5, 1);
+                    this.playerLabels.set(p.id, playerLabel);
+                }
+                playerLabel.setText(
+                    `${p.name} ${getTeamSymbol(p.teamId)} ${getTeamLabel(p.teamId)}`,
+                );
+                playerLabel.setPosition(p.x, p.y - 34);
+                playerLabel.setVisible(this.showTeamLabels);
+            } else {
+                this.markerTexts.get(p.id)?.setVisible(false);
+                this.playerLabels.get(p.id)?.setVisible(false);
+            }
         });
     }
 
@@ -114,6 +187,8 @@ class CurvefeverScene extends Phaser.Scene {
 
 export default function PhaserGame({
     players,
+    gameMode,
+    showTeamLabels = false,
     width = DEFAULT_GAME_WIDTH,
     height = DEFAULT_GAME_HEIGHT,
     className,
@@ -149,6 +224,13 @@ export default function PhaserGame({
             phaserRef.current = null;
         };
     }, [width, height]);
+
+    useEffect(() => {
+        if (sceneRef.current) {
+            sceneRef.current.setDisplayMode(gameMode, showTeamLabels);
+            sceneRef.current.updatePlayers(players);
+        }
+    }, [gameMode, players, showTeamLabels]);
 
     useEffect(() => {
         // Only update players if scene and playerSprites are ready

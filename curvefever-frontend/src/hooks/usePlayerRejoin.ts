@@ -21,6 +21,7 @@ type JoinRoomResponse = {
 type UsePlayerRejoinParams = {
     storedSession: PlayerSession | null;
     playerIdRef: React.MutableRefObject<string | null>;
+    setPlayerId: React.Dispatch<React.SetStateAction<string | null>>;
     stopSendingInput: () => void;
     onLeave: () => void;
     setJoined: React.Dispatch<React.SetStateAction<boolean>>;
@@ -31,6 +32,7 @@ type UsePlayerRejoinParams = {
 export function usePlayerRejoin({
     storedSession,
     playerIdRef,
+    setPlayerId,
     stopSendingInput,
     onLeave,
     setJoined,
@@ -53,6 +55,7 @@ export function usePlayerRejoin({
             rejoinResolved = true;
             clearRejoinTimeout();
             playerIdRef.current = null;
+            setPlayerId(null);
             setJoined(false);
             setIsRejoining(false);
             setRejoinError(message);
@@ -104,6 +107,7 @@ export function usePlayerRejoin({
                         );
                         rejoinResolved = true;
                         playerIdRef.current = res.player.id;
+                        setPlayerId(res.player.id);
                         setJoined(true);
                         setIsRejoining(false);
                         setRejoinError(null);
@@ -155,6 +159,7 @@ export function usePlayerRejoin({
         const handleRoomClosed = () => {
             alert("Room has been closed by the host.");
             playerIdRef.current = null;
+            setPlayerId(null);
             setJoined(false);
             setIsRejoining(false);
             localStorage.removeItem(PLAYER_SESSION_KEY);
@@ -172,6 +177,7 @@ export function usePlayerRejoin({
     }, [
         storedSession,
         playerIdRef,
+        setPlayerId,
         stopSendingInput,
         onLeave,
         setJoined,

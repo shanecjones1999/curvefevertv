@@ -7,10 +7,12 @@ import {
     MIN_SPAWN_DISTANCE,
     SPAWN_WALL_MARGIN,
 } from "./config";
+import { calculateTargetScore } from "./domain/gameRules";
 import {
     buildBattleRoyaleLeaderboard,
     buildClassicLeaderboard,
 } from "./domain/leaderboard";
+import { buildTeamLeaderboard, getAliveTeamIds } from "./domain/teamMode";
 
 const TICK_RATE = 60;
 const MS_PER_TICK = 1000 / TICK_RATE;
@@ -28,10 +30,6 @@ const roundStartFreezeUntilMap = new Map<string, number>();
 const ROUND_RESTART_DELAY_MS = 2000;
 const pendingRoundRestartMap = new Map<string, NodeJS.Timeout>();
 const MAX_SPAWN_ATTEMPTS = 40;
-
-function calculateTargetScore(playerCount: number) {
-    return Math.max(10, playerCount * 10 - 10);
-}
 
 function randomCoordinateAwayFromWalls(arenaSize: number, wallMargin: number) {
     const usableSize = arenaSize - wallMargin * 2;
@@ -274,6 +272,7 @@ export function buildGameState(roomCode: string): GameState | null {
         score: p.score ?? 0,
         socketId: p.socketId,
         color: p.color,
+        teamId: p.teamId,
         alive: p.alive,
         x: p.x,
         y: p.y,
@@ -296,9 +295,16 @@ export function buildGameState(roomCode: string): GameState | null {
         players,
         gameMode: room.gameMode,
         targetScore:
-            room.gameMode === "classic"
-                ? (room.targetScore ?? calculateTargetScore(room.players.size))
-                : undefined,
+            room.gameMode === "battle-royale"
+                ? undefined
+                : room.targetScore ??
+                  calculateTargetScore(
+                      room.gameMode === "teams"
+                          ? buildTeamLeaderboard(Array.from(room.players.values()))
+                                .length
+                          : room.players.size,
+                  ),
+        teamCount: room.teamCount,
         roundStartRemainingMs,
     };
 }
@@ -597,6 +603,9 @@ export function startGameLoop(roomCode: string, io: TypedServer) {
 
         // Check for collisions and determine round winner
         const players = Array.from(room.players.values());
+        const aliveTeamIdsBeforeDeath = new Set(
+            getAliveTeamIds(players.filter((player) => player.alive)),
+        );
         const { deadPlayers: deadPlayerIds, deathReasons } = detectCollisions(
             players,
             graceTicksRemaining,
@@ -613,6 +622,7 @@ export function startGameLoop(roomCode: string, io: TypedServer) {
             }
 
             const isBattleRoyale = room.gameMode === "battle-royale";
+            const isTeamMode = room.gameMode === "teams";
 
             if (isBattleRoyale) {
                 const eliminatedPlayerIds =
@@ -671,6 +681,91 @@ export function startGameLoop(roomCode: string, io: TypedServer) {
                     }, ROUND_RESTART_DELAY_MS);
 
                     pendingRoundRestartMap.set(roomCode, restartHandle);
+                }
+
+                if (shouldBroadcastState) {
+                    emitGameState(roomCode, io);
+                }
+                return;
+            }
+
+            if (isTeamMode) {
+                const aliveTeamIds = new Set(
+                    getAliveTeamIds(players.filter((player) => player.alive)),
+                );
+                const newlyEliminatedTeamIds = Array.from(
+                    aliveTeamIdsBeforeDeath,
+                ).filter((teamId) => !aliveTeamIds.has(teamId));
+
+                if (newlyEliminatedTeamIds.length > 0 && aliveTeamIds.size > 0) {
+                    for (const player of players) {
+                        if (
+                            typeof player.teamId === "number" &&
+                            aliveTeamIds.has(player.teamId)
+                        ) {
+                            player.score =
+                                (player.score ?? 0) +
+                                newlyEliminatedTeamIds.length;
+                        }
+                    }
+                }
+
+                const sortedLeaderboard = buildTeamLeaderboard(players);
+                const targetScore =
+                    room.targetScore ??
+                    calculateTargetScore(sortedLeaderboard.length);
+                room.targetScore = targetScore;
+
+                if (sortedLeaderboard.some((team) => team.score >= targetScore)) {
+                    room.state = "finished";
+                    io.to(roomCode).emit("gameOver", {
+                        winnerId: sortedLeaderboard[0]?.id ?? null,
+                        gameMode: room.gameMode,
+                        targetScore,
+                        teamCount: room.teamCount,
+                        leaderboard: sortedLeaderboard,
+                    });
+                    stopGameLoop(roomCode);
+                    return;
+                }
+
+                if (aliveTeamIds.size <= 1 && sortedLeaderboard.length >= 1) {
+                    if (!pendingRoundRestartMap.has(roomCode)) {
+                        const winningTeamId = Array.from(aliveTeamIds)[0];
+
+                        io.to(roomCode).emit("roundOver", {
+                            winnerId:
+                                typeof winningTeamId === "number"
+                                    ? `team-${winningTeamId}`
+                                    : null,
+                            gameMode: room.gameMode,
+                            leaderboard: sortedLeaderboard,
+                        });
+
+                        const restartHandle = setTimeout(() => {
+                            pendingRoundRestartMap.delete(roomCode);
+                            const latestRoom = getRoom(roomCode);
+                            if (!latestRoom) return;
+
+                            const latestPlayers = Array.from(
+                                latestRoom.players.values(),
+                            );
+                            restartRound(latestPlayers);
+                            restartGraceMap.set(roomCode, restartGracePeriod);
+                            roundStartNoTrailMap.set(
+                                roomCode,
+                                ROUND_START_NO_TRAIL_TICKS,
+                            );
+                            roundStartFreezeUntilMap.set(
+                                roomCode,
+                                Date.now() + ROUND_START_FREEZE_MS,
+                            );
+                            io.to(roomCode).emit("roundRestart");
+                            emitGameState(roomCode, io);
+                        }, ROUND_RESTART_DELAY_MS);
+
+                        pendingRoundRestartMap.set(roomCode, restartHandle);
+                    }
                 }
 
                 if (shouldBroadcastState) {

@@ -3,8 +3,10 @@ export const EVENTS = {
     INPUT: "input",
     CREATE_ROOM: "createRoom",
     JOIN_ROOM: "joinRoom",
+    REQUEST_LOBBY_STATE: "requestLobbyState",
     START_GAME: "startGame",
     SET_GAME_MODE: "setGameMode",
+    SWITCH_TEAM: "switchTeam",
     LEAVE_ROOM: "leaveRoom",
 
     // Server -> Client

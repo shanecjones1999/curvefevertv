@@ -54,6 +54,13 @@ export function registerLobbyHandlers(io: TypedServer, socket: TypedSocket) {
                       )
                     : buildClassicLeaderboard(players)
                 : undefined;
+        const winnerId =
+            room.state === "finished" && room.gameMode === "battle-royale"
+                ? players.find(
+                      (player) =>
+                          !room.battleRoyaleEliminatedPlayerIds?.has(player.id),
+                  )?.id ?? null
+                : leaderboard?.[0]?.id ?? null;
 
         cb?.({
             ok: true,
@@ -61,7 +68,7 @@ export function registerLobbyHandlers(io: TypedServer, socket: TypedSocket) {
             players,
             state: room.state,
             gameMode: room.gameMode,
-            winnerId: leaderboard?.[0]?.id ?? null,
+            winnerId,
             leaderboard,
             targetScore:
                 room.gameMode === "classic"

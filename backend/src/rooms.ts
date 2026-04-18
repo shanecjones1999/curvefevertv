@@ -1,5 +1,5 @@
-import { Room, Player } from "./types";
-import { DEFAULT_TEAM_COUNT } from "./domain/teamMode";
+import { Room, Player, GameMode } from "./types";
+import { DEFAULT_TEAM_COUNT, sanitizeGameMode, sanitizeTeamCount } from "./domain/gameRules";
 
 const rooms = new Map<string, Room>();
 const ROOM_CODE_LENGTH = 4;
@@ -14,7 +14,12 @@ function generateRoomCode() {
     return code;
 }
 
-export function createRoom(hostSocketId: string) {
+type CreateRoomOptions = {
+    gameMode?: GameMode;
+    teamCount?: number;
+};
+
+export function createRoom(hostSocketId: string, options?: CreateRoomOptions) {
     let code = generateRoomCode();
     let tries = 0;
     while (rooms.has(code) && tries < 5) {
@@ -28,8 +33,8 @@ export function createRoom(hostSocketId: string) {
         players: new Map<string, Player>(),
         state: "lobby",
         targetScore: undefined,
-        gameMode: "classic",
-        teamCount: DEFAULT_TEAM_COUNT,
+        gameMode: sanitizeGameMode(options?.gameMode),
+        teamCount: sanitizeTeamCount(options?.teamCount ?? DEFAULT_TEAM_COUNT),
         battleRoyaleEliminatedPlayerIds: new Set<string>(),
         game: null,
     };

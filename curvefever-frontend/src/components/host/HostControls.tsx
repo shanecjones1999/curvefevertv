@@ -2,7 +2,6 @@ import type { ReactNode } from "react";
 import type { GameMode } from "../../types";
 import { FullscreenIcon, LeaveGameIcon } from "../ActionIcons";
 import HostJoinQr from "./HostJoinQr";
-import { MAX_TEAMS, MIN_TEAMS } from "../../utils/teamMode";
 
 type Props = {
     copiedCode: boolean;
@@ -19,9 +18,8 @@ type Props = {
     layout?: "lobby" | "sidebar";
     playersSlot?: ReactNode;
     onLeaveGame: () => void;
+    onChangeMode: () => void;
     onCopyGameCode: () => void;
-    onGameModeChange: (gameMode: GameMode) => void;
-    onTeamCountChange: (teamCount: number) => void;
     onStartGame: () => void;
     onToggleFullscreen: () => void;
 };
@@ -41,9 +39,8 @@ export default function HostControls({
     layout = "sidebar",
     playersSlot = null,
     onLeaveGame,
+    onChangeMode,
     onCopyGameCode,
-    onGameModeChange,
-    onTeamCountChange,
     onStartGame,
     onToggleFullscreen,
 }: Props) {
@@ -56,66 +53,13 @@ export default function HostControls({
             ? `Race to ${effectiveTargetScore} pts`
             : gameMode === "teams"
               ? `Teams · First to ${effectiveTargetScore} pts`
-            : "Battle Royale · Last player standing";
-    const gameModeToggle = (
-        <div
-            className="host-mode-toggle"
-            role="group"
-            aria-label="Select game mode"
-        >
-            <button
-                type="button"
-                className={`host-mode-option ${gameMode === "classic" ? "is-active" : ""}`}
-                onClick={() => onGameModeChange("classic")}
-                disabled={playing}
-            >
-                Classic
-            </button>
-            <button
-                type="button"
-                className={`host-mode-option ${gameMode === "teams" ? "is-active" : ""}`}
-                onClick={() => onGameModeChange("teams")}
-                disabled={playing}
-            >
-                Teams
-            </button>
-            <button
-                type="button"
-                className={`host-mode-option ${gameMode === "battle-royale" ? "is-active" : ""}`}
-                onClick={() => onGameModeChange("battle-royale")}
-                disabled={playing}
-            >
-                Battle Royale
-            </button>
-        </div>
-    );
-    const teamCountSelector =
-        gameMode === "teams" ? (
-            <div className="host-team-count">
-                <span className="host-team-count-label">Teams</span>
-                <div className="host-team-count-options" role="group">
-                    {Array.from(
-                        { length: MAX_TEAMS - MIN_TEAMS + 1 },
-                        (_, index) => {
-                            const value = MIN_TEAMS + index;
-                            return (
-                                <button
-                                    key={value}
-                                    type="button"
-                                    className={`host-team-count-option ${
-                                        teamCount === value ? "is-active" : ""
-                                    }`}
-                                    onClick={() => onTeamCountChange(value)}
-                                    disabled={playing}
-                                >
-                                    {value}
-                                </button>
-                            );
-                        },
-                    )}
-                </div>
-            </div>
-        ) : null;
+              : "Battle Royale · Last player standing";
+    const gameModeText =
+        gameMode === "classic"
+            ? "Classic"
+            : gameMode === "teams"
+              ? `Teams${teamCount > 0 ? ` · ${teamCount} teams` : ""}`
+              : "Battle Royale";
 
     if (layout === "lobby") {
         return (
@@ -189,20 +133,27 @@ export default function HostControls({
 
                 {playersSlot}
 
-                    <div className="host-lobby-action-section">
-                        <div className="host-lobby-action-row">
-                            <div className="host-lobby-game-mode">
-                                {gameModeToggle}
-                                {teamCountSelector}
-                            </div>
-                            {!playing && (
-                                <button
-                                    className="ui-button host-lobby-start-button"
-                                    onClick={onStartGame}
-                                    disabled={!canStart}
-                                >
-                                    Start Game
-                                </button>
+                <div className="host-lobby-action-section">
+                    <div className="host-lobby-action-row">
+                        <button
+                            className="ui-button ui-button-secondary host-lobby-change-mode-button"
+                            onClick={onChangeMode}
+                        >
+                            <span className="host-lobby-setup-button-label">
+                                Game Setup
+                            </span>
+                            <span className="host-lobby-setup-button-value">
+                                {gameModeText}
+                            </span>
+                        </button>
+                        {!playing && (
+                            <button
+                                className="ui-button host-lobby-start-button"
+                                onClick={onStartGame}
+                                disabled={!canStart}
+                            >
+                                Start Game
+                            </button>
                         )}
                     </div>
                     {startError && <div className="error-text">{startError}</div>}
@@ -273,11 +224,6 @@ export default function HostControls({
                         <div className="status-pill target-score-pill" role="status">
                             {scoreText}
                         </div>
-                    </div>
-
-                    <div className="panel-row host-mode-row">
-                        {gameModeToggle}
-                        {teamCountSelector}
                     </div>
                 </div>
 

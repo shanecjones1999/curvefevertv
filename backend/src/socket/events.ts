@@ -23,9 +23,11 @@ export interface LobbyStatePayload {
 
 export interface ClientToServerEvents {
     createRoom: (
-        data: unknown,
+        data: { gameMode?: GameMode; teamCount?: number } | null,
         cb?: (response: {
             roomCode: string;
+            gameMode: GameMode;
+            teamCount: number;
             gameConfig: GameConfigPayload;
         }) => void,
     ) => void;

@@ -23,6 +23,7 @@ type UsePlayerRejoinParams = {
     playerIdRef: React.MutableRefObject<string | null>;
     stopSendingInput: () => void;
     onLeave: () => void;
+    onRejoinSuccess?: () => void;
     setJoined: React.Dispatch<React.SetStateAction<boolean>>;
     setIsRejoining: React.Dispatch<React.SetStateAction<boolean>>;
     setRejoinError: React.Dispatch<React.SetStateAction<string | null>>;
@@ -33,6 +34,7 @@ export function usePlayerRejoin({
     playerIdRef,
     stopSendingInput,
     onLeave,
+    onRejoinSuccess,
     setJoined,
     setIsRejoining,
     setRejoinError,
@@ -107,6 +109,7 @@ export function usePlayerRejoin({
                         setJoined(true);
                         setIsRejoining(false);
                         setRejoinError(null);
+                        onRejoinSuccess?.();
                         localStorage.setItem(
                             PLAYER_SESSION_KEY,
                             JSON.stringify({
@@ -174,6 +177,7 @@ export function usePlayerRejoin({
         playerIdRef,
         stopSendingInput,
         onLeave,
+        onRejoinSuccess,
         setJoined,
         setIsRejoining,
         setRejoinError,

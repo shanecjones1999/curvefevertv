@@ -5,6 +5,8 @@ import { PLAYER_SESSION_KEY } from "./constants/storage";
 import { ROOM_CODE_REGEX, sanitizeRoomCodeInput } from "./utils/roomCode";
 import { getStoredPlayerSession } from "./utils/playerSession";
 import { getRequestedRoomCodeFromUrl } from "./utils/joinLink";
+import { HAPTIC_PATTERNS, triggerHapticFeedback } from "./utils/haptics";
+import type { GameState } from "./types";
 import PlayerJoinForm from "./components/player/PlayerJoinForm";
 import PlayerLiveControls from "./components/player/PlayerLiveControls";
 import { LeaveGameIcon } from "./components/ActionIcons";
@@ -37,6 +39,7 @@ export default function PlayerController({ onLeave }: Props) {
     const [isRejoining, setIsRejoining] = useState(Boolean(rejoinSession));
     const [rejoinError, setRejoinError] = useState<string | null>(null);
     const playerIdRef = useRef<string | null>(rejoinSession?.playerId ?? null);
+    const aliveRef = useRef<boolean | null>(null);
     const pressRef = useRef<{ left: boolean; right: boolean }>({
         left: false,
         right: false,
@@ -105,10 +108,19 @@ export default function PlayerController({ onLeave }: Props) {
         playerIdRef,
         stopSendingInput,
         onLeave,
+        onRejoinSuccess: () => {
+            triggerHapticFeedback(HAPTIC_PATTERNS.reconnectSuccess);
+        },
         setJoined,
         setIsRejoining,
         setRejoinError,
     });
+
+    useEffect(() => {
+        if (!joined) {
+            aliveRef.current = null;
+        }
+    }, [joined]);
 
     useEffect(() => {
         if (!joined) return;
@@ -133,18 +145,42 @@ export default function PlayerController({ onLeave }: Props) {
             }
         };
 
+        const handleStartGame = () => {
+            aliveRef.current = true;
+            triggerHapticFeedback(HAPTIC_PATTERNS.roundStart);
+        };
+
         const handleRoundRestart = () => {
-            // Silently restart, game state updates automatically
+            aliveRef.current = true;
+            triggerHapticFeedback(HAPTIC_PATTERNS.roundRestart);
+        };
+
+        const handleGameState = (state: GameState) => {
+            const playerId = playerIdRef.current;
+            if (!playerId) return;
+
+            const player = state.players.find(({ id }) => id === playerId);
+            if (!player) return;
+
+            if (aliveRef.current === true && !player.alive) {
+                triggerHapticFeedback(HAPTIC_PATTERNS.eliminated);
+            }
+
+            aliveRef.current = player.alive;
         };
 
         window.addEventListener("keydown", handleKeyDown);
         window.addEventListener("keyup", handleKeyUp);
+        socket.on(EVENTS.START_GAME, handleStartGame);
         socket.on(EVENTS.ROUND_RESTART, handleRoundRestart);
+        socket.on(EVENTS.GAME_STATE, handleGameState);
 
         return () => {
             window.removeEventListener("keydown", handleKeyDown);
             window.removeEventListener("keyup", handleKeyUp);
+            socket.off(EVENTS.START_GAME, handleStartGame);
             socket.off(EVENTS.ROUND_RESTART, handleRoundRestart);
+            socket.off(EVENTS.GAME_STATE, handleGameState);
         };
     }, [joined, handleLeftDown, handleLeftUp, handleRightDown, handleRightUp]);
 
@@ -171,6 +207,7 @@ export default function PlayerController({ onLeave }: Props) {
                     setRejoinError(null);
                     setRoomCode(normalizedRoomCode);
                     setName(normalizedName);
+                    triggerHapticFeedback(HAPTIC_PATTERNS.joinSuccess);
                     localStorage.setItem(
                         PLAYER_SESSION_KEY,
                         JSON.stringify({

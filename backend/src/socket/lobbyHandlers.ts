@@ -25,12 +25,14 @@ import {
 } from "./sessionRegistry";
 
 export function registerLobbyHandlers(io: TypedServer, socket: TypedSocket) {
-    socket.on("createRoom", (_data, cb) => {
-        const room = createRoom(socket.id);
+    socket.on("createRoom", (data, cb) => {
+        const room = createRoom(socket.id, data ?? undefined);
         socket.join(room.code);
         bindSocketToRoom(socket.id, room.code);
         cb?.({
             roomCode: room.code,
+            gameMode: room.gameMode,
+            teamCount: room.teamCount,
             gameConfig: {
                 width: GAME_WIDTH,
                 height: GAME_HEIGHT,

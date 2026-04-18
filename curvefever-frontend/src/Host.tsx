@@ -7,6 +7,7 @@ import { DEFAULT_GAME_HEIGHT, DEFAULT_GAME_WIDTH } from "./gameConfig";
 import { PLAYER_COLORS, DISCONNECTED_DOT_COLOR } from "./constants/gameUi";
 import { HOST_SESSION_KEY } from "./constants/storage";
 import HostControls from "./components/host/HostControls";
+import HostGameSetup from "./components/host/HostGameSetup";
 import HostPlayerList from "./components/host/HostPlayerList";
 import HostLeaderboard from "./components/host/HostLeaderboard";
 import HostGameOverOverlay from "./components/host/HostGameOverOverlay";
@@ -29,6 +30,13 @@ type SetGameModeResponse = {
     gameMode?: GameMode;
     teamCount?: number;
     error?: string;
+};
+
+type CreateRoomResponse = {
+    roomCode?: string;
+    gameMode?: GameMode;
+    teamCount?: number;
+    gameConfig?: GameConfig;
 };
 
 type Props = { onLeave: () => void };
@@ -77,7 +85,10 @@ export default function Host({ onLeave }: Props) {
         width: DEFAULT_GAME_WIDTH,
         height: DEFAULT_GAME_HEIGHT,
     });
-    const hasRequestedRoomCreation = useRef(false);
+    const [isSubmittingGameSetup, setIsSubmittingGameSetup] = useState(false);
+    const [isEditingGameSetup, setIsEditingGameSetup] = useState(false);
+    const [draftGameMode, setDraftGameMode] = useState<GameMode>("classic");
+    const [draftTeamCount, setDraftTeamCount] = useState(DEFAULT_TEAM_COUNT);
     const hostScreenRef = useRef<HTMLElement | null>(null);
     const [isFullscreen, setIsFullscreen] = useState(() =>
         Boolean(
@@ -218,9 +229,15 @@ export default function Host({ onLeave }: Props) {
             ?.name ?? displayLeaderboard[0]?.name;
     const roundStartCountdown =
         roundStartRemainingMs > 0 ? Math.ceil(roundStartRemainingMs / 1000) : 0;
+    const hasDraftGameSetupChanges =
+        draftGameMode !== gameMode ||
+        (draftGameMode === "teams" && draftTeamCount !== teamCount);
+    const willReshuffleTeams =
+        players.length > 0 &&
+        (gameMode === "teams" || draftGameMode === "teams") &&
+        hasDraftGameSetupChanges;
 
     useHostRoomSync({
-        hasRequestedRoomCreation,
         setRoomCode,
         setPlayers,
         setPlaying,
@@ -231,6 +248,7 @@ export default function Host({ onLeave }: Props) {
         setRoundStartRemainingMs,
         setGameOverData,
         setGameConfig,
+        autoCreateRoom: false,
     });
 
     useEffect(() => {
@@ -271,6 +289,83 @@ export default function Host({ onLeave }: Props) {
         return () => window.clearTimeout(timeoutId);
     }, [copiedCode]);
 
+    function handleSubmitGameSetup() {
+        if (roomCode && !hasDraftGameSetupChanges) {
+            setStartError(null);
+            setIsEditingGameSetup(false);
+            return;
+        }
+
+        if (
+            roomCode &&
+            willReshuffleTeams &&
+            !window.confirm(
+                "Changing the game setup may reshuffle teams for players already in the room. Continue?",
+            )
+        ) {
+            return;
+        }
+
+        setStartError(null);
+        setIsSubmittingGameSetup(true);
+
+        if (!roomCode) {
+            socket.emit(
+                EVENTS.CREATE_ROOM,
+                { gameMode: draftGameMode, teamCount: draftTeamCount },
+                (res: CreateRoomResponse) => {
+                    setIsSubmittingGameSetup(false);
+                    if (!res?.roomCode) {
+                        setStartError("Unable to create room");
+                        return;
+                    }
+
+                    const nextGameMode = res.gameMode ?? draftGameMode;
+                    const nextTeamCount = res.teamCount ?? draftTeamCount;
+                    setRoomCode(res.roomCode);
+                    setGameMode(nextGameMode);
+                    setTeamCount(nextTeamCount);
+                    setDraftGameMode(nextGameMode);
+                    setDraftTeamCount(nextTeamCount);
+                    if (res.gameConfig) {
+                        setGameConfig(res.gameConfig);
+                    }
+                    setStartError(null);
+                    localStorage.setItem(
+                        HOST_SESSION_KEY,
+                        JSON.stringify({ roomCode: res.roomCode }),
+                    );
+                },
+            );
+            return;
+        }
+
+        socket.emit(
+            EVENTS.SET_GAME_MODE,
+            {
+                roomCode,
+                gameMode: draftGameMode,
+                teamCount: draftTeamCount,
+            },
+            (res: SetGameModeResponse) => {
+                setIsSubmittingGameSetup(false);
+                if (!res?.ok) {
+                    setStartError(res?.error ?? "Unable to update game mode");
+                    return;
+                }
+
+                const nextGameMode = res.gameMode ?? draftGameMode;
+                const nextTeamCount = res.teamCount ?? draftTeamCount;
+                setGameMode(nextGameMode);
+                setTeamCount(nextTeamCount);
+                setDraftGameMode(nextGameMode);
+                setDraftTeamCount(nextTeamCount);
+                setIsEditingGameSetup(false);
+                setStartError(null);
+            },
+        );
+    }
+
     function handleStartGame() {
         if (!roomCode) return;
         socket.emit(
@@ -300,51 +395,28 @@ export default function Host({ onLeave }: Props) {
         );
     }
 
-    function handleGameModeChange(nextGameMode: GameMode) {
-        setGameMode(nextGameMode);
-
-        if (!roomCode || playing) return;
-
-        socket.emit(
-            EVENTS.SET_GAME_MODE,
-            { roomCode, gameMode: nextGameMode, teamCount },
-            (res: SetGameModeResponse) => {
-                if (!res?.ok) {
-                    setStartError(res?.error ?? "Unable to update game mode");
-                    return;
-                }
-                setStartError(null);
-                if (res.gameMode) {
-                    setGameMode(res.gameMode);
-                }
-                if (typeof res.teamCount === "number") {
-                    setTeamCount(res.teamCount);
-                }
-            },
-        );
+    function handleDraftGameModeChange(nextGameMode: GameMode) {
+        setStartError(null);
+        setDraftGameMode(nextGameMode);
     }
 
-    function handleTeamCountChange(nextTeamCount: number) {
-        setTeamCount(nextTeamCount);
+    function handleDraftTeamCountChange(nextTeamCount: number) {
+        setStartError(null);
+        setDraftTeamCount(nextTeamCount);
+    }
 
-        if (!roomCode || playing || gameMode !== "teams") return;
+    function handleOpenGameSetup() {
+        setDraftGameMode(gameMode);
+        setDraftTeamCount(teamCount);
+        setStartError(null);
+        setIsEditingGameSetup(true);
+    }
 
-        socket.emit(
-            EVENTS.SET_GAME_MODE,
-            { roomCode, gameMode, teamCount: nextTeamCount },
-            (res: SetGameModeResponse) => {
-                if (!res?.ok) {
-                    setStartError(
-                        res?.error ?? "Unable to update number of teams",
-                    );
-                    return;
-                }
-                setStartError(null);
-                if (typeof res.teamCount === "number") {
-                    setTeamCount(res.teamCount);
-                }
-            },
-        );
+    function handleCloseGameSetup() {
+        setDraftGameMode(gameMode);
+        setDraftTeamCount(teamCount);
+        setStartError(null);
+        setIsEditingGameSetup(false);
     }
 
     function handleLeaveGame() {
@@ -363,8 +435,12 @@ export default function Host({ onLeave }: Props) {
         setTargetScore(null);
         setGameMode("classic");
         setTeamCount(DEFAULT_TEAM_COUNT);
+        setDraftGameMode("classic");
+        setDraftTeamCount(DEFAULT_TEAM_COUNT);
         setGameOverData(null);
         setRoundStartRemainingMs(0);
+        setIsSubmittingGameSetup(false);
+        setIsEditingGameSetup(false);
         onLeave();
     }
 
@@ -476,13 +552,33 @@ export default function Host({ onLeave }: Props) {
                 ) : null
             }
             onLeaveGame={handleLeaveGame}
+            onChangeMode={handleOpenGameSetup}
             onCopyGameCode={handleCopyGameCode}
-            onGameModeChange={handleGameModeChange}
-            onTeamCountChange={handleTeamCountChange}
             onStartGame={handleStartGame}
             onToggleFullscreen={handleFullscreenToggle}
         />
     );
+
+    if (!roomCode || isEditingGameSetup) {
+        if (!roomCode) {
+            return (
+                <main className="page-shell page-shell-host-lobby">
+                    <HostGameSetup
+                        gameMode={draftGameMode}
+                        teamCount={draftTeamCount}
+                        submitting={isSubmittingGameSetup}
+                        isEditing={false}
+                        canSubmit
+                        error={startError}
+                        onBack={handleLeaveGame}
+                        onSubmit={handleSubmitGameSetup}
+                        onGameModeChange={handleDraftGameModeChange}
+                        onTeamCountChange={handleDraftTeamCountChange}
+                    />
+                </main>
+            );
+        }
+    }
 
     if (!playing) {
         return (
@@ -493,6 +589,22 @@ export default function Host({ onLeave }: Props) {
                 <section className="panel host-panel host-lobby-panel">
                     {hostControls}
                 </section>
+                {isEditingGameSetup && (
+                    <div className="host-setup-overlay" role="dialog" aria-modal="true">
+                        <HostGameSetup
+                            gameMode={draftGameMode}
+                            teamCount={draftTeamCount}
+                            submitting={isSubmittingGameSetup}
+                            isEditing
+                            canSubmit={hasDraftGameSetupChanges}
+                            error={startError}
+                            onBack={handleCloseGameSetup}
+                            onSubmit={handleSubmitGameSetup}
+                            onGameModeChange={handleDraftGameModeChange}
+                            onTeamCountChange={handleDraftTeamCountChange}
+                        />
+                    </div>
+                )}
             </main>
         );
     }

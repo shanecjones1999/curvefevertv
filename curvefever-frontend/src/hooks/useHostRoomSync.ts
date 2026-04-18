@@ -21,7 +21,6 @@ type ReconnectHostResponse = {
 };
 
 type UseHostRoomSyncParams = {
-    hasRequestedRoomCreation: React.MutableRefObject<boolean>;
     setRoomCode: React.Dispatch<React.SetStateAction<string | null>>;
     setPlayers: React.Dispatch<React.SetStateAction<Player[]>>;
     setPlaying: React.Dispatch<React.SetStateAction<boolean>>;
@@ -34,10 +33,10 @@ type UseHostRoomSyncParams = {
         React.SetStateAction<GameOverPayload | null>
     >;
     setGameConfig: React.Dispatch<React.SetStateAction<GameConfig>>;
+    autoCreateRoom?: boolean;
 };
 
 export function useHostRoomSync({
-    hasRequestedRoomCreation,
     setRoomCode,
     setPlayers,
     setPlaying,
@@ -48,10 +47,9 @@ export function useHostRoomSync({
     setRoundStartRemainingMs,
     setGameOverData,
     setGameConfig,
+    autoCreateRoom = true,
 }: UseHostRoomSyncParams) {
     useEffect(() => {
-        const roomCreationRequestRef = hasRequestedRoomCreation;
-
         const applyGameConfig = (incoming?: GameConfig) => {
             if (!incoming) return;
             if (incoming.width <= 0 || incoming.height <= 0) return;
@@ -118,41 +116,38 @@ export function useHostRoomSync({
                 );
         };
 
-        const requestCreateRoom = () => {
-            socket.emit(
-                "createRoom",
-                null,
-                (res: { roomCode: string; gameConfig?: GameConfig }) => {
-                    if (!res?.roomCode) {
-                        roomCreationRequestRef.current = false;
-                        setStartError("Unable to create room");
-                        return;
-                    }
-                    setRoomCode(res.roomCode);
-                    if (res.gameConfig) {
-                        setGameConfig(res.gameConfig);
-                    }
-                    setStartError(null);
-                    localStorage.setItem(
-                        HOST_SESSION_KEY,
-                        JSON.stringify({ roomCode: res.roomCode }),
-                    );
-                },
-            );
-        };
-
         const reconnectFromSession = () => {
             const rawSession = localStorage.getItem(HOST_SESSION_KEY);
             if (!rawSession) {
-                if (!roomCreationRequestRef.current) {
-                    roomCreationRequestRef.current = true;
-                    requestCreateRoom();
-                }
+                if (!autoCreateRoom) return;
+                socket.emit(
+                    EVENTS.CREATE_ROOM,
+                    null,
+                    (res: { roomCode: string; gameConfig?: GameConfig }) => {
+                        if (!res?.roomCode) {
+                            setStartError("Unable to create room");
+                            return;
+                        }
+                        setRoomCode(res.roomCode);
+                        if (res.gameConfig) {
+                            setGameConfig(res.gameConfig);
+                        }
+                        setStartError(null);
+                        localStorage.setItem(
+                            HOST_SESSION_KEY,
+                            JSON.stringify({ roomCode: res.roomCode }),
+                        );
+                    },
+                );
                 return;
             }
             try {
                 const session = JSON.parse(rawSession) as { roomCode?: string };
-                if (!session.roomCode) return;
+                if (!session.roomCode) {
+                    localStorage.removeItem(HOST_SESSION_KEY);
+                    setRoomCode(null);
+                    return;
+                }
                 socket.emit(
                     "reconnectHost",
                     { roomCode: session.roomCode },
@@ -199,6 +194,7 @@ export function useHostRoomSync({
                             }
                         } else {
                             localStorage.removeItem(HOST_SESSION_KEY);
+                            setRoomCode(null);
                             setStartError(
                                 res?.error ??
                                     "Unable to reconnect host session",
@@ -301,7 +297,6 @@ export function useHostRoomSync({
             socket.off("connect", reconnectFromSession);
         };
     }, [
-        hasRequestedRoomCreation,
         setRoomCode,
         setPlayers,
         setPlaying,
@@ -312,5 +307,6 @@ export function useHostRoomSync({
         setRoundStartRemainingMs,
         setGameOverData,
         setGameConfig,
+        autoCreateRoom,
     ]);
 }

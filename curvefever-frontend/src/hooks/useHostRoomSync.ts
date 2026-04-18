@@ -11,6 +11,8 @@ type ReconnectHostResponse = {
     players?: Player[];
     state?: "lobby" | "playing" | "finished";
     gameMode?: GameMode;
+    winnerId?: string | null;
+    leaderboard?: GameOverPayload["leaderboard"];
     targetScore?: number;
     gameConfig?: GameConfig;
     error?: string;
@@ -142,10 +144,14 @@ export function useHostRoomSync({
                                     );
                                 setGameOverData({
                                     winnerId:
-                                        fallbackLeaderboard[0]?.id ?? null,
+                                        res.winnerId ??
+                                        res.leaderboard?.[0]?.id ??
+                                        fallbackLeaderboard[0]?.id ??
+                                        null,
                                     gameMode: res.gameMode,
                                     targetScore: res.targetScore,
-                                    leaderboard: fallbackLeaderboard,
+                                    leaderboard:
+                                        res.leaderboard ?? fallbackLeaderboard,
                                 });
                                 setPlaying(true);
                             } else {

@@ -1,6 +1,10 @@
 import crypto from "crypto";
 import { GAME_HEIGHT, GAME_WIDTH } from "../config";
 import { calculateTargetScore, normalizeRoomCode } from "../domain/gameRules";
+import {
+    buildBattleRoyaleLeaderboard,
+    buildClassicLeaderboard,
+} from "../domain/leaderboard";
 import { generateSpawnPosition } from "../gameLoop";
 import { createRoom, deleteRoom, getRoom, joinRoom, leaveRoom } from "../rooms";
 import { Player } from "../types";
@@ -40,12 +44,25 @@ export function registerLobbyHandlers(io: TypedServer, socket: TypedSocket) {
         socket.join(room.code);
         bindSocketToRoom(socket.id, room.code);
 
+        const players = Array.from(room.players.values());
+        const leaderboard =
+            room.state === "finished"
+                ? room.gameMode === "battle-royale"
+                    ? buildBattleRoyaleLeaderboard(
+                          players,
+                          room.battleRoyaleEliminatedPlayerIds,
+                      )
+                    : buildClassicLeaderboard(players)
+                : undefined;
+
         cb?.({
             ok: true,
             roomCode: room.code,
-            players: Array.from(room.players.values()),
+            players,
             state: room.state,
             gameMode: room.gameMode,
+            winnerId: leaderboard?.[0]?.id ?? null,
+            leaderboard,
             targetScore:
                 room.gameMode === "classic"
                     ? (room.targetScore ??

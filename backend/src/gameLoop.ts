@@ -23,6 +23,8 @@ const restartGraceMap = new Map<string, number>();
 const roomTickCounterMap = new Map<string, number>();
 const ROUND_START_NO_TRAIL_TICKS = 120;
 const roundStartNoTrailMap = new Map<string, number>();
+const ROUND_START_FREEZE_MS = 3000;
+const roundStartFreezeUntilMap = new Map<string, number>();
 const ROUND_RESTART_DELAY_MS = 2000;
 const pendingRoundRestartMap = new Map<string, NodeJS.Timeout>();
 const MAX_SPAWN_ATTEMPTS = 40;
@@ -258,9 +260,14 @@ function movePlayer(
     }
 }
 
-function buildGameState(roomCode: string): GameState | null {
+export function buildGameState(roomCode: string): GameState | null {
     const room = getRoom(roomCode);
     if (!room) return null;
+    const roundStartFreezeUntil = roundStartFreezeUntilMap.get(roomCode) ?? 0;
+    const roundStartRemainingMs = Math.max(
+        0,
+        roundStartFreezeUntil - Date.now(),
+    );
     const players = Array.from(room.players.values()).map((p) => ({
         id: p.id,
         name: p.name,
@@ -292,7 +299,15 @@ function buildGameState(roomCode: string): GameState | null {
             room.gameMode === "classic"
                 ? (room.targetScore ?? calculateTargetScore(room.players.size))
                 : undefined,
+        roundStartRemainingMs,
     };
+}
+
+function emitGameState(roomCode: string, io: TypedServer) {
+    const state = buildGameState(roomCode);
+    if (state) {
+        io.to(roomCode).emit("gameState", state);
+    }
 }
 
 function distanceToLineSegment(
@@ -526,6 +541,7 @@ export function startGameLoop(roomCode: string, io: TypedServer) {
 
     restartGraceMap.set(roomCode, restartGracePeriod);
     roundStartNoTrailMap.set(roomCode, ROUND_START_NO_TRAIL_TICKS);
+    roundStartFreezeUntilMap.set(roomCode, Date.now() + ROUND_START_FREEZE_MS);
     roomTickCounterMap.set(roomCode, 0);
 
     const tick = () => {
@@ -541,10 +557,16 @@ export function startGameLoop(roomCode: string, io: TypedServer) {
         const roundPaused = pendingRoundRestartMap.has(roomCode);
         if (roundPaused) {
             if (shouldBroadcastState) {
-                const state = buildGameState(roomCode);
-                if (state) {
-                    io.to(roomCode).emit("gameState", state);
-                }
+                emitGameState(roomCode, io);
+            }
+            return;
+        }
+
+        const roundStartRemainingMs =
+            (roundStartFreezeUntilMap.get(roomCode) ?? 0) - Date.now();
+        if (roundStartRemainingMs > 0) {
+            if (shouldBroadcastState) {
+                emitGameState(roomCode, io);
             }
             return;
         }
@@ -652,10 +674,7 @@ export function startGameLoop(roomCode: string, io: TypedServer) {
                 }
 
                 if (shouldBroadcastState) {
-                    const state = buildGameState(roomCode);
-                    if (state) {
-                        io.to(roomCode).emit("gameState", state);
-                    }
+                    emitGameState(roomCode, io);
                 }
                 return;
             }
@@ -722,7 +741,12 @@ export function startGameLoop(roomCode: string, io: TypedServer) {
                             roomCode,
                             ROUND_START_NO_TRAIL_TICKS,
                         );
+                        roundStartFreezeUntilMap.set(
+                            roomCode,
+                            Date.now() + ROUND_START_FREEZE_MS,
+                        );
                         io.to(roomCode).emit("roundRestart");
+                        emitGameState(roomCode, io);
                     }, ROUND_RESTART_DELAY_MS);
 
                     pendingRoundRestartMap.set(roomCode, restartHandle);
@@ -731,10 +755,7 @@ export function startGameLoop(roomCode: string, io: TypedServer) {
         }
 
         if (shouldBroadcastState) {
-            const state = buildGameState(roomCode);
-            if (state) {
-                io.to(roomCode).emit("gameState", state);
-            }
+            emitGameState(roomCode, io);
         }
     };
 
@@ -757,5 +778,6 @@ export function stopGameLoop(roomCode: string) {
 
     restartGraceMap.delete(roomCode);
     roundStartNoTrailMap.delete(roomCode);
+    roundStartFreezeUntilMap.delete(roomCode);
     roomTickCounterMap.delete(roomCode);
 }

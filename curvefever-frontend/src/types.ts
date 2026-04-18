@@ -40,6 +40,7 @@ export interface GameState {
     players: Player[];
     gameMode: GameMode;
     targetScore?: number;
+    roundStartRemainingMs?: number;
 }
 
 export interface InputPayload {

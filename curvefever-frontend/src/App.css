@@ -546,6 +546,7 @@
 .game-stage {
   margin-top: 0;
   width: 100%;
+  position: relative;
 }
 
 .host-playing-screen {
@@ -566,6 +567,39 @@
   background: rgba(5, 10, 24, 0.72);
   -webkit-backdrop-filter: blur(3px);
   backdrop-filter: blur(3px);
+}
+
+.round-start-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 0.4rem;
+  padding: clamp(0.8rem, 2vw, 1.4rem);
+  pointer-events: none;
+  justify-items: center;
+  text-align: center;
+}
+
+.round-start-label {
+  margin: 0;
+  font-size: clamp(1rem, 2vw, 1.4rem);
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(215, 235, 255, 0.58);
+  text-shadow: 0 4px 18px rgba(0, 0, 0, 0.7);
+}
+
+.round-start-countdown {
+  margin: 0;
+  font-size: clamp(3rem, 9vw, 5rem);
+  line-height: 1;
+  font-weight: 800;
+  color: rgba(244, 251, 255, 0.45);
+  text-shadow: 0 8px 30px rgba(0, 0, 0, 0.85);
 }
 
 .game-over-panel {

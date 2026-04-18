@@ -232,13 +232,6 @@ export default function PhaserGame({
         }
     }, [gameMode, players, showTeamLabels]);
 
-    useEffect(() => {
-        // Only update players if scene and playerSprites are ready
-        if (sceneRef.current && sceneRef.current.playerSprites) {
-            sceneRef.current.updatePlayers(players);
-        }
-    }, [players]);
-
     return (
         <div className={`phaser-shell ${className ?? ""}`.trim()}>
             <div ref={gameRef} className="phaser-host" />

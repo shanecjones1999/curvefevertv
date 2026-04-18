@@ -78,9 +78,10 @@ export function registerLobbyHandlers(io: TypedServer, socket: TypedSocket) {
                     );
                 }
                 if (room.gameMode === "teams") {
+                    const activeTeamCount = buildTeamLeaderboard(players).length;
                     return (
                         room.targetScore ??
-                        calculateTargetScore(leaderboard?.length ?? 0)
+                        calculateTargetScore(activeTeamCount)
                     );
                 }
                 return undefined;

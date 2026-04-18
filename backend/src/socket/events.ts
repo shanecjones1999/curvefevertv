@@ -43,6 +43,8 @@ export interface ClientToServerEvents {
             players?: Player[];
             state?: RoomState;
             gameMode?: GameMode;
+            winnerId?: string | null;
+            leaderboard?: ScoreboardEntry[];
             targetScore?: number;
             gameConfig?: GameConfigPayload;
         }) => void,

@@ -7,6 +7,10 @@ import {
     MIN_SPAWN_DISTANCE,
     SPAWN_WALL_MARGIN,
 } from "./config";
+import {
+    buildBattleRoyaleLeaderboard,
+    buildClassicLeaderboard,
+} from "./domain/leaderboard";
 
 const TICK_RATE = 60;
 const MS_PER_TICK = 1000 / TICK_RATE;
@@ -602,21 +606,10 @@ export function startGameLoop(roomCode: string, io: TypedServer) {
 
                 if (survivingPlayers.length <= 1) {
                     const winner = survivingPlayers[0] ?? null;
-                    const sortedLeaderboard = players
-                        .map((player) => ({
-                            id: player.id,
-                            name: player.name,
-                            score: eliminatedPlayerIds.has(player.id) ? 0 : 1,
-                            color: player.color,
-                        }))
-                        .sort((firstPlayer, secondPlayer) => {
-                            if (secondPlayer.score !== firstPlayer.score) {
-                                return secondPlayer.score - firstPlayer.score;
-                            }
-                            return firstPlayer.name.localeCompare(
-                                secondPlayer.name,
-                            );
-                        });
+                    const sortedLeaderboard = buildBattleRoyaleLeaderboard(
+                        players,
+                        eliminatedPlayerIds,
+                    );
 
                     room.state = "finished";
                     io.to(roomCode).emit("gameOver", {
@@ -687,21 +680,7 @@ export function startGameLoop(roomCode: string, io: TypedServer) {
                 (player) => (player.score ?? 0) >= targetScore,
             );
             if (playersAtOrAboveTarget.length > 0) {
-                const sortedLeaderboard = players
-                    .map((player) => ({
-                        id: player.id,
-                        name: player.name,
-                        score: player.score ?? 0,
-                        color: player.color,
-                    }))
-                    .sort((firstPlayer, secondPlayer) => {
-                        if (secondPlayer.score !== firstPlayer.score) {
-                            return secondPlayer.score - firstPlayer.score;
-                        }
-                        return firstPlayer.name.localeCompare(
-                            secondPlayer.name,
-                        );
-                    });
+                const sortedLeaderboard = buildClassicLeaderboard(players);
 
                 room.state = "finished";
                 io.to(roomCode).emit("gameOver", {

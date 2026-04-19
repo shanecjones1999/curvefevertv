@@ -1,4 +1,6 @@
 import type { GameMode, LeaderboardEntry, Player } from "../../types";
+import styles from "../../ui.module.css";
+import { cx } from "../../utils/cx";
 import { getTeamLabel, getTeamSymbol } from "../../utils/teamMode";
 
 type Props = {
@@ -17,18 +19,24 @@ export default function HostLeaderboard({
     getTeamPlayers,
 }: Props) {
     return (
-        <section className="panel inset-panel leaderboard-panel">
-            <h3 className="section-title">Leaderboard</h3>
-            <ul className="player-list">
+        <section
+            className={cx(
+                styles.panel,
+                styles["inset-panel"],
+                styles["leaderboard-panel"],
+            )}
+        >
+            <h3 className={styles["section-title"]}>Leaderboard</h3>
+            <ul className={styles["player-list"]}>
                 {leaderboard.map((entry) => (
                     <li
                         key={entry.id}
                         className={getRowClassName(entry)}
                     >
-                        <span className="leaderboard-player-name">
-                            <span className="player-name-with-status">
+                        <span className={styles["leaderboard-player-name"]}>
+                            <span className={styles["player-name-with-status"]}>
                                 <span
-                                    className="status-dot-wrap"
+                                    className={styles["status-dot-wrap"]}
                                     title={
                                         entry.kind === "team"
                                             ? entry.alive
@@ -40,7 +48,7 @@ export default function HostLeaderboard({
                                     }
                                 >
                                     <svg
-                                        className="status-dot"
+                                        className={styles["status-dot"]}
                                         viewBox="0 0 10 10"
                                         aria-hidden="true"
                                     >
@@ -60,7 +68,7 @@ export default function HostLeaderboard({
                                 </span>
                                 {entry.kind === "team" &&
                                     typeof entry.playerCount === "number" && (
-                                        <span className="team-badge">
+                                        <span className={styles["team-badge"]}>
                                             {entry.playerCount}{" "}
                                             {entry.playerCount === 1
                                                 ? "player"
@@ -69,7 +77,7 @@ export default function HostLeaderboard({
                                     )}
                             </span>
                         </span>
-                        <span className="leaderboard-player-meta">
+                        <span className={styles["leaderboard-player-meta"]}>
                             <span>
                                 {gameMode === "battle-royale"
                                     ? entry.alive
@@ -80,14 +88,16 @@ export default function HostLeaderboard({
                         </span>
                         {entry.kind === "team" &&
                             typeof entry.teamId === "number" && (
-                                <div className="team-member-list">
+                                <div className={styles["team-member-list"]}>
                                     {getTeamPlayers(entry.teamId).map((player) => (
                                         <span
                                             key={player.id}
-                                            className="team-member-chip"
+                                            className={styles["team-member-chip"]}
                                         >
                                             <span
-                                                className="team-member-chip-dot"
+                                                className={
+                                                    styles["team-member-chip-dot"]
+                                                }
                                                 style={{
                                                     backgroundColor:
                                                         getDotColor({

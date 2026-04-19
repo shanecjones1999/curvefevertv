@@ -11,6 +11,8 @@ import PlayerLiveControls from "./components/player/PlayerLiveControls";
 import { LeaveGameIcon } from "./components/ActionIcons";
 import { usePlayerRejoin } from "./hooks/usePlayerRejoin";
 import { DEFAULT_TEAM_COUNT } from "./utils/teamMode";
+import uiStyles from "./ui.module.css";
+import { cx } from "./utils/cx";
 
 const INPUT_SEND_INTERVAL_MS = 16;
 
@@ -396,11 +398,13 @@ export default function PlayerController({ onLeave }: Props) {
     // Show a loading state while attempting to rejoin
     if (isRejoining) {
         return (
-            <main className="page-shell">
-                <section className="panel controller-panel">
-                    <p className="eyebrow">Controller</p>
-                    <h2 className="title title-small">Reconnecting...</h2>
-                    <p className="subtitle">
+            <main className={uiStyles["page-shell"]}>
+                <section className={cx(uiStyles.panel, uiStyles["controller-panel"])}>
+                    <p className={uiStyles.eyebrow}>Controller</p>
+                    <h2 className={cx(uiStyles.title, uiStyles["title-small"])}>
+                        Reconnecting...
+                    </h2>
+                    <p className={uiStyles.subtitle}>
                         Restoring your previous game session.
                     </p>
                 </section>
@@ -409,20 +413,26 @@ export default function PlayerController({ onLeave }: Props) {
     }
 
     return (
-        <main className="page-shell">
-            <section className="panel controller-panel">
-                <div className="panel-header">
+        <main className={uiStyles["page-shell"]}>
+            <section className={cx(uiStyles.panel, uiStyles["controller-panel"])}>
+                <div className={uiStyles["panel-header"]}>
                     <div>
-                        <p className="eyebrow">Mobile Console</p>
-                        <h2 className="title title-small">Join as Player</h2>
+                        <p className={uiStyles.eyebrow}>Mobile Console</p>
+                        <h2 className={cx(uiStyles.title, uiStyles["title-small"])}>
+                            Join as Player
+                        </h2>
                     </div>
                     <button
-                        className="ui-button ui-button-ghost ui-icon-button"
+                        className={cx(
+                            uiStyles["ui-button"],
+                            uiStyles["ui-button-ghost"],
+                            uiStyles["ui-icon-button"],
+                        )}
                         onClick={handleLeaveGame}
                         aria-label="Leave game"
                         title="Leave game"
                     >
-                        <LeaveGameIcon className="ui-button-icon" />
+                        <LeaveGameIcon className={uiStyles["ui-button-icon"]} />
                     </button>
                 </div>
 

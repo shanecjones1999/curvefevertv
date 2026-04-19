@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 import type { GameMode } from "../../types";
+import styles from "../../ui.module.css";
+import { cx } from "../../utils/cx";
 import { FullscreenIcon, LeaveGameIcon } from "../ActionIcons";
 import HostJoinQr from "./HostJoinQr";
 
@@ -64,13 +66,22 @@ export default function HostControls({
     if (layout === "lobby") {
         return (
             <>
-                <div className="panel-header host-lobby-header">
+                <div
+                    className={cx(
+                        styles["panel-header"],
+                        styles["host-lobby-header"],
+                    )}
+                >
                     <div>
-                        <p className="eyebrow">Host Console</p>
+                        <p className={styles.eyebrow}>Host Console</p>
                     </div>
-                    <div className="panel-header-actions">
+                    <div className={styles["panel-header-actions"]}>
                         <button
-                            className="ui-button ui-button-ghost ui-icon-button"
+                            className={cx(
+                                styles["ui-button"],
+                                styles["ui-button-ghost"],
+                                styles["ui-icon-button"],
+                            )}
                             onClick={onToggleFullscreen}
                             disabled={!isFullscreenSupported}
                             aria-label={
@@ -86,25 +97,33 @@ export default function HostControls({
                         >
                             <FullscreenIcon
                                 active={isFullscreen}
-                                className="ui-button-icon"
+                                className={styles["ui-button-icon"]}
                             />
                         </button>
                         <button
-                            className="ui-button ui-button-ghost ui-icon-button"
+                            className={cx(
+                                styles["ui-button"],
+                                styles["ui-button-ghost"],
+                                styles["ui-icon-button"],
+                            )}
                             onClick={onLeaveGame}
                             aria-label="Leave game"
                             title="Leave game"
                         >
-                            <LeaveGameIcon className="ui-button-icon" />
+                            <LeaveGameIcon className={styles["ui-button-icon"]} />
                         </button>
                     </div>
                 </div>
 
-                <div className="host-lobby-share-row">
-                    <div className="host-lobby-share-main">
+                <div className={styles["host-lobby-share-row"]}>
+                    <div className={styles["host-lobby-share-main"]}>
                         <button
                             type="button"
-                            className="status-pill room-code-pill room-code-button"
+                            className={cx(
+                                styles["status-pill"],
+                                styles["room-code-pill"],
+                                styles["room-code-button"],
+                            )}
                             onClick={onCopyGameCode}
                             disabled={!roomCode}
                             title={
@@ -113,15 +132,19 @@ export default function HostControls({
                                     : "No game code available"
                             }
                         >
-                            <span className="room-code-label">
+                            <span className={styles["room-code-label"]}>
                                 {copiedCode ? "Copied!" : "Game Code"}
                             </span>
-                            <span className="room-code-value">
+                            <span className={styles["room-code-value"]}>
                                 {roomCode ?? "------"}
                             </span>
                         </button>
                         <div
-                            className="status-pill target-score-pill host-lobby-score-pill"
+                            className={cx(
+                                styles["status-pill"],
+                                styles["target-score-pill"],
+                                styles["host-lobby-score-pill"],
+                            )}
                             role="status"
                         >
                             {scoreText}
@@ -133,22 +156,29 @@ export default function HostControls({
 
                 {playersSlot}
 
-                <div className="host-lobby-action-section">
-                    <div className="host-lobby-action-row">
+                <div className={styles["host-lobby-action-section"]}>
+                    <div className={styles["host-lobby-action-row"]}>
                         <button
-                            className="ui-button ui-button-secondary host-lobby-change-mode-button"
+                            className={cx(
+                                styles["ui-button"],
+                                styles["ui-button-secondary"],
+                                styles["host-lobby-change-mode-button"],
+                            )}
                             onClick={onChangeMode}
                         >
-                            <span className="host-lobby-setup-button-label">
+                            <span className={styles["host-lobby-setup-button-label"]}>
                                 Game Setup
                             </span>
-                            <span className="host-lobby-setup-button-value">
+                            <span className={styles["host-lobby-setup-button-value"]}>
                                 {gameModeText}
                             </span>
                         </button>
                         {!playing && (
                             <button
-                                className="ui-button host-lobby-start-button"
+                                className={cx(
+                                    styles["ui-button"],
+                                    styles["host-lobby-start-button"],
+                                )}
                                 onClick={onStartGame}
                                 disabled={!canStart}
                             >
@@ -156,7 +186,9 @@ export default function HostControls({
                             </button>
                         )}
                     </div>
-                    {startError && <div className="error-text">{startError}</div>}
+                    {startError && (
+                        <div className={styles["error-text"]}>{startError}</div>
+                    )}
                 </div>
             </>
         );
@@ -164,13 +196,17 @@ export default function HostControls({
 
     return (
         <>
-            <div className="panel-header">
+            <div className={styles["panel-header"]}>
                 <div>
-                    <p className="eyebrow">Host Console</p>
+                    <p className={styles.eyebrow}>Host Console</p>
                 </div>
-                <div className="panel-header-actions">
+                <div className={styles["panel-header-actions"]}>
                     <button
-                        className="ui-button ui-button-ghost ui-icon-button"
+                        className={cx(
+                            styles["ui-button"],
+                            styles["ui-button-ghost"],
+                            styles["ui-icon-button"],
+                        )}
                         onClick={onToggleFullscreen}
                         disabled={!isFullscreenSupported}
                         aria-label={
@@ -186,26 +222,34 @@ export default function HostControls({
                     >
                         <FullscreenIcon
                             active={isFullscreen}
-                            className="ui-button-icon"
+                            className={styles["ui-button-icon"]}
                         />
                     </button>
                     <button
-                        className="ui-button ui-button-ghost ui-icon-button"
+                        className={cx(
+                            styles["ui-button"],
+                            styles["ui-button-ghost"],
+                            styles["ui-icon-button"],
+                        )}
                         onClick={onLeaveGame}
                         aria-label="Leave game"
                         title="Leave game"
                     >
-                        <LeaveGameIcon className="ui-button-icon" />
+                        <LeaveGameIcon className={styles["ui-button-icon"]} />
                     </button>
                 </div>
             </div>
 
-            <div className="host-lobby-overview">
-                <div className="host-lobby-meta">
-                    <div className="panel-row host-room-row">
+            <div className={styles["host-lobby-overview"]}>
+                <div>
+                    <div className={styles["panel-row"]}>
                         <button
                             type="button"
-                            className="status-pill room-code-pill room-code-button"
+                            className={cx(
+                                styles["status-pill"],
+                                styles["room-code-pill"],
+                                styles["room-code-button"],
+                            )}
                             onClick={onCopyGameCode}
                             disabled={!roomCode}
                             title={
@@ -214,14 +258,20 @@ export default function HostControls({
                                     : "No game code available"
                             }
                         >
-                            <span className="room-code-label">
+                            <span className={styles["room-code-label"]}>
                                 {copiedCode ? "Copied!" : "Game Code"}
                             </span>
-                            <span className="room-code-value">
+                            <span className={styles["room-code-value"]}>
                                 {roomCode ?? "------"}
                             </span>
                         </button>
-                        <div className="status-pill target-score-pill" role="status">
+                        <div
+                            className={cx(
+                                styles["status-pill"],
+                                styles["target-score-pill"],
+                            )}
+                            role="status"
+                        >
                             {scoreText}
                         </div>
                     </div>
@@ -231,10 +281,10 @@ export default function HostControls({
             </div>
 
             {(!playing || startError) && (
-                <div className="panel-row panel-row-bottom">
+                <div className={cx(styles["panel-row"], styles["panel-row-bottom"])}>
                     {!playing && (
                         <button
-                            className="ui-button"
+                            className={styles["ui-button"]}
                             onClick={onStartGame}
                             disabled={!canStart}
                         >
@@ -242,7 +292,7 @@ export default function HostControls({
                         </button>
                     )}
                     {startError && (
-                        <div className="error-text">{startError}</div>
+                        <div className={styles["error-text"]}>{startError}</div>
                     )}
                 </div>
             )}

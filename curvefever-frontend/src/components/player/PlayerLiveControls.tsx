@@ -1,4 +1,6 @@
 import styles from "../../PlayerController.module.css";
+import uiStyles from "../../ui.module.css";
+import { cx } from "../../utils/cx";
 
 type Props = {
     roomCode: string;
@@ -35,7 +37,12 @@ export default function PlayerLiveControls({
 
     return (
         <div className={styles.controllerLive}>
-            <p className="status-pill controller-status-pill">
+            <p
+                className={cx(
+                    uiStyles["status-pill"],
+                    uiStyles["controller-status-pill"],
+                )}
+            >
                 Joined room {roomCode} as {name}
             </p>
             {isLobby ? (

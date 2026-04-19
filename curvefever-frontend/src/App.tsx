@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import "./App.css";
 import Host from "./Host";
 import PlayerController from "./PlayerController";
+import styles from "./ui.module.css";
+import { cx } from "./utils/cx";
 import { getRequestedRoleFromUrl } from "./utils/joinLink";
 
 const ROLE_KEY = "curvefever:role";
@@ -37,15 +38,15 @@ function App() {
     if (role === "phone") return <PlayerController onLeave={clearRole} />;
 
     return (
-        <main className="page-shell page-shell-landing">
-            <section className="panel role-panel">
-                <div className="brand-row">
+        <main className={cx(styles["page-shell"], styles["page-shell-landing"])}>
+            <section className={cx(styles.panel, styles["role-panel"])}>
+                <div className={styles["brand-row"]}>
                     <svg
                         xmlns="http://www.w3.org/2000/svg"
                         viewBox="0 0 64 64"
                         role="img"
                         aria-label="Curvefever logo"
-                        className="brand-logo"
+                        className={styles["brand-logo"]}
                     >
                         <defs>
                             <radialGradient
@@ -105,30 +106,35 @@ function App() {
                         <circle cx="53" cy="32" r="4" fill="#61f7ff" />
                         <circle cx="17" cy="38" r="3.5" fill="#ff7ccf" />
                     </svg>
-                    <p className="eyebrow brand-text">Curvefever TV</p>
+                    <p className={cx(styles.eyebrow, styles["brand-text"])}>
+                        Curvefever TV
+                    </p>
                 </div>
-                <h1 className="title">Select Your Role</h1>
-                <p className="subtitle">
+                <h1 className={styles.title}>Select Your Role</h1>
+                <p className={styles.subtitle}>
                     Host on the big screen or use your phone as a controller.
                 </p>
-                <div className="role-grid">
+                <div className={styles["role-grid"]}>
                     <button
-                        className="ui-button"
+                        className={styles["ui-button"]}
                         onClick={() => selectRole("host")}
                     >
                         Host Game
                     </button>
                     <button
-                        className="ui-button ui-button-secondary"
+                        className={cx(
+                            styles["ui-button"],
+                            styles["ui-button-secondary"],
+                        )}
                         onClick={() => selectRole("phone")}
                     >
                         Join as Player
                     </button>
                 </div>
             </section>
-            <footer className="landing-footer" aria-label="Project links">
+            <footer className={styles["landing-footer"]} aria-label="Project links">
                 <a
-                    className="landing-footer-link"
+                    className={styles["landing-footer-link"]}
                     href="https://github.com/shanecjones1999/curvefevertv"
                     target="_blank"
                     rel="noopener noreferrer"
@@ -139,7 +145,7 @@ function App() {
                         viewBox="0 0 24 24"
                         role="img"
                         aria-hidden="true"
-                        className="landing-footer-icon"
+                        className={styles["landing-footer-icon"]}
                     >
                         <path
                             fill="currentColor"

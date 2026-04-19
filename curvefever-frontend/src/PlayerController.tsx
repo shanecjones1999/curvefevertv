@@ -11,6 +11,7 @@ import PlayerLiveControls from "./components/player/PlayerLiveControls";
 import { LeaveGameIcon } from "./components/ActionIcons";
 import { usePlayerRejoin } from "./hooks/usePlayerRejoin";
 import { DEFAULT_TEAM_COUNT } from "./utils/teamMode";
+import { buildPlayerColorById } from "./utils/playerColor";
 import uiStyles from "./ui.module.css";
 import { cx } from "./utils/cx";
 
@@ -57,6 +58,41 @@ export default function PlayerController({ onLeave }: Props) {
         () => players.find((player) => player.id === playerId) ?? null,
         [playerId, players],
     );
+    const playerColorById = useMemo(() => buildPlayerColorById(players), [players]);
+    const currentPlayerColor = useMemo(() => {
+        if (!currentPlayer) {
+            return null;
+        }
+
+        return playerColorById.get(currentPlayer.id) ?? null;
+    }, [currentPlayer, playerColorById]);
+    const isCurrentPlayerAlive = currentPlayer?.alive !== false;
+
+    const emitInput = useCallback(() => {
+        socket.emit("input", {
+            turnLeft: pressRef.current.left,
+            turnRight: pressRef.current.right,
+        });
+    }, []);
+
+    const stopSendingInput = useCallback(() => {
+        if (intervalRef.current) {
+            window.clearInterval(intervalRef.current);
+            intervalRef.current = null;
+        }
+    }, []);
+
+    const resetInputState = useCallback(() => {
+        const hadInput = pressRef.current.left || pressRef.current.right;
+        pressRef.current.left = false;
+        pressRef.current.right = false;
+        setLeftPressed(false);
+        setRightPressed(false);
+        stopSendingInput();
+        if (hadInput) {
+            emitInput();
+        }
+    }, [emitInput, stopSendingInput]);
 
     const applyRoomSnapshot = useCallback(
         (snapshot?: {
@@ -65,6 +101,18 @@ export default function PlayerController({ onLeave }: Props) {
             gameMode?: GameMode;
             teamCount?: number;
         }) => {
+            const nextCurrentPlayer = Array.isArray(snapshot?.players)
+                ? snapshot.players.find(
+                      (player) => player.id === playerIdRef.current,
+                  ) ?? null
+                : null;
+            const shouldDisableControls =
+                snapshot?.state !== "playing" || nextCurrentPlayer?.alive === false;
+
+            if (shouldDisableControls) {
+                resetInputState();
+            }
+
             if (Array.isArray(snapshot?.players)) {
                 setPlayers(snapshot.players);
             }
@@ -83,7 +131,7 @@ export default function PlayerController({ onLeave }: Props) {
                 setTeamCount(snapshot.teamCount);
             }
         },
-        [],
+        [resetInputState],
     );
 
     const requestRoomState = useCallback(
@@ -113,20 +161,6 @@ export default function PlayerController({ onLeave }: Props) {
         [applyRoomSnapshot],
     );
 
-    const emitInput = useCallback(() => {
-        socket.emit("input", {
-            turnLeft: pressRef.current.left,
-            turnRight: pressRef.current.right,
-        });
-    }, []);
-
-    const stopSendingInput = useCallback(() => {
-        if (intervalRef.current) {
-            window.clearInterval(intervalRef.current);
-            intervalRef.current = null;
-        }
-    }, []);
-
     const startSendingInput = useCallback(() => {
         if (intervalRef.current) return;
         intervalRef.current = window.setInterval(() => {
@@ -139,11 +173,12 @@ export default function PlayerController({ onLeave }: Props) {
     }, [emitInput, stopSendingInput]);
 
     const handleLeftDown = useCallback(() => {
+        if (!isCurrentPlayerAlive || roomState !== "playing") return;
         pressRef.current.left = true;
         setLeftPressed(true);
         emitInput();
         startSendingInput();
-    }, [emitInput, startSendingInput]);
+    }, [emitInput, isCurrentPlayerAlive, roomState, startSendingInput]);
 
     const handleLeftUp = useCallback(() => {
         pressRef.current.left = false;
@@ -155,11 +190,12 @@ export default function PlayerController({ onLeave }: Props) {
     }, [emitInput, stopSendingInput]);
 
     const handleRightDown = useCallback(() => {
+        if (!isCurrentPlayerAlive || roomState !== "playing") return;
         pressRef.current.right = true;
         setRightPressed(true);
         emitInput();
         startSendingInput();
-    }, [emitInput, startSendingInput]);
+    }, [emitInput, isCurrentPlayerAlive, roomState, startSendingInput]);
 
     const handleRightUp = useCallback(() => {
         pressRef.current.right = false;
@@ -220,6 +256,7 @@ export default function PlayerController({ onLeave }: Props) {
     }, [
         joined,
         roomState,
+        isCurrentPlayerAlive,
         handleLeftDown,
         handleLeftUp,
         handleRightDown,
@@ -451,6 +488,8 @@ export default function PlayerController({ onLeave }: Props) {
                     <PlayerLiveControls
                         roomCode={roomCode}
                         name={name}
+                        playerColor={currentPlayerColor}
+                        isAlive={isCurrentPlayerAlive}
                         gameMode={gameMode}
                         roomState={roomState}
                         teamCount={teamCount}

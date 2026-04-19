@@ -44,6 +44,30 @@
   gap: 0.9rem;
 }
 
+.joinedRoomCode {
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.joinedPlayerName {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.16rem 0.48rem;
+  border-radius: 999px;
+  font-weight: 800;
+  line-height: 1.2;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
+.joinedPlayerNameFallback {
+  font-weight: 800;
+  color: #eef4ff;
+}
+
+.joinedPlayerNameEliminated {
+  opacity: 0.7;
+}
+
 .lobbyState {
   display: grid;
   gap: 0.9rem;

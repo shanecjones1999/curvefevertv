@@ -17,6 +17,11 @@ import styles from "./ui.module.css";
 import { cx } from "./utils/cx";
 import { buildPlayerJoinUrl } from "./utils/joinLink";
 import { buildTeamLeaderboard, DEFAULT_TEAM_COUNT, getActiveTeamCount } from "./utils/teamMode";
+import {
+    buildPlayerColorById,
+    getFallbackPlayerColor,
+    isValidHexColor,
+} from "./utils/playerColor";
 
 type StartGameResponse = {
     ok: boolean;
@@ -107,17 +112,7 @@ export default function Host({ onLeave }: Props) {
     );
 
     const playerColorById = useMemo(() => {
-        const colorById = new Map<string, string>();
-        players.forEach((player, index) => {
-            const fallbackColor = PLAYER_COLORS[index % PLAYER_COLORS.length];
-            const hasValidHexColor =
-                typeof player.color === "string" && /^#/.test(player.color);
-            colorById.set(
-                player.id,
-                hasValidHexColor ? player.color! : fallbackColor,
-            );
-        });
-        return colorById;
+        return buildPlayerColorById(players);
     }, [players]);
 
     const getPlayerRowClassName = (player: Player) => {
@@ -206,17 +201,15 @@ export default function Host({ onLeave }: Props) {
                 : leaderboard;
 
         return source.map((entry, index) => {
-            const fallbackColor = PLAYER_COLORS[index % PLAYER_COLORS.length];
+            const fallbackColor = getFallbackPlayerColor(index);
             const colorFromPlayer =
                 entry.kind === "team"
                     ? entry.color
                     : playerColorById.get(entry.id);
-            const hasValidEntryColor =
-                typeof entry.color === "string" && /^#/.test(entry.color);
             return {
                 ...entry,
                 color:
-                    (hasValidEntryColor ? entry.color : undefined) ??
+                    (isValidHexColor(entry.color) ? entry.color : undefined) ??
                     colorFromPlayer ??
                     fallbackColor,
             };

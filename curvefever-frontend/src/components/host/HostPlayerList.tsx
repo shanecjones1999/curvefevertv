@@ -1,4 +1,6 @@
 import type { GameMode, Player } from "../../types";
+import styles from "../../ui.module.css";
+import { cx } from "../../utils/cx";
 import {
     getTeamColor,
     getTeamLabel,
@@ -32,39 +34,50 @@ export default function HostPlayerList({
         });
 
         return (
-            <section className={`panel inset-panel ${className ?? ""}`.trim()}>
-                <h3 className="section-title">Teams ({teamCount})</h3>
-                <div className="team-list">
+            <section className={cx(styles.panel, styles["inset-panel"], className)}>
+                <h3 className={styles["section-title"]}>Teams ({teamCount})</h3>
+                <div className={styles["team-list"]}>
                     {teams.map((team) => (
                         <section
                             key={team.teamId}
-                            className="team-group"
+                            className={styles["team-group"]}
                             aria-label={getTeamLabel(team.teamId)}
                         >
-                            <div className="team-group-header">
+                            <div className={styles["team-group-header"]}>
                                 <span
-                                    className="team-badge team-badge-colored"
+                                    className={cx(
+                                        styles["team-badge"],
+                                        styles["team-badge-colored"],
+                                    )}
                                     style={{
                                         borderColor: `${getTeamColor(team.teamId)}80`,
                                         backgroundColor: `${getTeamColor(team.teamId)}24`,
                                         color: getTeamColor(team.teamId),
                                     }}
                                 >
-                                    <span className="team-symbol" aria-hidden="true">
+                                    <span
+                                        className={styles["team-symbol"]}
+                                        aria-hidden="true"
+                                    >
                                         {getTeamSymbol(team.teamId)}
                                     </span>
                                     {getTeamLabel(team.teamId)}
                                 </span>
-                                <span className="team-group-count">
+                                <span className={styles["team-group-count"]}>
                                     {team.players.length}{" "}
                                     {team.players.length === 1
                                         ? "player"
                                         : "players"}
                                 </span>
                             </div>
-                            <ul className="player-list">
+                            <ul className={styles["player-list"]}>
                                 {team.players.length === 0 ? (
-                                    <li className="player-row player-empty">
+                                    <li
+                                        className={cx(
+                                            styles["player-row"],
+                                            styles["player-empty"],
+                                        )}
+                                    >
                                         No players assigned yet
                                     </li>
                                 ) : (
@@ -73,9 +86,15 @@ export default function HostPlayerList({
                                             key={player.id}
                                             className={getPlayerRowClassName(player)}
                                         >
-                                            <span className="player-name-with-status">
+                                            <span
+                                                className={
+                                                    styles["player-name-with-status"]
+                                                }
+                                            >
                                                 <span
-                                                    className="status-dot-wrap"
+                                                    className={
+                                                        styles["status-dot-wrap"]
+                                                    }
                                                     title={
                                                         player.socketId
                                                             ? "Connected"
@@ -83,7 +102,7 @@ export default function HostPlayerList({
                                                     }
                                                 >
                                                     <svg
-                                                        className="status-dot"
+                                                        className={styles["status-dot"]}
                                                         viewBox="0 0 10 10"
                                                         aria-hidden="true"
                                                     >
@@ -109,19 +128,24 @@ export default function HostPlayerList({
     }
 
     return (
-        <section className={`panel inset-panel ${className ?? ""}`.trim()}>
-            <h3 className="section-title">Players ({players.length})</h3>
-            <ul className="player-list">
+        <section className={cx(styles.panel, styles["inset-panel"], className)}>
+            <h3 className={styles["section-title"]}>Players ({players.length})</h3>
+            <ul className={styles["player-list"]}>
                 {players.length === 0 && (
-                    <li className="player-row player-empty">
+                    <li
+                        className={cx(
+                            styles["player-row"],
+                            styles["player-empty"],
+                        )}
+                    >
                         Waiting for players to join...
                     </li>
                 )}
                 {players.map((player) => (
                     <li key={player.id} className={getPlayerRowClassName(player)}>
-                        <span className="player-name-with-status">
+                        <span className={styles["player-name-with-status"]}>
                             <span
-                                className="status-dot-wrap"
+                                className={styles["status-dot-wrap"]}
                                 title={
                                     player.socketId
                                         ? "Connected"
@@ -129,7 +153,7 @@ export default function HostPlayerList({
                                 }
                             >
                                 <svg
-                                    className="status-dot"
+                                    className={styles["status-dot"]}
                                     viewBox="0 0 10 10"
                                     aria-hidden="true"
                                 >

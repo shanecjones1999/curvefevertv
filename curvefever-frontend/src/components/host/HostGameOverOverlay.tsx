@@ -1,4 +1,6 @@
 import type { GameMode } from "../../types";
+import styles from "../../ui.module.css";
+import { cx } from "../../utils/cx";
 import type { GameOverLeaderboardEntry, GameOverPayload } from "./types";
 
 type Props = {
@@ -25,33 +27,33 @@ export default function HostGameOverOverlay({
     onEndGame,
 }: Props) {
     return (
-        <section className="game-over-overlay">
-            <div className="game-over-panel">
-                <h2 className="game-over-title">
+        <section className={styles["game-over-overlay"]}>
+            <div className={styles["game-over-panel"]}>
+                <h2 className={styles["game-over-title"]}>
                     {gameMode === "battle-royale"
                         ? "Battle Royale Over"
                         : "Game Over"}
                 </h2>
-                <p className="game-over-subtitle">
+                <p className={styles["game-over-subtitle"]}>
                     {winnerName ? `${winnerName} wins!` : "Final standings"}
                 </p>
 
-                <div className="game-over-bars" role="list">
+                <div className={styles["game-over-bars"]} role="list">
                     {displayLeaderboard.map((entry, index) => {
                         return (
                             <div
                                 key={entry.id}
-                                className="game-over-bar-row"
+                                className={styles["game-over-bar-row"]}
                                 role="listitem"
                             >
-                                <div className="game-over-bar-meta">
-                                    <span className="game-over-rank">
+                                <div className={styles["game-over-bar-meta"]}>
+                                    <span className={styles["game-over-rank"]}>
                                         #{index + 1}
                                     </span>
-                                    <span className="game-over-name">
+                                    <span className={styles["game-over-name"]}>
                                         {entry.name}
                                     </span>
-                                    <span className="game-over-score">
+                                    <span className={styles["game-over-score"]}>
                                         {gameMode === "battle-royale"
                                             ? entry.id === gameOverData.winnerId
                                                 ? "Winner"
@@ -60,9 +62,15 @@ export default function HostGameOverOverlay({
                                     </span>
                                 </div>
                                 {gameMode !== "battle-royale" && (
-                                    <div className="game-over-bar-track">
+                                    <div className={styles["game-over-bar-track"]}>
                                         <progress
-                                            className={`game-over-progress ${getBarColorClassName(entry.color, index)}`}
+                                            className={cx(
+                                                styles["game-over-progress"],
+                                                getBarColorClassName(
+                                                    entry.color,
+                                                    index,
+                                                ),
+                                            )}
                                             value={Math.max(0, entry.score)}
                                             max={Math.max(1, highestScore)}
                                             aria-label={`${entry.name} score bar`}
@@ -74,16 +82,19 @@ export default function HostGameOverOverlay({
                     })}
                 </div>
 
-                <div className="game-over-actions">
+                <div className={styles["game-over-actions"]}>
                     <button
-                        className="ui-button"
+                        className={styles["ui-button"]}
                         onClick={onPlayAgain}
                         disabled={playersCount < 1}
                     >
                         Play Again
                     </button>
                     <button
-                        className="ui-button ui-button-ghost"
+                        className={cx(
+                            styles["ui-button"],
+                            styles["ui-button-ghost"],
+                        )}
                         onClick={onEndGame}
                     >
                         End Game

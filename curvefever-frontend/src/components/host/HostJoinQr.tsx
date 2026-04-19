@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import QRCode from "qrcode";
+import styles from "../../ui.module.css";
 
 type Props = {
     joinUrl: string | null;
@@ -54,21 +55,21 @@ export default function HostJoinQr({ joinUrl }: Props) {
 
     return (
         <div
-            className="host-join-qr"
+            className={styles["host-join-qr"]}
             role="group"
             aria-label="Phone join QR code"
         >
-            <p className="host-join-qr-label">Scan to join</p>
-            <div className="host-join-qr-frame" aria-hidden="true">
+            <p className={styles["host-join-qr-label"]}>Scan to join</p>
+            <div className={styles["host-join-qr-frame"]} aria-hidden="true">
                 {qrCode?.joinUrl === joinUrl ? (
                     <img
-                        className="host-join-qr-image"
+                        className={styles["host-join-qr-image"]}
                         src={qrCode.src}
                         alt="QR code to open the player join screen"
                     />
                 ) : (
                     <div
-                        className="host-join-qr-placeholder"
+                        className={styles["host-join-qr-placeholder"]}
                         aria-hidden="true"
                     >
                         Generating QR…

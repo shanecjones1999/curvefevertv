@@ -13,6 +13,8 @@ import HostLeaderboard from "./components/host/HostLeaderboard";
 import HostGameOverOverlay from "./components/host/HostGameOverOverlay";
 import type { GameConfig, GameOverPayload } from "./components/host/types";
 import { useHostRoomSync } from "./hooks/useHostRoomSync";
+import styles from "./ui.module.css";
+import { cx } from "./utils/cx";
 import { buildPlayerJoinUrl } from "./utils/joinLink";
 import { buildTeamLeaderboard, DEFAULT_TEAM_COUNT, getActiveTeamCount } from "./utils/teamMode";
 
@@ -53,7 +55,7 @@ type FullscreenCapableDocument = Document & {
 
 const PLAYER_COLOR_CLASS_BY_HEX: Record<string, string> = PLAYER_COLORS.reduce(
     (map, color, index) => {
-        map[color.toLowerCase()] = `bar-color-${index}`;
+        map[color.toLowerCase()] = styles[`bar-color-${index}`];
         return map;
     },
     {} as Record<string, string>,
@@ -119,14 +121,11 @@ export default function Host({ onLeave }: Props) {
     }, [players]);
 
     const getPlayerRowClassName = (player: Player) => {
-        const classes = ["player-row"];
-        if (!player.socketId) {
-            classes.push("player-row-disconnected");
-        }
-        if (!player.alive) {
-            classes.push("player-row-eliminated");
-        }
-        return classes.join(" ");
+        return cx(
+            styles["player-row"],
+            !player.socketId && styles["player-row-disconnected"],
+            !player.alive && styles["player-row-eliminated"],
+        );
     };
 
     const getPlayerDotColor = (player: Player) => {
@@ -141,7 +140,7 @@ export default function Host({ onLeave }: Props) {
         if (normalizedColor && PLAYER_COLOR_CLASS_BY_HEX[normalizedColor]) {
             return PLAYER_COLOR_CLASS_BY_HEX[normalizedColor];
         }
-        return `bar-color-${index % PLAYER_COLORS.length}`;
+        return styles[`bar-color-${index % PLAYER_COLORS.length}`];
     };
 
     const leaderboard = useMemo(() => {
@@ -446,11 +445,14 @@ export default function Host({ onLeave }: Props) {
 
     const getLeaderboardRowClassName = (entry: LeaderboardEntry) => {
         if (entry.kind === "team") {
-            return `player-row ${entry.alive ? "" : "player-row-eliminated"}`.trim();
+            return cx(
+                styles["player-row"],
+                !entry.alive && styles["player-row-eliminated"],
+            );
         }
 
         const player = players.find((candidate) => candidate.id === entry.id);
-        return player ? getPlayerRowClassName(player) : "player-row";
+        return player ? getPlayerRowClassName(player) : styles["player-row"];
     };
 
     const getLeaderboardDotColor = (entry: LeaderboardEntry) => {
@@ -542,7 +544,7 @@ export default function Host({ onLeave }: Props) {
             playersSlot={
                 !playing ? (
                     <HostPlayerList
-                        className="host-lobby-player-panel"
+                        className={styles["host-lobby-player-panel"]}
                         players={players}
                         gameMode={gameMode}
                         teamCount={teamCount}
@@ -562,7 +564,12 @@ export default function Host({ onLeave }: Props) {
     if (!roomCode || isEditingGameSetup) {
         if (!roomCode) {
             return (
-                <main className="page-shell page-shell-host-lobby">
+                <main
+                    className={cx(
+                        styles["page-shell"],
+                        styles["page-shell-host-lobby"],
+                    )}
+                >
                     <HostGameSetup
                         gameMode={draftGameMode}
                         teamCount={draftTeamCount}
@@ -583,14 +590,27 @@ export default function Host({ onLeave }: Props) {
     if (!playing) {
         return (
             <main
-                className="page-shell page-shell-host-lobby"
+                className={cx(
+                    styles["page-shell"],
+                    styles["page-shell-host-lobby"],
+                )}
                 ref={hostScreenRef}
             >
-                <section className="panel host-panel host-lobby-panel">
+                <section
+                    className={cx(
+                        styles.panel,
+                        styles["host-panel"],
+                        styles["host-lobby-panel"],
+                    )}
+                >
                     {hostControls}
                 </section>
                 {isEditingGameSetup && (
-                    <div className="host-setup-overlay" role="dialog" aria-modal="true">
+                    <div
+                        className={styles["host-setup-overlay"]}
+                        role="dialog"
+                        aria-modal="true"
+                    >
                         <HostGameSetup
                             gameMode={draftGameMode}
                             teamCount={draftTeamCount}
@@ -611,12 +631,21 @@ export default function Host({ onLeave }: Props) {
 
     return (
         <main
-            className="page-shell page-shell-host-playing"
+            className={cx(
+                styles["page-shell"],
+                styles["page-shell-host-playing"],
+            )}
             ref={hostScreenRef}
         >
-            <div className="host-playing-screen">
-                <div className="host-side-column">
-                    <section className="panel host-panel host-control-panel">
+            <div className={styles["host-playing-screen"]}>
+                <div className={styles["host-side-column"]}>
+                    <section
+                        className={cx(
+                            styles.panel,
+                            styles["host-panel"],
+                            styles["host-control-panel"],
+                        )}
+                    >
                         {hostControls}
                     </section>
                     <HostLeaderboard
@@ -630,7 +659,7 @@ export default function Host({ onLeave }: Props) {
                     />
                 </div>
 
-                <div className="game-stage">
+                <div className={styles["game-stage"]}>
                     <PhaserGame
                         players={players}
                         gameMode={gameMode}
@@ -639,9 +668,14 @@ export default function Host({ onLeave }: Props) {
                         height={gameConfig.height}
                     />
                     {roundStartCountdown > 0 && !gameOverData && (
-                        <div className="round-start-overlay" aria-live="polite">
-                            <p className="round-start-label">Round starting</p>
-                            <p className="round-start-countdown">
+                        <div
+                            className={styles["round-start-overlay"]}
+                            aria-live="polite"
+                        >
+                            <p className={styles["round-start-label"]}>
+                                Round starting
+                            </p>
+                            <p className={styles["round-start-countdown"]}>
                                 {roundStartCountdown}
                             </p>
                         </div>

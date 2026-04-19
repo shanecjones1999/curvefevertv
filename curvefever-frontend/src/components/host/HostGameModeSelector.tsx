@@ -1,4 +1,6 @@
 import type { GameMode } from "../../types";
+import styles from "../../ui.module.css";
+import { cx } from "../../utils/cx";
 import { MAX_TEAMS, MIN_TEAMS } from "../../utils/teamMode";
 
 type Props = {
@@ -39,9 +41,9 @@ export default function HostGameModeSelector({
     onTeamCountChange,
 }: Props) {
     return (
-        <div className="host-mode-selection">
+        <div className={styles["host-mode-selection"]}>
             <div
-                className="host-mode-toggle"
+                className={styles["host-mode-toggle"]}
                 role="group"
                 aria-label="Select game mode"
             >
@@ -49,16 +51,17 @@ export default function HostGameModeSelector({
                     <button
                         key={modeOption.value}
                         type="button"
-                        className={`host-mode-option ${
-                            gameMode === modeOption.value ? "is-active" : ""
-                        }`}
+                        className={cx(
+                            styles["host-mode-option"],
+                            gameMode === modeOption.value && styles["is-active"],
+                        )}
                         onClick={() => onGameModeChange(modeOption.value)}
                         disabled={disabled}
                     >
-                        <span className="host-mode-option-title">
+                        <span className={styles["host-mode-option-title"]}>
                             {modeOption.title}
                         </span>
-                        <span className="host-mode-option-copy">
+                        <span className={styles["host-mode-option-copy"]}>
                             {modeOption.description}
                         </span>
                     </button>
@@ -66,9 +69,9 @@ export default function HostGameModeSelector({
             </div>
 
             {gameMode === "teams" ? (
-                <div className="host-team-count">
-                    <span className="host-team-count-label">Teams</span>
-                    <div className="host-team-count-options" role="group">
+                <div className={styles["host-team-count"]}>
+                    <span className={styles["host-team-count-label"]}>Teams</span>
+                    <div className={styles["host-team-count-options"]} role="group">
                         {Array.from(
                             { length: MAX_TEAMS - MIN_TEAMS + 1 },
                             (_, index) => {
@@ -77,9 +80,11 @@ export default function HostGameModeSelector({
                                     <button
                                         key={value}
                                         type="button"
-                                        className={`host-team-count-option ${
-                                            teamCount === value ? "is-active" : ""
-                                        }`}
+                                        className={cx(
+                                            styles["host-team-count-option"],
+                                            teamCount === value &&
+                                                styles["is-active"],
+                                        )}
                                         onClick={() => onTeamCountChange(value)}
                                         disabled={disabled}
                                     >

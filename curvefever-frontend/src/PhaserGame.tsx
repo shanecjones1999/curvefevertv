@@ -1,6 +1,8 @@
 import { useEffect, useRef } from "react";
 import Phaser from "phaser";
 import type { GameMode, Player } from "./types";
+import styles from "./ui.module.css";
+import { cx } from "./utils/cx";
 import {
     DEFAULT_GAME_HEIGHT,
     DEFAULT_GAME_WIDTH,
@@ -233,8 +235,8 @@ export default function PhaserGame({
     }, [gameMode, players, showTeamLabels]);
 
     return (
-        <div className={`phaser-shell ${className ?? ""}`.trim()}>
-            <div ref={gameRef} className="phaser-host" />
+        <div className={cx(styles["phaser-shell"], className)}>
+            <div ref={gameRef} className={styles["phaser-host"]} />
         </div>
     );
 }

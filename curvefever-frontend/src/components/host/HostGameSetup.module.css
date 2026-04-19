@@ -1,0 +1,75 @@
+.panel {
+  width: min(100%, 760px);
+  margin: 0 auto;
+  gap: 1rem;
+}
+
+.details {
+  display: grid;
+  gap: 1rem;
+  padding: clamp(1rem, 2.8vw, 1.35rem);
+}
+
+.copy {
+  display: grid;
+  gap: 0.35rem;
+  text-align: center;
+}
+
+.highlightRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  justify-content: center;
+  margin-top: 0.2rem;
+}
+
+.highlightPill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0.16rem 0.55rem;
+  border-radius: var(--cf-radius-pill);
+  background: rgba(27, 57, 121, 0.4);
+  border: 1px solid rgba(146, 197, 255, 0.28);
+  color: #dcecff;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.modeTitle,
+.modeDescription {
+  margin: 0;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.actions :global(.ui-button) {
+  box-shadow: none;
+}
+
+@media (max-width: 680px) {
+  .actions {
+    align-items: stretch;
+  }
+
+  .actions :global(.ui-button) {
+    width: 100%;
+  }
+}
+
+@media (max-height: 920px) and (min-width: 700px) {
+  .panel {
+    gap: 0.8rem;
+  }
+
+  .details {
+    gap: 0.8rem;
+    padding: 0.85rem;
+  }
+}

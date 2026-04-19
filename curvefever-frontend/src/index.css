@@ -1,10 +1,55 @@
 :root {
   --cf-bg: #070b18;
   --cf-bg-soft: #0e1530;
+  --cf-bg-elevated: #101a39;
+  --cf-bg-overlay: rgba(4, 8, 20, 0.78);
   --cf-text: #edf3ff;
   --cf-text-soft: #b7caef;
   --cf-text-muted: #8ca2cc;
+  --cf-text-bright: #f6fbff;
+  --cf-accent: #4b82ff;
+  --cf-accent-strong: #2d5de0;
+  --cf-accent-soft: rgba(75, 130, 255, 0.18);
+  --cf-accent-soft-strong: rgba(75, 130, 255, 0.32);
+  --cf-accent-soft-muted: rgba(75, 130, 255, 0.12);
+  --cf-danger: #d93e72;
+  --cf-danger-strong: #b5285b;
   --cf-grid: rgba(87, 136, 255, 0.16);
+  --cf-border-subtle: rgba(120, 179, 255, 0.18);
+  --cf-border-default: rgba(124, 173, 255, 0.34);
+  --cf-border-strong: rgba(151, 195, 255, 0.52);
+  --cf-border-focus: rgba(167, 214, 255, 0.92);
+  --cf-surface-panel:
+    linear-gradient(160deg, rgba(14, 19, 39, 0.85), rgba(10, 13, 28, 0.92));
+  --cf-surface-panel-strong:
+    linear-gradient(160deg, rgba(15, 24, 53, 0.9), rgba(9, 15, 34, 0.96));
+  --cf-surface-card:
+    linear-gradient(180deg, rgba(15, 25, 58, 0.86), rgba(10, 15, 35, 0.92));
+  --cf-surface-elevated: rgba(10, 17, 39, 0.76);
+  --cf-surface-inset: rgba(7, 14, 35, 0.55);
+  --cf-surface-chip: rgba(18, 34, 84, 0.52);
+  --cf-surface-chip-strong: rgba(27, 57, 121, 0.55);
+  --cf-surface-ghost: rgba(14, 26, 58, 0.45);
+  --cf-button-primary:
+    linear-gradient(150deg, rgba(43, 102, 255, 0.88), rgba(29, 67, 207, 0.95));
+  --cf-button-secondary:
+    linear-gradient(150deg, rgba(18, 29, 63, 0.92), rgba(14, 22, 50, 0.92));
+  --cf-button-danger:
+    linear-gradient(150deg, rgba(168, 35, 75, 0.95), rgba(127, 22, 61, 0.95));
+  --cf-shadow-inset: inset 0 1px 0 rgba(188, 220, 255, 0.18);
+  --cf-shadow-sm: 0 8px 24px rgba(8, 20, 50, 0.28);
+  --cf-shadow-md: 0 14px 32px rgba(8, 20, 50, 0.4);
+  --cf-shadow-lg: 0 20px 60px rgba(6, 9, 20, 0.62);
+  --cf-shadow-accent: 0 12px 32px rgba(25, 69, 196, 0.45);
+  --cf-shadow-danger: 0 8px 22px rgba(146, 25, 63, 0.35);
+  --cf-focus-ring: 0 0 0 3px rgba(72, 132, 255, 0.3);
+  --cf-radius-sm: 0.65rem;
+  --cf-radius-md: 0.85rem;
+  --cf-radius-lg: 1rem;
+  --cf-radius-xl: 1.2rem;
+  --cf-radius-pill: 999px;
+  --cf-transition-fast: 120ms ease;
+  --cf-transition-medium: 160ms ease;
   font-family: "Inter", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   line-height: 1.45;
   font-weight: 400;
@@ -36,7 +81,7 @@ body {
   background:
     radial-gradient(circle at 0% 0%, rgba(47, 96, 221, 0.2), transparent 38%),
     radial-gradient(circle at 100% 100%, rgba(37, 69, 152, 0.22), transparent 42%),
-    linear-gradient(180deg, #070b18, #040711 72%);
+    linear-gradient(180deg, var(--cf-bg), #040711 72%);
 }
 
 body::before {

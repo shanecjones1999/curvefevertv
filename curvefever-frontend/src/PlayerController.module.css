@@ -1,3 +1,105 @@
+.controllerLive {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.modeClassic {
+  --controller-accent: rgba(73, 134, 255, 0.9);
+  --controller-accent-soft: rgba(73, 134, 255, 0.18);
+}
+
+.modeTeams {
+  --controller-accent: rgba(115, 232, 184, 0.92);
+  --controller-accent-soft: rgba(115, 232, 184, 0.18);
+}
+
+.modeBattleRoyale {
+  --controller-accent: rgba(255, 133, 107, 0.95);
+  --controller-accent-soft: rgba(255, 133, 107, 0.18);
+}
+
+.sessionCard {
+  display: grid;
+  gap: 0.75rem;
+  padding: 1rem;
+  border-radius: var(--cf-radius-lg);
+  border: 1px solid color-mix(in srgb, var(--controller-accent) 35%, var(--cf-border-default));
+  background:
+    linear-gradient(160deg, rgba(14, 25, 58, 0.92), rgba(9, 16, 37, 0.88)),
+    var(--controller-accent-soft);
+  box-shadow: inset 0 1px 0 rgba(213, 230, 255, 0.1);
+}
+
+.sessionHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.8rem;
+}
+
+.sessionEyebrow {
+  margin: 0;
+  color: var(--cf-text-soft);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.sessionTitle {
+  margin: 0.18rem 0 0;
+  font-size: 1.35rem;
+}
+
+.sessionState {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0.3rem 0.7rem;
+  border-radius: var(--cf-radius-pill);
+  background: var(--controller-accent-soft);
+  color: var(--cf-text-bright);
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.sessionMetaRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.sessionMetaChip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 0.35rem 0.7rem;
+  border-radius: var(--cf-radius-pill);
+  border: 1px solid var(--cf-border-subtle);
+  background: color-mix(in srgb, var(--cf-surface-elevated) 88%, transparent);
+  color: #dcebff;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.stateCard {
+  display: grid;
+  gap: 0.4rem;
+  padding: 1rem;
+  border-radius: var(--cf-radius-lg);
+  border: 1px solid var(--cf-border-subtle);
+  background: color-mix(in srgb, var(--cf-surface-inset) 96%, transparent);
+}
+
+.stateTitle {
+  margin: 0;
+  color: var(--cf-text-bright);
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
 .button {
   -webkit-user-select: none;
   user-select: none;
@@ -10,13 +112,19 @@
   font-weight: 700;
   letter-spacing: 0.03em;
   padding: 2.1rem 1rem;
-  border-radius: 1.2rem;
-  border: 1px solid rgba(157, 203, 255, 0.34);
-  background: linear-gradient(145deg, rgba(35, 91, 230, 0.92), rgba(28, 67, 180, 0.95));
-  color: #eef4ff;
+  border-radius: var(--cf-radius-xl);
+  border: 1px solid color-mix(in srgb, var(--controller-accent) 30%, var(--cf-border-default));
+  background:
+    radial-gradient(circle at 50% 0%, color-mix(in srgb, var(--controller-accent) 28%, transparent), transparent 55%),
+    linear-gradient(145deg, rgba(35, 91, 230, 0.92), rgba(28, 67, 180, 0.95));
+  color: var(--cf-text-bright);
   box-shadow: 0 18px 32px rgba(20, 49, 132, 0.38), inset 0 1px 0 rgba(183, 212, 255, 0.34);
   margin: 0;
-  transition: transform 120ms ease, box-shadow 140ms ease;
+  transition: transform var(--cf-transition-fast), box-shadow 140ms ease, border-color var(--cf-transition-medium);
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 0.28rem;
 }
 .button:active,
 .buttonPressed {
@@ -25,7 +133,7 @@
 }
 .button:focus {
   outline: none;
-  box-shadow: 0 0 0 3px rgba(72, 132, 255, 0.3), 0 10px 24px rgba(20, 49, 132, 0.34);
+  box-shadow: var(--cf-focus-ring), 0 10px 24px rgba(20, 49, 132, 0.34);
 }
 .button[disabled] {
   opacity: 0.5;
@@ -39,9 +147,15 @@
   width: 100%;
 }
 
-.controllerLive {
-  display: grid;
-  gap: 0.9rem;
+.buttonDirection {
+  font-size: 0.8rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--cf-text-bright) 72%, transparent);
+}
+
+.buttonLabel {
+  font-size: clamp(1.15rem, 4.4vw, 1.55rem);
 }
 
 .lobbyState {
@@ -52,7 +166,7 @@
 .lobbyMessage {
   margin: 0;
   text-align: center;
-  color: rgba(224, 237, 255, 0.88);
+  color: color-mix(in srgb, var(--cf-text-bright) 88%, transparent);
   font-weight: 600;
 }
 
@@ -64,7 +178,7 @@
 .teamSelectorLabel {
   margin: 0;
   text-align: center;
-  color: rgba(183, 202, 239, 0.88);
+  color: color-mix(in srgb, var(--cf-text-soft) 88%, transparent);
   font-size: 0.9rem;
   font-weight: 700;
   letter-spacing: 0.04em;
@@ -78,25 +192,39 @@
 }
 
 .teamButton {
-  min-height: 54px;
-  border-radius: 0.85rem;
-  border: 1px solid rgba(126, 178, 255, 0.35);
-  background: rgba(10, 17, 39, 0.76);
-  color: #eaf2ff;
+  min-height: 72px;
+  border-radius: var(--cf-radius-md);
+  border: 1px solid var(--cf-border-default);
+  background: var(--cf-surface-elevated);
+  color: var(--cf-text-bright);
   font-weight: 700;
   cursor: pointer;
-  transition: transform 120ms ease, border-color 160ms ease, background-color 160ms ease;
+  transition: transform var(--cf-transition-fast), border-color var(--cf-transition-medium), background-color var(--cf-transition-medium);
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 0.18rem;
 }
 
 .teamButton:hover {
   transform: translateY(-1px);
-  border-color: rgba(151, 195, 255, 0.7);
-  background: rgba(43, 102, 255, 0.22);
+  border-color: var(--cf-border-strong);
+  background: color-mix(in srgb, var(--cf-accent-soft) 82%, transparent);
 }
 
 .teamButtonActive {
-  border-color: rgba(146, 197, 255, 0.95);
-  background: rgba(43, 102, 255, 0.35);
+  border-color: color-mix(in srgb, var(--cf-border-strong) 96%, rgba(214, 234, 255, 0.1));
+  background: color-mix(in srgb, var(--cf-accent-soft-strong) 92%, transparent);
+}
+
+.teamButtonLabel {
+  font-size: 0.96rem;
+}
+
+.teamButtonHint {
+  color: color-mix(in srgb, var(--cf-text-bright) 72%, transparent);
+  font-size: 0.74rem;
+  font-weight: 600;
 }
 
 .leaveWrap {
@@ -118,5 +246,46 @@
 
   .leaveWrap :global(.ui-button) {
     width: 100%;
+  }
+}
+
+@media (max-height: 920px) and (min-width: 700px) {
+  .controllerLive,
+  .lobbyState {
+    gap: 0.7rem;
+  }
+
+  .sessionCard,
+  .stateCard {
+    padding: 0.8rem;
+  }
+
+  .sessionTitle {
+    font-size: 1.15rem;
+  }
+
+  .sessionMetaChip {
+    min-height: 32px;
+    padding: 0.28rem 0.62rem;
+  }
+
+  .button {
+    min-height: clamp(160px, 32vh, 240px);
+    padding: 1.4rem 0.8rem;
+  }
+
+  .teamButton {
+    min-height: 60px;
+  }
+}
+
+@media (max-height: 780px) and (min-width: 700px) {
+  .button {
+    min-height: clamp(138px, 26vh, 200px);
+    padding: 1.1rem 0.75rem;
+  }
+
+  .teamButton {
+    min-height: 54px;
   }
 }

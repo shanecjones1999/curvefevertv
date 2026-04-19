@@ -24,9 +24,17 @@ export default function HostGameOverOverlay({
     onPlayAgain,
     onEndGame,
 }: Props) {
+    const gameModeLabel =
+        gameMode === "classic"
+            ? "Classic"
+            : gameMode === "teams"
+              ? "Teams"
+              : "Battle Royale";
+
     return (
         <section className="game-over-overlay">
             <div className="game-over-panel">
+                <p className="game-over-kicker">Match complete</p>
                 <h2 className="game-over-title">
                     {gameMode === "battle-royale"
                         ? "Battle Royale Over"
@@ -35,6 +43,17 @@ export default function HostGameOverOverlay({
                 <p className="game-over-subtitle">
                     {winnerName ? `${winnerName} wins!` : "Final standings"}
                 </p>
+                <div className="game-over-summary-row" aria-label="Match summary">
+                    <span className="game-over-summary-pill">{gameModeLabel}</span>
+                    <span className="game-over-summary-pill">
+                        {playersCount} {playersCount === 1 ? "contender" : "contenders"}
+                    </span>
+                    {gameMode !== "battle-royale" && (
+                        <span className="game-over-summary-pill">
+                            Top score {highestScore}
+                        </span>
+                    )}
+                </div>
 
                 <div className="game-over-bars" role="list">
                     {displayLeaderboard.map((entry, index) => {
@@ -80,7 +99,7 @@ export default function HostGameOverOverlay({
                         onClick={onPlayAgain}
                         disabled={playersCount < 1}
                     >
-                        Play Again
+                        Run It Back
                     </button>
                     <button
                         className="ui-button ui-button-ghost"

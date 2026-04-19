@@ -1,0 +1,337 @@
+.landingFooter {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: max(0.8rem, env(safe-area-inset-bottom));
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.landingFooterLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.42rem;
+  padding: 0.35rem 0.62rem;
+  border-radius: var(--cf-radius-pill);
+  color: rgba(224, 237, 255, 0.9);
+  text-decoration: none;
+  border: 1px solid color-mix(in srgb, var(--cf-border-default) 78%, rgba(188, 220, 255, 0.12));
+  background: linear-gradient(160deg, rgba(13, 24, 54, 0.58), rgba(10, 19, 44, 0.44));
+  box-shadow: var(--cf-shadow-sm), var(--cf-shadow-inset);
+  -webkit-backdrop-filter: blur(8px) saturate(1.2);
+  backdrop-filter: blur(8px) saturate(1.2);
+  transition:
+    color var(--cf-transition-medium),
+    border-color var(--cf-transition-medium),
+    background-color var(--cf-transition-medium),
+    box-shadow var(--cf-transition-medium);
+  pointer-events: auto;
+  animation: landingFooterFadeIn 380ms ease-out both;
+}
+
+.landingFooterLink:hover {
+  color: #eef6ff;
+  border-color: rgba(173, 220, 255, 0.56);
+  background: linear-gradient(160deg, rgba(19, 35, 79, 0.66), rgba(14, 26, 61, 0.52));
+  box-shadow: 0 12px 28px rgba(7, 16, 40, 0.4), inset 0 1px 0 rgba(204, 230, 255, 0.24);
+}
+
+.landingFooterLink:focus-visible {
+  outline: 2px solid var(--cf-border-focus);
+  outline-offset: 2px;
+}
+
+.landingFooterIcon {
+  width: 16px;
+  height: 16px;
+  display: block;
+}
+
+.landingHeroPanel {
+  gap: 1.5rem;
+  overflow: hidden;
+}
+
+.landingHeroGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(280px, 0.9fr);
+  gap: 1.2rem;
+  align-items: stretch;
+}
+
+.landingCopy {
+  display: grid;
+  gap: 1rem;
+  align-content: start;
+}
+
+.brandRow {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.65rem;
+}
+
+.brandLogo {
+  width: clamp(42px, 7vw, 64px);
+  height: auto;
+  display: block;
+  shape-rendering: geometricPrecision;
+}
+
+.brandText {
+  margin: 0;
+}
+
+.landingBrandBlock {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.landingKicker {
+  margin: 0;
+  color: rgba(209, 227, 255, 0.7);
+  font-size: 0.86rem;
+  max-width: 44ch;
+}
+
+.landingTitle {
+  max-width: 11ch;
+  font-size: clamp(2.4rem, 6vw, 4.4rem);
+  line-height: 0.96;
+}
+
+.landingSubtitle {
+  max-width: 56ch;
+  font-size: 1rem;
+}
+
+.landingHighlightRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+
+.landingHighlightPill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 38px;
+  padding: 0.4rem 0.8rem;
+  border-radius: var(--cf-radius-pill);
+  border: 1px solid color-mix(in srgb, var(--cf-border-default) 78%, transparent);
+  background: color-mix(in srgb, var(--cf-bg-elevated) 76%, transparent);
+  color: #dcecff;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.landingPreviewStack {
+  display: grid;
+  gap: 0.85rem;
+  align-content: center;
+}
+
+.landingPreviewCard {
+  position: relative;
+  display: grid;
+  gap: 0.7rem;
+  min-height: 180px;
+  padding: 1rem;
+  border-radius: var(--cf-radius-lg);
+  border: 1px solid color-mix(in srgb, var(--cf-border-default) 65%, transparent);
+  background:
+    radial-gradient(circle at top right, rgba(102, 154, 255, 0.16), transparent 42%),
+    var(--cf-surface-card);
+  box-shadow: inset 0 1px 0 rgba(207, 227, 255, 0.08);
+}
+
+.landingPreviewCardHost {
+  transform: rotate(-2deg);
+}
+
+.landingPreviewCardPhone {
+  transform: translateX(1rem) rotate(2deg);
+}
+
+.landingPreviewLabel {
+  color: rgba(183, 202, 239, 0.82);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.landingPreviewTitle {
+  font-size: 1.1rem;
+}
+
+.landingPreviewCode {
+  font-size: clamp(1.8rem, 5vw, 2.9rem);
+  letter-spacing: 0.22em;
+  font-weight: 800;
+  color: #f0f7ff;
+}
+
+.landingPreviewPlayers,
+.landingPreviewControls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.landingPreviewPlayers span,
+.landingPreviewControls span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 0.3rem 0.65rem;
+  border-radius: var(--cf-radius-pill);
+  background: rgba(20, 38, 86, 0.6);
+  color: #dcecff;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.landingPreviewCopy {
+  margin: 0;
+  color: var(--cf-text-soft);
+}
+
+.landingRoleGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 0.85rem;
+}
+
+.landingRoleCard {
+  display: grid;
+  gap: 0.45rem;
+  align-content: start;
+  padding: 1rem;
+  text-align: left;
+  border-radius: var(--cf-radius-lg);
+  border: 1px solid color-mix(in srgb, var(--cf-border-default) 72%, transparent);
+  background: var(--cf-surface-panel-strong);
+  color: var(--cf-text);
+  cursor: pointer;
+  transition:
+    transform 140ms ease,
+    border-color var(--cf-transition-medium),
+    box-shadow var(--cf-transition-medium);
+}
+
+.landingRoleCard:hover {
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--cf-border-strong) 88%, rgba(214, 234, 255, 0.2));
+  box-shadow: var(--cf-shadow-md);
+}
+
+.landingRoleCard:focus-visible {
+  outline: 2px solid var(--cf-border-focus);
+  outline-offset: 2px;
+}
+
+.landingRoleCardPrimary {
+  background:
+    radial-gradient(circle at top right, rgba(88, 149, 255, 0.28), transparent 40%),
+    linear-gradient(160deg, rgba(25, 53, 127, 0.86), rgba(12, 20, 46, 0.96));
+}
+
+.landingRoleEyebrow {
+  color: rgba(183, 202, 239, 0.84);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.landingRoleTitle {
+  font-size: 1.22rem;
+}
+
+.landingRoleCopy {
+  color: var(--cf-text-soft);
+  line-height: 1.45;
+}
+
+.landingRoleMeta {
+  color: #9fd1ff;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
+@keyframes landingFooterFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landingFooterLink {
+    animation: none;
+  }
+}
+
+@media (max-width: 980px) {
+  .landingHeroGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .landingPreviewStack {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-content: initial;
+  }
+
+  .landingPreviewCardHost,
+  .landingPreviewCardPhone {
+    transform: none;
+  }
+}
+
+@media (max-width: 680px) {
+  .landingPreviewStack {
+    grid-template-columns: 1fr;
+  }
+
+  .landingRoleGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-height: 920px) and (min-width: 700px) {
+  .landingHeroPanel {
+    gap: 1rem;
+  }
+
+  .landingHeroGrid,
+  .landingCopy {
+    gap: 0.8rem;
+  }
+
+  .landingTitle {
+    font-size: clamp(2rem, 4.2vw, 3.2rem);
+  }
+
+  .landingPreviewCard {
+    min-height: 146px;
+    padding: 0.85rem;
+  }
+
+  .landingRoleCard {
+    padding: 0.85rem;
+  }
+}
+
+@media (max-height: 780px) and (min-width: 700px) {
+  .landingPreviewCard {
+    min-height: 132px;
+  }
+}

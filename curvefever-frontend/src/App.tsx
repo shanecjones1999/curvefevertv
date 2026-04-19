@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import "./App.css";
+import styles from "./App.module.css";
 import Host from "./Host";
 import PlayerController from "./PlayerController";
 import { getRequestedRoleFromUrl } from "./utils/joinLink";
@@ -38,97 +39,163 @@ function App() {
 
     return (
         <main className="page-shell page-shell-landing">
-            <section className="panel role-panel">
-                <div className="brand-row">
-                    <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        viewBox="0 0 64 64"
-                        role="img"
-                        aria-label="Curvefever logo"
-                        className="brand-logo"
-                    >
-                        <defs>
-                            <radialGradient
-                                id="brand-bg"
-                                cx="50%"
-                                cy="25%"
-                                r="85%"
+            <section className={`panel role-panel ${styles.landingHeroPanel}`}>
+                <div className={styles.landingHeroGrid}>
+                    <div className={styles.landingCopy}>
+                        <div className={styles.brandRow}>
+                            <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                viewBox="0 0 64 64"
+                                role="img"
+                                aria-label="Curvefever logo"
+                                className={styles.brandLogo}
                             >
-                                <stop offset="0%" stopColor="#1c2d66" />
-                                <stop offset="100%" stopColor="#070c1f" />
-                            </radialGradient>
-                            <linearGradient
-                                id="brand-trail-a"
-                                x1="0"
-                                y1="0"
-                                x2="1"
-                                y2="1"
-                            >
-                                <stop offset="0%" stopColor="#5cf6ff" />
-                                <stop offset="100%" stopColor="#2c76ff" />
-                            </linearGradient>
-                            <linearGradient
-                                id="brand-trail-b"
-                                x1="1"
-                                y1="0"
-                                x2="0"
-                                y2="1"
-                            >
-                                <stop offset="0%" stopColor="#ff66c4" />
-                                <stop offset="100%" stopColor="#ff934f" />
-                            </linearGradient>
-                        </defs>
-                        <rect
-                            x="2"
-                            y="2"
-                            width="60"
-                            height="60"
-                            rx="14"
-                            fill="url(#brand-bg)"
-                            stroke="#395fbf"
-                            strokeWidth="2"
-                        />
-                        <path
-                            d="M14 44C14 30 24 20 35 20c8 0 15 4 18 11"
-                            fill="none"
-                            stroke="url(#brand-trail-a)"
-                            strokeWidth="5"
-                            strokeLinecap="round"
-                        />
-                        <path
-                            d="M50 22c0 12-8 22-20 22-6 0-11-2-15-6"
-                            fill="none"
-                            stroke="url(#brand-trail-b)"
-                            strokeWidth="5"
-                            strokeLinecap="round"
-                        />
-                        <circle cx="53" cy="32" r="4" fill="#61f7ff" />
-                        <circle cx="17" cy="38" r="3.5" fill="#ff7ccf" />
-                    </svg>
-                    <p className="eyebrow brand-text">Curvefever TV</p>
+                                <defs>
+                                    <radialGradient
+                                        id="brand-bg"
+                                        cx="50%"
+                                        cy="25%"
+                                        r="85%"
+                                    >
+                                        <stop offset="0%" stopColor="#1c2d66" />
+                                        <stop offset="100%" stopColor="#070c1f" />
+                                    </radialGradient>
+                                    <linearGradient
+                                        id="brand-trail-a"
+                                        x1="0"
+                                        y1="0"
+                                        x2="1"
+                                        y2="1"
+                                    >
+                                        <stop offset="0%" stopColor="#5cf6ff" />
+                                        <stop offset="100%" stopColor="#2c76ff" />
+                                    </linearGradient>
+                                    <linearGradient
+                                        id="brand-trail-b"
+                                        x1="1"
+                                        y1="0"
+                                        x2="0"
+                                        y2="1"
+                                    >
+                                        <stop offset="0%" stopColor="#ff66c4" />
+                                        <stop offset="100%" stopColor="#ff934f" />
+                                    </linearGradient>
+                                </defs>
+                                <rect
+                                    x="2"
+                                    y="2"
+                                    width="60"
+                                    height="60"
+                                    rx="14"
+                                    fill="url(#brand-bg)"
+                                    stroke="#395fbf"
+                                    strokeWidth="2"
+                                />
+                                <path
+                                    d="M14 44C14 30 24 20 35 20c8 0 15 4 18 11"
+                                    fill="none"
+                                    stroke="url(#brand-trail-a)"
+                                    strokeWidth="5"
+                                    strokeLinecap="round"
+                                />
+                                <path
+                                    d="M50 22c0 12-8 22-20 22-6 0-11-2-15-6"
+                                    fill="none"
+                                    stroke="url(#brand-trail-b)"
+                                    strokeWidth="5"
+                                    strokeLinecap="round"
+                                />
+                                <circle cx="53" cy="32" r="4" fill="#61f7ff" />
+                                <circle cx="17" cy="38" r="3.5" fill="#ff7ccf" />
+                            </svg>
+                            <div className={styles.landingBrandBlock}>
+                                <p className={`eyebrow ${styles.brandText}`}>Curvefever TV</p>
+                                <p className={styles.landingKicker}>
+                                    Arcade party racing for one big screen and a
+                                    room full of phones
+                                </p>
+                            </div>
+                        </div>
+                        <h1 className={`title ${styles.landingTitle}`}>
+                            Run the room. Hand everyone a controller.
+                        </h1>
+                        <p className={`subtitle ${styles.landingSubtitle}`}>
+                            Host the arena on the TV, let players join in seconds,
+                            and turn every match into a polished couch-competition
+                            moment.
+                        </p>
+                        <div className={styles.landingHighlightRow} aria-label="Product highlights">
+                            <span className={styles.landingHighlightPill}>
+                                Fast room-code join
+                            </span>
+                            <span className={styles.landingHighlightPill}>
+                                Mobile-first controls
+                            </span>
+                            <span className={styles.landingHighlightPill}>
+                                Built for party play
+                            </span>
+                        </div>
+                    </div>
+
+                    <div className={styles.landingPreviewStack} aria-hidden="true">
+                        <article className={`${styles.landingPreviewCard} ${styles.landingPreviewCardHost}`}>
+                            <span className={styles.landingPreviewLabel}>Host screen</span>
+                            <strong className={styles.landingPreviewTitle}>
+                                Command-center lobby
+                            </strong>
+                            <div className={styles.landingPreviewCode}>ABCD</div>
+                            <div className={styles.landingPreviewPlayers}>
+                                <span>4 players connected</span>
+                                <span>Classic mode</span>
+                            </div>
+                        </article>
+                        <article className={`${styles.landingPreviewCard} ${styles.landingPreviewCardPhone}`}>
+                            <span className={styles.landingPreviewLabel}>Phone controller</span>
+                            <strong className={styles.landingPreviewTitle}>
+                                Join, hold, and steer
+                            </strong>
+                            <div className={styles.landingPreviewControls}>
+                                <span>Turn Left</span>
+                                <span>Turn Right</span>
+                            </div>
+                            <p className={styles.landingPreviewCopy}>
+                                Quick to join, clear to use, and ready for every
+                                round.
+                            </p>
+                        </article>
+                    </div>
                 </div>
-                <h1 className="title">Select Your Role</h1>
-                <p className="subtitle">
-                    Host on the big screen or use your phone as a controller.
-                </p>
-                <div className="role-grid">
+
+                <div className={styles.landingRoleGrid}>
                     <button
-                        className="ui-button"
+                        className={`${styles.landingRoleCard} ${styles.landingRoleCardPrimary}`}
                         onClick={() => selectRole("host")}
                     >
-                        Host Game
+                        <span className={styles.landingRoleEyebrow}>Big screen</span>
+                        <strong className={styles.landingRoleTitle}>Host a game</strong>
+                        <span className={styles.landingRoleCopy}>
+                            Create the room, pick the mode, and run the match from
+                            the TV or laptop.
+                        </span>
+                        <span className={styles.landingRoleMeta}>Best for the display device</span>
                     </button>
                     <button
-                        className="ui-button ui-button-secondary"
+                        className={styles.landingRoleCard}
                         onClick={() => selectRole("phone")}
                     >
-                        Join as Player
+                        <span className={styles.landingRoleEyebrow}>Phone controller</span>
+                        <strong className={styles.landingRoleTitle}>Join as player</strong>
+                        <span className={styles.landingRoleCopy}>
+                            Enter the room code and turn your phone into a dedicated
+                            controller.
+                        </span>
+                        <span className={styles.landingRoleMeta}>Best for everyone joining in</span>
                     </button>
                 </div>
             </section>
-            <footer className="landing-footer" aria-label="Project links">
+            <footer className={styles.landingFooter} aria-label="Project links">
                 <a
-                    className="landing-footer-link"
+                    className={styles.landingFooterLink}
                     href="https://github.com/shanecjones1999/curvefevertv"
                     target="_blank"
                     rel="noopener noreferrer"
@@ -139,7 +206,7 @@ function App() {
                         viewBox="0 0 24 24"
                         role="img"
                         aria-hidden="true"
-                        className="landing-footer-icon"
+                        className={styles.landingFooterIcon}
                     >
                         <path
                             fill="currentColor"

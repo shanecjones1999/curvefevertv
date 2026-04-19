@@ -175,6 +175,14 @@ export default function Host({ onLeave }: Props) {
             });
     }, [gameMode, players]);
     const activeTeamCount = useMemo(() => getActiveTeamCount(players), [players]);
+    const connectedPlayerCount = useMemo(
+        () => players.filter((player) => Boolean(player.socketId)).length,
+        [players],
+    );
+    const alivePlayerCount = useMemo(
+        () => players.filter((player) => player.alive).length,
+        [players],
+    );
     const teamPlayersByTeamId = useMemo(() => {
         const groupedPlayers = new Map<number, Player[]>();
         for (const player of players) {
@@ -533,6 +541,9 @@ export default function Host({ onLeave }: Props) {
             gameMode={gameMode}
             teamCount={teamCount}
             effectiveTargetScore={effectiveTargetScore}
+            playerCount={players.length}
+            connectedPlayerCount={connectedPlayerCount}
+            alivePlayerCount={alivePlayerCount}
             playing={playing}
             canStart={canStart}
             startError={startError}
@@ -631,6 +642,31 @@ export default function Host({ onLeave }: Props) {
                 </div>
 
                 <div className="game-stage">
+                    <div className="game-stage-header">
+                        <div>
+                            <p className="game-stage-label">Live arena</p>
+                            <h2 className="game-stage-title">
+                                {gameMode === "classic"
+                                    ? "Classic score race"
+                                    : gameMode === "teams"
+                                      ? "Team showdown"
+                                      : "Battle royale elimination"}
+                            </h2>
+                        </div>
+                        <div className="game-stage-stat-row" aria-label="Arena stats">
+                            <span className="game-stage-stat">
+                                {alivePlayerCount} alive
+                            </span>
+                            <span className="game-stage-stat">
+                                {connectedPlayerCount} connected
+                            </span>
+                            <span className="game-stage-stat">
+                                {gameMode === "battle-royale"
+                                    ? "Last one standing"
+                                    : `${effectiveTargetScore} pts to win`}
+                            </span>
+                        </div>
+                    </div>
                     <PhaserGame
                         players={players}
                         gameMode={gameMode}

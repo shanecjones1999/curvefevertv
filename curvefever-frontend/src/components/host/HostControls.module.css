@@ -1,0 +1,257 @@
+.header {
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  position: relative;
+  z-index: 2;
+}
+
+.headerCopy {
+  display: grid;
+  gap: 0.12rem;
+  text-align: left;
+}
+
+.title {
+  max-width: 16ch;
+  margin-top: 0.05rem;
+}
+
+.subtitle {
+  margin-top: 0.12rem;
+  max-width: 40ch;
+  font-size: 0.84rem;
+}
+
+.contentGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(260px, 0.9fr);
+  gap: 0.55rem;
+  align-items: start;
+}
+
+.primary {
+  display: grid;
+  gap: 0.55rem;
+  min-width: 0;
+  align-content: start;
+}
+
+.shareMain {
+  display: grid;
+  gap: 0.5rem;
+  min-width: 0;
+  align-content: start;
+}
+
+.shareHeader {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.6rem;
+  align-items: start;
+}
+
+.shareMain :global(.room-code-button) {
+  width: auto;
+  max-width: 100%;
+  justify-self: start;
+}
+
+.shareMeta {
+  display: grid;
+  gap: 0.45rem;
+  min-width: 0;
+  align-content: start;
+}
+
+.shareSide {
+  display: grid;
+  gap: 0.38rem;
+  align-content: start;
+}
+
+.scorePill {
+  width: max-content;
+  max-width: 100%;
+}
+
+.shareHint {
+  margin: 0;
+  color: var(--cf-text-soft);
+  max-width: 34ch;
+  font-size: 0.82rem;
+}
+
+.stepGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.45rem;
+  width: 100%;
+}
+
+.stepCard {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.55rem;
+  align-items: start;
+  width: 100%;
+  min-height: 100%;
+  padding: 0.65rem 0.72rem;
+  border-radius: 0.9rem;
+  border: 1px solid rgba(132, 186, 255, 0.18);
+  background: rgba(10, 17, 39, 0.62);
+}
+
+.stepCard strong,
+.stepCard p {
+  display: block;
+}
+
+.stepCard p {
+  margin: 0.1rem 0 0;
+  color: var(--cf-text-muted);
+  font-size: 0.76rem;
+  line-height: 1.3;
+}
+
+.stepIndex {
+  display: grid;
+  place-items: center;
+  width: 1.65rem;
+  aspect-ratio: 1;
+  border-radius: var(--cf-radius-pill);
+  background: rgba(43, 102, 255, 0.28);
+  color: #eef6ff;
+  font-weight: 800;
+  font-size: 0.8rem;
+}
+
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.4rem;
+  width: 100%;
+}
+
+.metricCard {
+  display: grid;
+  gap: 0.18rem;
+  width: 100%;
+  padding: 0.58rem 0.66rem;
+  border-radius: 0.9rem;
+  border: 1px solid color-mix(in srgb, var(--cf-border-subtle) 94%, rgba(173, 220, 255, 0.06));
+  background: color-mix(in srgb, var(--cf-surface-elevated) 82%, transparent);
+}
+
+.metricLabel {
+  color: var(--cf-text-muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.metricValue {
+  color: #eef6ff;
+  font-size: 0.88rem;
+}
+
+.metricCopy {
+  color: var(--cf-text-soft);
+  font-size: 0.74rem;
+  line-height: 1.3;
+}
+
+.actionSection {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.actionSectionInline {
+  margin-top: 0.05rem;
+}
+
+.actionRow {
+  display: flex;
+  align-items: center;
+  justify-content: stretch;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.changeModeButton {
+  min-width: 0;
+  flex: 1 1 0;
+  background: var(--cf-surface-ghost);
+  box-shadow: none;
+  display: grid;
+  justify-items: start;
+  gap: 0.12rem;
+  text-align: left;
+  padding-inline: 1rem;
+}
+
+.setupButtonLabel {
+  font-size: 0.7rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--cf-text-muted);
+}
+
+.setupButtonValue {
+  color: #eaf2ff;
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+
+.startButton {
+  min-width: 0;
+  flex: 1 1 0;
+}
+
+.errorText {
+  text-align: center;
+  font-size: 0.82rem;
+}
+
+@media (min-width: 981px) {
+  .shareSide {
+    margin-top: -8rem;
+  }
+}
+
+@media (max-width: 980px) {
+  .contentGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .shareHeader {
+    grid-template-columns: 1fr;
+  }
+
+  .metrics,
+  .stepGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .primary {
+    min-height: 0;
+  }
+}
+
+@media (max-width: 680px) {
+  .actionRow {
+    align-items: stretch;
+  }
+
+  .changeModeButton,
+  .startButton {
+    width: 100%;
+  }
+}
+
+@media (max-height: 920px) and (min-width: 700px) {
+  .subtitle {
+    font-size: 0.86rem;
+  }
+}

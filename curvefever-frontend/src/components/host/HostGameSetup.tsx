@@ -1,5 +1,6 @@
 import type { GameMode } from "../../types";
 import HostGameModeSelector from "./HostGameModeSelector";
+import styles from "./HostGameSetup.module.css";
 
 type Props = {
     gameMode: GameMode;
@@ -16,19 +17,22 @@ type Props = {
 
 const GAME_MODE_COPY: Record<
     GameMode,
-    { title: string; description: string }
+    { title: string; description: string; highlights: string[] }
 > = {
     classic: {
         title: "Classic",
         description: "Race for points across rounds. Best for the standard Curvefever setup.",
+        highlights: ["Best all-rounder", "Quick resets", "Score chase"],
     },
     teams: {
         title: "Teams",
         description: "Split players into teams and score together. Great for bigger groups.",
+        highlights: ["Shared scoring", "Balanced chaos", "Great for groups"],
     },
     "battle-royale": {
         title: "Battle Royale",
         description: "One round, one winner. Last player alive takes it all.",
+        highlights: ["Highest tension", "Fast winner", "Sudden-death energy"],
     },
 };
 
@@ -59,7 +63,7 @@ export default function HostGameSetup({
           : "Create Game";
 
     return (
-        <section className="panel host-panel host-setup-panel">
+        <section className={`panel host-panel host-setup-panel ${styles.panel}`}>
             <div>
                 <p className="eyebrow">Host Console</p>
                 <h1 className="title title-small">{title}</h1>
@@ -67,15 +71,25 @@ export default function HostGameSetup({
 
             <p className="subtitle">{subtitle}</p>
 
-            <div className="inset-panel host-setup-details">
-                <div className="host-setup-copy">
+            <div className={`inset-panel ${styles.details}`}>
+                <div className={styles.copy}>
                     <p className="eyebrow">Selected mode</p>
-                    <h2 className="section-title host-setup-mode-title">
+                    <h2 className={`section-title ${styles.modeTitle}`}>
                         {selectedModeCopy.title}
                     </h2>
-                    <p className="subtitle host-setup-mode-description">
+                    <p className={`subtitle ${styles.modeDescription}`}>
                         {selectedModeCopy.description}
                     </p>
+                    <div className={styles.highlightRow}>
+                        {selectedModeCopy.highlights.map((highlight) => (
+                            <span
+                                key={highlight}
+                                className={styles.highlightPill}
+                            >
+                                {highlight}
+                            </span>
+                        ))}
+                    </div>
                 </div>
 
                 <HostGameModeSelector
@@ -86,7 +100,7 @@ export default function HostGameSetup({
                 />
             </div>
 
-            <div className="host-setup-actions">
+            <div className={styles.actions}>
                 <button
                     type="button"
                     className="ui-button ui-button-secondary"

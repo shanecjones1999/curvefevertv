@@ -4,6 +4,7 @@ import {
     getTeamLabel,
     getTeamSymbol,
 } from "../../utils/teamMode";
+import styles from "./HostPlayerList.module.css";
 
 type Props = {
     className?: string;
@@ -22,6 +23,8 @@ export default function HostPlayerList({
     getPlayerRowClassName,
     getPlayerDotColor,
 }: Props) {
+    const connectedPlayers = players.filter((player) => Boolean(player.socketId)).length;
+
     if (gameMode === "teams") {
         const teams = Array.from({ length: teamCount }, (_, index) => {
             const teamId = index + 1;
@@ -32,16 +35,25 @@ export default function HostPlayerList({
         });
 
         return (
-            <section className={`panel inset-panel ${className ?? ""}`.trim()}>
-                <h3 className="section-title">Teams ({teamCount})</h3>
-                <div className="team-list">
+            <section className={`panel inset-panel ${styles.root} ${className ?? ""}`.trim()}>
+                <div className={styles.header}>
+                    <div>
+                        <p className="eyebrow">Lobby roster</p>
+                        <h3 className="section-title">Teams ({teamCount})</h3>
+                    </div>
+                    <div className={styles.summary}>
+                        <span>{players.length} assigned</span>
+                        <span>{connectedPlayers} connected</span>
+                    </div>
+                </div>
+                <div className={styles.teamList}>
                     {teams.map((team) => (
                         <section
                             key={team.teamId}
-                            className="team-group"
+                            className={styles.teamGroup}
                             aria-label={getTeamLabel(team.teamId)}
                         >
-                            <div className="team-group-header">
+                            <div className={styles.teamGroupHeader}>
                                 <span
                                     className="team-badge team-badge-colored"
                                     style={{
@@ -55,7 +67,7 @@ export default function HostPlayerList({
                                     </span>
                                     {getTeamLabel(team.teamId)}
                                 </span>
-                                <span className="team-group-count">
+                                <span className={styles.teamGroupCount}>
                                     {team.players.length}{" "}
                                     {team.players.length === 1
                                         ? "player"
@@ -109,12 +121,24 @@ export default function HostPlayerList({
     }
 
     return (
-        <section className={`panel inset-panel ${className ?? ""}`.trim()}>
-            <h3 className="section-title">Players ({players.length})</h3>
+        <section className={`panel inset-panel ${styles.root} ${className ?? ""}`.trim()}>
+            <div className={styles.header}>
+                <div>
+                    <p className="eyebrow">Lobby roster</p>
+                    <h3 className="section-title">Players ({players.length})</h3>
+                </div>
+                <div className={styles.summary}>
+                    <span>{connectedPlayers} connected</span>
+                    <span>{Math.max(0, players.length - connectedPlayers)} away</span>
+                </div>
+            </div>
             <ul className="player-list">
                 {players.length === 0 && (
-                    <li className="player-row player-empty">
-                        Waiting for players to join...
+                    <li className="player-row player-empty player-empty-card">
+                        <div className="player-empty-copy">
+                            <strong>No players yet</strong>
+                            <p>Share the code or QR to bring controllers in.</p>
+                        </div>
                     </li>
                 )}
                 {players.map((player) => (

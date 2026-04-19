@@ -75,6 +75,9 @@ export default function HostJoinQr({ joinUrl }: Props) {
                     </div>
                 )}
             </div>
+            <p className="host-join-qr-copy">
+                Fastest on mobile camera, then players can enter the room instantly.
+            </p>
         </div>
     );
 }

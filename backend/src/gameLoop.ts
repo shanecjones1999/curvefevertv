@@ -333,6 +333,83 @@ function buildRoundStartScoreMap(room: {
     );
 }
 
+export function getPendingRoundOverPayload(roomCode: string) {
+    const room = getRoom(roomCode);
+    if (!room || !pendingRoundRestartMap.has(roomCode)) {
+        return undefined;
+    }
+
+    const players = Array.from(room.players.values());
+
+    if (room.gameMode === "battle-royale") {
+        const eliminatedPlayerIds =
+            room.battleRoyaleEliminatedPlayerIds ?? new Set<string>();
+        const survivingPlayers = players.filter(
+            (player) => !eliminatedPlayerIds.has(player.id),
+        );
+
+        if (survivingPlayers.length <= 1) {
+            return undefined;
+        }
+
+        return {
+            winnerId: null,
+            gameMode: room.gameMode,
+            eliminatedPlayerIds: Array.from(eliminatedPlayerIds),
+            scoreBeforeById: room.roundStartScoreById,
+        };
+    }
+
+    if (room.gameMode === "teams") {
+        const sortedLeaderboard = buildTeamLeaderboard(players);
+        const aliveTeamIds = new Set(
+            getAliveTeamIds(players.filter((player) => player.alive)),
+        );
+
+        if (aliveTeamIds.size > 1 || sortedLeaderboard.length < 1) {
+            return undefined;
+        }
+
+        const winningTeamId = Array.from(aliveTeamIds)[0];
+
+        return {
+            winnerId:
+                typeof winningTeamId === "number"
+                    ? `team-${winningTeamId}`
+                    : null,
+            gameMode: room.gameMode,
+            leaderboard: sortedLeaderboard,
+            scoreBeforeById: room.roundStartScoreById,
+        };
+    }
+
+    const alivePlayers = players.filter((player) => player.alive);
+
+    if (alivePlayers.length > 1 || players.length < 1) {
+        return undefined;
+    }
+
+    const winner = alivePlayers[0] ?? null;
+
+    return {
+        winnerId: winner?.id ?? null,
+        gameMode: room.gameMode,
+        leaderboard: players
+            .map((player) => ({
+                id: player.id,
+                name: player.name,
+                score: player.score ?? 0,
+            }))
+            .sort((firstPlayer, secondPlayer) => {
+                return (
+                    secondPlayer.score - firstPlayer.score ||
+                    firstPlayer.name.localeCompare(secondPlayer.name)
+                );
+            }),
+        scoreBeforeById: room.roundStartScoreById,
+    };
+}
+
 function distanceToLineSegment(
     px: number,
     py: number,

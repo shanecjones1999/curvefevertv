@@ -18,6 +18,7 @@ type ReconnectHostResponse = {
     gameMode?: GameMode;
     winnerId?: string | null;
     leaderboard?: GameOverPayload["leaderboard"];
+    roundOver?: RoundOverPayload;
     targetScore?: number;
     teamCount?: number;
     gameConfig?: GameConfig;
@@ -202,8 +203,8 @@ export function useHostRoomSync({
                             applyTargetScore(res.targetScore);
                             applyTeamCount(res.teamCount);
                             applyGameConfig(res.gameConfig);
-                            setRoundOverData(null);
                             if (res.state === "finished") {
+                                setRoundOverData(null);
                                 setRoundStartRemainingMs(0);
                                 const fallbackLeaderboard =
                                     buildFallbackLeaderboard(
@@ -225,6 +226,11 @@ export function useHostRoomSync({
                                 setPlaying(true);
                             } else {
                                 setGameOverData(null);
+                                setRoundOverData(
+                                    res.state === "playing"
+                                        ? res.roundOver ?? null
+                                        : null,
+                                );
                                 if (res.state !== "playing") {
                                     setRoundStartRemainingMs(0);
                                 }

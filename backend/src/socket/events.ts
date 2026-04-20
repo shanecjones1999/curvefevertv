@@ -42,6 +42,13 @@ export interface ClientToServerEvents {
             gameMode?: GameMode;
             winnerId?: string | null;
             leaderboard?: LeaderboardEntry[];
+            roundOver?: {
+                winnerId: string | null;
+                gameMode?: GameMode;
+                eliminatedPlayerIds?: string[];
+                leaderboard?: LeaderboardEntry[];
+                scoreBeforeById?: Record<string, number>;
+            };
             targetScore?: number;
             teamCount?: number;
             gameConfig?: GameConfigPayload;

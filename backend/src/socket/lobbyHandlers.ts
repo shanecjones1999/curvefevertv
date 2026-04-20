@@ -10,7 +10,11 @@ import {
     chooseBalancedTeam,
     rebalancePlayersForTeamMode,
 } from "../domain/teamMode";
-import { generateSpawnPosition, stopGameLoop } from "../gameLoop";
+import {
+    generateSpawnPosition,
+    getPendingRoundOverPayload,
+    stopGameLoop,
+} from "../gameLoop";
 import { createRoom, deleteRoom, getRoom, joinRoom, leaveRoom } from "../rooms";
 import { Player } from "../types";
 import { TypedServer, TypedSocket } from "./events";
@@ -73,6 +77,10 @@ export function registerLobbyHandlers(io: TypedServer, socket: TypedSocket) {
             gameMode: room.gameMode,
             winnerId,
             leaderboard,
+            roundOver:
+                room.state === "playing"
+                    ? getPendingRoundOverPayload(room.code)
+                    : undefined,
             targetScore: (() => {
                 if (room.gameMode === "classic") {
                     return (

@@ -718,9 +718,6 @@ export default function Host({ onLeave }: Props) {
                             className={styles["round-start-overlay"]}
                             aria-live="polite"
                         >
-                            <p className={styles["round-start-label"]}>
-                                Round starting
-                            </p>
                             <p className={styles["round-start-countdown"]}>
                                 {roundStartCountdown}
                             </p>

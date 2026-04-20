@@ -1,10 +1,4 @@
-import {
-    useEffect,
-    useLayoutEffect,
-    useMemo,
-    useRef,
-    useState,
-} from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { CSSProperties } from "react";
 import type { GameMode } from "../../types";
 import styles from "../../ui.module.css";
@@ -12,8 +6,6 @@ import type { RoundOverLeaderboardEntry, RoundOverPayload } from "./types";
 
 const ROUND_RESTART_DELAY_MS = 5000;
 const SCORE_ANIMATION_START_DELAY_MS = 1000;
-const SCORE_ANIMATION_DURATION_MS = 3000;
-const ROW_REORDER_DURATION_MS = 650;
 
 type Props = {
     gameMode: GameMode;
@@ -49,17 +41,6 @@ function getRowClassName(isWinner: boolean) {
         .join(" ");
 }
 
-function compareByScoreThenName(
-    left: RoundOverLeaderboardEntry,
-    right: RoundOverLeaderboardEntry,
-    scoreById: Record<string, number>,
-) {
-    return (
-        (scoreById[right.id] ?? 0) - (scoreById[left.id] ?? 0) ||
-        left.name.localeCompare(right.name)
-    );
-}
-
 export default function HostRoundOverOverlay({
     gameMode,
     roundOverData,
@@ -80,91 +61,26 @@ export default function HostRoundOverOverlay({
             ) as Record<string, number>,
         [displayLeaderboard, roundOverData.scoreBeforeById],
     );
-    const entriesById = useMemo(
-        () =>
-            new Map(
-                displayLeaderboard.map((entry) => [entry.id, entry] as const),
-            ),
-        [displayLeaderboard],
-    );
-    const initialOrderedIds = useMemo(
-        () =>
-            [...displayLeaderboard]
-                .sort((left, right) =>
-                    compareByScoreThenName(left, right, previousScores),
-                )
-                .map((entry) => entry.id),
-        [displayLeaderboard, previousScores],
-    );
-    const finalOrderedIds = useMemo(
-        () => displayLeaderboard.map((entry) => entry.id),
-        [displayLeaderboard],
-    );
     const [hasAnimated, setHasAnimated] = useState(false);
-    const [orderedEntryIds, setOrderedEntryIds] =
-        useState<string[]>(initialOrderedIds);
     const [nextRoundCountdown, setNextRoundCountdown] = useState(
         Math.ceil(ROUND_RESTART_DELAY_MS / 1000),
-    );
-    const rowRefs = useRef(new Map<string, HTMLDivElement>());
-    const rowPositionsRef = useRef(new Map<string, number>());
-
-    const orderedEntries = useMemo(
-        () =>
-            orderedEntryIds
-                .map((id) => entriesById.get(id))
-                .filter((entry): entry is RoundOverLeaderboardEntry =>
-                    Boolean(entry),
-                ),
-        [entriesById, orderedEntryIds],
     );
 
     useEffect(() => {
         let frameId = 0;
         let secondFrameId = 0;
-        let reorderTimeoutId = 0;
 
         frameId = window.requestAnimationFrame(() => {
             secondFrameId = window.requestAnimationFrame(() => {
                 setHasAnimated(true);
             });
         });
-        reorderTimeoutId = window.setTimeout(() => {
-            setOrderedEntryIds(finalOrderedIds);
-        }, SCORE_ANIMATION_START_DELAY_MS + SCORE_ANIMATION_DURATION_MS);
 
         return () => {
             window.cancelAnimationFrame(frameId);
             window.cancelAnimationFrame(secondFrameId);
-            window.clearTimeout(reorderTimeoutId);
         };
-    }, [finalOrderedIds]);
-
-    useLayoutEffect(() => {
-        const nextPositions = new Map<string, number>();
-
-        for (const entryId of orderedEntryIds) {
-            const element = rowRefs.current.get(entryId);
-            if (!element) continue;
-
-            const nextTop = element.getBoundingClientRect().top;
-            nextPositions.set(entryId, nextTop);
-
-            const previousTop = rowPositionsRef.current.get(entryId);
-            if (typeof previousTop !== "number") continue;
-
-            const deltaY = previousTop - nextTop;
-            if (Math.abs(deltaY) < 1) continue;
-
-            element.style.transition = "none";
-            element.style.transform = `translateY(${deltaY}px)`;
-            void element.offsetHeight;
-            element.style.transition = `transform ${ROW_REORDER_DURATION_MS}ms cubic-bezier(0.22, 1, 0.36, 1)`;
-            element.style.transform = "translateY(0)";
-        }
-
-        rowPositionsRef.current = nextPositions;
-    }, [orderedEntryIds]);
+    }, []);
 
     useEffect(() => {
         if (!showCountdown) return;
@@ -197,7 +113,7 @@ export default function HostRoundOverOverlay({
 
                 <div className={styles["round-over-board"]}>
                     <div className={styles["round-over-rows"]} role="list">
-                        {orderedEntries.map((entry, index) => {
+                        {displayLeaderboard.map((entry, index) => {
                             const startScore =
                                 previousScores[entry.id] ?? entry.score ?? 0;
                             const finalScore = entry.score ?? 0;
@@ -229,13 +145,6 @@ export default function HostRoundOverOverlay({
                                     className={getRowClassName(isWinner)}
                                     style={rowStyle}
                                     role="listitem"
-                                    ref={(element) => {
-                                        if (element) {
-                                            rowRefs.current.set(entry.id, element);
-                                            return;
-                                        }
-                                        rowRefs.current.delete(entry.id);
-                                    }}
                                 >
                                     <div
                                         className={styles["round-over-row-track"]}

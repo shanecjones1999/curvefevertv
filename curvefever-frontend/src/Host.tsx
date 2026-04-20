@@ -11,7 +11,12 @@ import HostGameSetup from "./components/host/HostGameSetup";
 import HostPlayerList from "./components/host/HostPlayerList";
 import HostLeaderboard from "./components/host/HostLeaderboard";
 import HostGameOverOverlay from "./components/host/HostGameOverOverlay";
-import type { GameConfig, GameOverPayload } from "./components/host/types";
+import HostRoundOverOverlay from "./components/host/HostRoundOverOverlay";
+import type {
+    GameConfig,
+    GameOverPayload,
+    RoundOverPayload,
+} from "./components/host/types";
 import { useHostRoomSync } from "./hooks/useHostRoomSync";
 import styles from "./ui.module.css";
 import { cx } from "./utils/cx";
@@ -22,6 +27,24 @@ import {
     getFallbackPlayerColor,
     isValidHexColor,
 } from "./utils/playerColor";
+
+function buildDisplayLeaderboard(
+    source: LeaderboardEntry[],
+    playerColorById: Map<string, string>,
+) {
+    return source.map((entry, index) => {
+        const fallbackColor = getFallbackPlayerColor(index);
+        const colorFromPlayer =
+            entry.kind === "team" ? entry.color : playerColorById.get(entry.id);
+        return {
+            ...entry,
+            color:
+                (isValidHexColor(entry.color) ? entry.color : undefined) ??
+                colorFromPlayer ??
+                fallbackColor,
+        };
+    });
+}
 
 type StartGameResponse = {
     ok: boolean;
@@ -86,6 +109,9 @@ export default function Host({ onLeave }: Props) {
     const [teamCount, setTeamCount] = useState(DEFAULT_TEAM_COUNT);
     const [roundStartRemainingMs, setRoundStartRemainingMs] = useState(0);
     const [gameOverData, setGameOverData] = useState<GameOverPayload | null>(
+        null,
+    );
+    const [roundOverData, setRoundOverData] = useState<RoundOverPayload | null>(
         null,
     );
     const [gameConfig, setGameConfig] = useState<GameConfig>({
@@ -200,27 +226,41 @@ export default function Host({ onLeave }: Props) {
                 ? gameOverData.leaderboard
                 : leaderboard;
 
-        return source.map((entry, index) => {
-            const fallbackColor = getFallbackPlayerColor(index);
-            const colorFromPlayer =
-                entry.kind === "team"
-                    ? entry.color
-                    : playerColorById.get(entry.id);
-            return {
-                ...entry,
-                color:
-                    (isValidHexColor(entry.color) ? entry.color : undefined) ??
-                    colorFromPlayer ??
-                    fallbackColor,
-            };
-        });
+        return buildDisplayLeaderboard(source, playerColorById);
     }, [gameOverData, leaderboard, playerColorById]);
+    const roundDisplayLeaderboard = useMemo(() => {
+        const source =
+            roundOverData?.leaderboard && roundOverData.leaderboard.length > 0
+                ? roundOverData.leaderboard
+                : leaderboard;
+
+        return buildDisplayLeaderboard(source, playerColorById);
+    }, [leaderboard, playerColorById, roundOverData]);
+    const roundOverOverlayKey = useMemo(() => {
+        if (!roundOverData) return null;
+
+        return JSON.stringify({
+            winnerId: roundOverData.winnerId ?? null,
+            scoreBeforeById: roundOverData.scoreBeforeById ?? null,
+            leaderboard: roundDisplayLeaderboard.map((entry) => ({
+                id: entry.id,
+                score: entry.score ?? 0,
+            })),
+        });
+    }, [roundDisplayLeaderboard, roundOverData]);
     const highestScore = displayLeaderboard[0]?.score ?? 0;
     const winnerName =
         displayLeaderboard.find((entry) => entry.id === gameOverData?.winnerId)
             ?.name ?? displayLeaderboard[0]?.name;
+    const roundWinnerName = roundDisplayLeaderboard.find(
+        (entry) => entry.id === roundOverData?.winnerId,
+    )?.name;
+    const roundWinnerColor = roundDisplayLeaderboard.find(
+        (entry) => entry.id === roundOverData?.winnerId,
+    )?.color;
     const roundStartCountdown =
         roundStartRemainingMs > 0 ? Math.ceil(roundStartRemainingMs / 1000) : 0;
+    const renderPlayers = roundOverData?.frozenPlayers ?? players;
     const hasDraftGameSetupChanges =
         draftGameMode !== gameMode ||
         (draftGameMode === "teams" && draftTeamCount !== teamCount);
@@ -239,6 +279,7 @@ export default function Host({ onLeave }: Props) {
         setTeamCount,
         setRoundStartRemainingMs,
         setGameOverData,
+        setRoundOverData,
         setGameConfig,
         autoCreateRoom: false,
     });
@@ -430,6 +471,7 @@ export default function Host({ onLeave }: Props) {
         setDraftGameMode("classic");
         setDraftTeamCount(DEFAULT_TEAM_COUNT);
         setGameOverData(null);
+        setRoundOverData(null);
         setRoundStartRemainingMs(0);
         setIsSubmittingGameSetup(false);
         setIsEditingGameSetup(false);
@@ -654,13 +696,13 @@ export default function Host({ onLeave }: Props) {
 
                 <div className={styles["game-stage"]}>
                     <PhaserGame
-                        players={players}
+                        players={renderPlayers}
                         gameMode={gameMode}
                         showTeamLabels={gameMode === "teams" && roundStartCountdown > 0}
                         width={gameConfig.width}
                         height={gameConfig.height}
                     />
-                    {roundStartCountdown > 0 && !gameOverData && (
+                    {roundStartCountdown > 0 && !gameOverData && !roundOverData && (
                         <div
                             className={styles["round-start-overlay"]}
                             aria-live="polite"
@@ -672,6 +714,21 @@ export default function Host({ onLeave }: Props) {
                                 {roundStartCountdown}
                             </p>
                         </div>
+                    )}
+                    {roundOverData && !gameOverData && (
+                        <HostRoundOverOverlay
+                            key={roundOverOverlayKey ?? undefined}
+                            gameMode={gameMode}
+                            roundOverData={roundOverData}
+                            winnerName={roundWinnerName}
+                            winnerColor={roundWinnerColor}
+                            goalScore={
+                                gameMode === "battle-royale"
+                                    ? null
+                                    : effectiveTargetScore
+                            }
+                            displayLeaderboard={roundDisplayLeaderboard}
+                        />
                     )}
                 </div>
 

@@ -128,6 +128,7 @@ export interface ServerToClientEvents {
         gameMode?: GameMode;
         eliminatedPlayerIds?: string[];
         leaderboard?: LeaderboardEntry[];
+        scoreBeforeById?: Record<string, number>;
     }) => void;
     roundRestart: () => void;
     gameOver: (payload: {

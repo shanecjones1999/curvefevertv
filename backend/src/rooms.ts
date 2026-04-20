@@ -36,6 +36,7 @@ export function createRoom(hostSocketId: string, options?: CreateRoomOptions) {
         gameMode: sanitizeGameMode(options?.gameMode),
         teamCount: sanitizeTeamCount(options?.teamCount ?? DEFAULT_TEAM_COUNT),
         battleRoyaleEliminatedPlayerIds: new Set<string>(),
+        roundStartScoreById: {},
         game: null,
     };
     rooms.set(code, room);

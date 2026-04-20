@@ -1,6 +1,6 @@
 import { getRoom } from "./rooms";
 import { TypedServer } from "./socket/events";
-import { GameState, Player } from "./types";
+import { GameMode, GameState, Player } from "./types";
 import {
     GAME_HEIGHT,
     GAME_WIDTH,
@@ -27,7 +27,7 @@ const ROUND_START_NO_TRAIL_TICKS = 120;
 const roundStartNoTrailMap = new Map<string, number>();
 const ROUND_START_FREEZE_MS = 3000;
 const roundStartFreezeUntilMap = new Map<string, number>();
-const ROUND_RESTART_DELAY_MS = 2000;
+const ROUND_RESTART_DELAY_MS = 5000;
 const pendingRoundRestartMap = new Map<string, NodeJS.Timeout>();
 const MAX_SPAWN_ATTEMPTS = 40;
 
@@ -316,6 +316,23 @@ function emitGameState(roomCode: string, io: TypedServer) {
     }
 }
 
+function buildRoundStartScoreMap(room: {
+    gameMode: GameMode;
+    players: Map<string, Player>;
+}) {
+    const players = Array.from(room.players.values());
+
+    if (room.gameMode === "teams") {
+        return Object.fromEntries(
+            buildTeamLeaderboard(players).map((entry) => [entry.id, entry.score ?? 0]),
+        );
+    }
+
+    return Object.fromEntries(
+        players.map((player) => [player.id, player.score ?? 0]),
+    );
+}
+
 function distanceToLineSegment(
     px: number,
     py: number,
@@ -545,6 +562,11 @@ export function restartRound(
 export function startGameLoop(roomCode: string, io: TypedServer) {
     if (runningLoops.has(roomCode)) return;
 
+    const room = getRoom(roomCode);
+    if (room) {
+        room.roundStartScoreById = buildRoundStartScoreMap(room);
+    }
+
     restartGraceMap.set(roomCode, restartGracePeriod);
     roundStartNoTrailMap.set(roomCode, ROUND_START_NO_TRAIL_TICKS);
     roundStartFreezeUntilMap.set(roomCode, Date.now() + ROUND_START_FREEZE_MS);
@@ -658,6 +680,7 @@ export function startGameLoop(roomCode: string, io: TypedServer) {
                         winnerId: null,
                         gameMode: room.gameMode,
                         eliminatedPlayerIds: Array.from(eliminatedPlayerIds),
+                        scoreBeforeById: room.roundStartScoreById,
                     });
 
                     const restartHandle = setTimeout(() => {
@@ -672,6 +695,8 @@ export function startGameLoop(roomCode: string, io: TypedServer) {
                             battleRoyaleEliminatedPlayerIds:
                                 latestRoom.battleRoyaleEliminatedPlayerIds,
                         });
+                        latestRoom.roundStartScoreById =
+                            buildRoundStartScoreMap(latestRoom);
                         restartGraceMap.set(roomCode, restartGracePeriod);
                         roundStartNoTrailMap.set(
                             roomCode,
@@ -740,6 +765,7 @@ export function startGameLoop(roomCode: string, io: TypedServer) {
                                     : null,
                             gameMode: room.gameMode,
                             leaderboard: sortedLeaderboard,
+                            scoreBeforeById: room.roundStartScoreById,
                         });
 
                         const restartHandle = setTimeout(() => {
@@ -751,6 +777,8 @@ export function startGameLoop(roomCode: string, io: TypedServer) {
                                 latestRoom.players.values(),
                             );
                             restartRound(latestPlayers);
+                            latestRoom.roundStartScoreById =
+                                buildRoundStartScoreMap(latestRoom);
                             restartGraceMap.set(roomCode, restartGracePeriod);
                             roundStartNoTrailMap.set(
                                 roomCode,
@@ -820,6 +848,7 @@ export function startGameLoop(roomCode: string, io: TypedServer) {
                                 score: player.score ?? 0,
                             }))
                             .sort((a, b) => b.score - a.score),
+                        scoreBeforeById: room.roundStartScoreById,
                     });
 
                     const restartHandle = setTimeout(() => {
@@ -831,6 +860,8 @@ export function startGameLoop(roomCode: string, io: TypedServer) {
                             latestRoom.players.values(),
                         );
                         restartRound(latestPlayers);
+                        latestRoom.roundStartScoreById =
+                            buildRoundStartScoreMap(latestRoom);
                         restartGraceMap.set(roomCode, restartGracePeriod);
                         roundStartNoTrailMap.set(
                             roomCode,

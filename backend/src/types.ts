@@ -47,6 +47,7 @@ export interface Room {
     gameMode: GameMode;
     teamCount: number;
     battleRoyaleEliminatedPlayerIds?: Set<string>;
+    roundStartScoreById?: Record<string, number>;
     game?: GameState | null;
 }
 

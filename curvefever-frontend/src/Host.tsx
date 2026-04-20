@@ -80,7 +80,7 @@ type FullscreenCapableDocument = Document & {
     webkitFullscreenEnabled?: boolean;
 };
 
-const GAME_OVER_RETURN_DELAY_MS = 5000;
+const GAME_OVER_RETURN_DELAY_MS = 10000;
 
 export default function Host({ onLeave }: Props) {
     const [roomCode, setRoomCode] = useState<string | null>(() => {
@@ -736,26 +736,28 @@ export default function Host({ onLeave }: Props) {
                             displayLeaderboard={roundDisplayLeaderboard}
                         />
                     )}
+                    {gameOverData && gameOverOverlayData && (
+                        <HostRoundOverOverlay
+                            key={gameOverOverlayKey ?? undefined}
+                            gameMode={gameMode}
+                            roundOverData={gameOverOverlayData}
+                            goalScore={
+                                gameMode === "battle-royale"
+                                    ? null
+                                    : effectiveTargetScore
+                            }
+                            displayLeaderboard={displayLeaderboard}
+                            title={
+                                gameMode === "battle-royale"
+                                    ? "Battle Royale Over"
+                                    : "Game Over"
+                            }
+                            winnerStatusLabel="Game winner"
+                            countdownLabel="Returning to lobby in"
+                            countdownDurationMs={GAME_OVER_RETURN_DELAY_MS}
+                        />
+                    )}
                 </div>
-
-                {gameOverData && gameOverOverlayData && (
-                    <HostRoundOverOverlay
-                        key={gameOverOverlayKey ?? undefined}
-                        gameMode={gameMode}
-                        roundOverData={gameOverOverlayData}
-                        goalScore={
-                            gameMode === "battle-royale" ? null : effectiveTargetScore
-                        }
-                        displayLeaderboard={displayLeaderboard}
-                        title={
-                            gameMode === "battle-royale"
-                                ? "Battle Royale Over"
-                                : "Game Over"
-                        }
-                        winnerStatusLabel="Game winner"
-                        countdownLabel="Returning to lobby in"
-                    />
-                )}
             </div>
         </main>
     );

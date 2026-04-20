@@ -16,6 +16,7 @@ type Props = {
     winnerStatusLabel?: string;
     showCountdown?: boolean;
     countdownLabel?: string;
+    countdownDurationMs?: number;
 };
 
 function getInitial(name: string) {
@@ -50,6 +51,7 @@ export default function HostRoundOverOverlay({
     winnerStatusLabel = "Round winner",
     showCountdown = true,
     countdownLabel = "Next round starts in",
+    countdownDurationMs = ROUND_RESTART_DELAY_MS,
 }: Props) {
     const previousScores = useMemo(
         () =>
@@ -63,7 +65,7 @@ export default function HostRoundOverOverlay({
     );
     const [hasAnimated, setHasAnimated] = useState(false);
     const [nextRoundCountdown, setNextRoundCountdown] = useState(
-        Math.ceil(ROUND_RESTART_DELAY_MS / 1000),
+        Math.ceil(countdownDurationMs / 1000),
     );
 
     useEffect(() => {
@@ -85,14 +87,14 @@ export default function HostRoundOverOverlay({
     useEffect(() => {
         if (!showCountdown) return;
 
-        const restartAt = Date.now() + ROUND_RESTART_DELAY_MS;
+        const restartAt = Date.now() + countdownDurationMs;
         const intervalId = window.setInterval(() => {
             const remainingMs = restartAt - Date.now();
             setNextRoundCountdown(Math.max(1, Math.ceil(remainingMs / 1000)));
         }, 100);
 
         return () => window.clearInterval(intervalId);
-    }, [showCountdown]);
+    }, [countdownDurationMs, showCountdown]);
 
     const maxScore = Math.max(
         goalScore ?? 0,

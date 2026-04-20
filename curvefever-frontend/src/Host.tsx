@@ -252,12 +252,6 @@ export default function Host({ onLeave }: Props) {
     const winnerName =
         displayLeaderboard.find((entry) => entry.id === gameOverData?.winnerId)
             ?.name ?? displayLeaderboard[0]?.name;
-    const roundWinnerName = roundDisplayLeaderboard.find(
-        (entry) => entry.id === roundOverData?.winnerId,
-    )?.name;
-    const roundWinnerColor = roundDisplayLeaderboard.find(
-        (entry) => entry.id === roundOverData?.winnerId,
-    )?.color;
     const roundStartCountdown =
         roundStartRemainingMs > 0 ? Math.ceil(roundStartRemainingMs / 1000) : 0;
     const renderPlayers = roundOverData?.frozenPlayers ?? players;
@@ -720,8 +714,6 @@ export default function Host({ onLeave }: Props) {
                             key={roundOverOverlayKey ?? undefined}
                             gameMode={gameMode}
                             roundOverData={roundOverData}
-                            winnerName={roundWinnerName}
-                            winnerColor={roundWinnerColor}
                             goalScore={
                                 gameMode === "battle-royale"
                                     ? null

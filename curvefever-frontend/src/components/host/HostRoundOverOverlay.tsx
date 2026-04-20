@@ -11,15 +11,13 @@ import styles from "../../ui.module.css";
 import type { RoundOverLeaderboardEntry, RoundOverPayload } from "./types";
 
 const ROUND_RESTART_DELAY_MS = 5000;
-const SCORE_ANIMATION_START_DELAY_MS = 0;
+const SCORE_ANIMATION_START_DELAY_MS = 1000;
 const SCORE_ANIMATION_DURATION_MS = 3000;
 const ROW_REORDER_DURATION_MS = 650;
 
 type Props = {
     gameMode: GameMode;
     roundOverData: RoundOverPayload;
-    winnerName?: string;
-    winnerColor?: string;
     goalScore?: number | null;
     displayLeaderboard: RoundOverLeaderboardEntry[];
 };
@@ -61,8 +59,6 @@ function compareByScoreThenName(
 export default function HostRoundOverOverlay({
     gameMode,
     roundOverData,
-    winnerName,
-    winnerColor,
     goalScore,
     displayLeaderboard,
 }: Props) {
@@ -118,22 +114,18 @@ export default function HostRoundOverOverlay({
     useEffect(() => {
         let frameId = 0;
         let secondFrameId = 0;
-        let startTimeoutId = 0;
         let reorderTimeoutId = 0;
 
-        startTimeoutId = window.setTimeout(() => {
-            frameId = window.requestAnimationFrame(() => {
-                secondFrameId = window.requestAnimationFrame(() => {
-                    setHasAnimated(true);
-                });
+        frameId = window.requestAnimationFrame(() => {
+            secondFrameId = window.requestAnimationFrame(() => {
+                setHasAnimated(true);
             });
-        }, SCORE_ANIMATION_START_DELAY_MS);
+        });
         reorderTimeoutId = window.setTimeout(() => {
             setOrderedEntryIds(finalOrderedIds);
         }, SCORE_ANIMATION_START_DELAY_MS + SCORE_ANIMATION_DURATION_MS);
 
         return () => {
-            window.clearTimeout(startTimeoutId);
             window.cancelAnimationFrame(frameId);
             window.cancelAnimationFrame(secondFrameId);
             window.clearTimeout(reorderTimeoutId);
@@ -181,42 +173,15 @@ export default function HostRoundOverOverlay({
         ...displayLeaderboard.map((entry) => entry.score ?? 0),
         1,
     );
-    const goalLabel =
-        gameMode === "battle-royale" ? null : `Goal: ${goalScore ?? maxScore}`;
-    const winnerLabel = winnerName
-        ? `${winnerName} wins the round`
-        : "Points awarded";
-
     return (
         <section className={styles["round-over-overlay"]} aria-live="polite">
             <div className={styles["round-over-panel"]}>
                 <div className={styles["round-over-header"]}>
-                    <p className={styles["round-over-winner-line"]}>
-                        <span
-                            className={styles["round-over-winner-dot"]}
-                            style={{
-                                background:
-                                    winnerColor ??
-                                    "linear-gradient(135deg, #86b8ff, #ffffff)",
-                            }}
-                        />
-                        {winnerLabel}
-                    </p>
                     <div className={styles["round-over-heading"]}>
                         <h2 className={styles["round-over-title"]}>
                             Round results
                         </h2>
                     </div>
-                    {goalLabel && (
-                        <p className={styles["round-over-goal"]}>{goalLabel}</p>
-                    )}
-                </div>
-
-                <div className={styles["round-over-table-head"]} aria-hidden="true">
-                    <span className={styles["round-over-table-rank"]}>#</span>
-                    <span className={styles["round-over-table-player"]}>Player</span>
-                    <span className={styles["round-over-table-points"]}>Points</span>
-                    <span className={styles["round-over-table-total"]}>Score</span>
                 </div>
 
                 <div className={styles["round-over-board"]}>
@@ -250,6 +215,7 @@ export default function HostRoundOverOverlay({
                             const rowStyle = {
                                 "--round-over-accent": entry.color ?? "#4d88ff",
                                 "--round-over-row-delay": `${index * 70}ms`,
+                                "--round-over-score-delay": `${SCORE_ANIMATION_START_DELAY_MS}ms`,
                             } as CSSProperties;
 
                             return (
@@ -290,24 +256,6 @@ export default function HostRoundOverOverlay({
                                         }}
                                         aria-hidden="true"
                                     />
-                                    <span
-                                        className={styles["round-over-row-value-start"]}
-                                        style={{
-                                            left: `clamp(24px, ${startFillPercent}%, calc(100% - 24px))`,
-                                        }}
-                                        aria-hidden="true"
-                                    >
-                                        {startScore}
-                                    </span>
-                                    <span
-                                        className={styles["round-over-row-value-end"]}
-                                        style={{
-                                            left: `clamp(24px, ${finalFillPercent}%, calc(100% - 24px))`,
-                                        }}
-                                        aria-hidden="true"
-                                    >
-                                        {finalScore}
-                                    </span>
                                     <div
                                         className={styles["round-over-row-grid"]}
                                     >

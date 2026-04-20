@@ -10,7 +10,6 @@ import HostControls from "./components/host/HostControls";
 import HostGameSetup from "./components/host/HostGameSetup";
 import HostPlayerList from "./components/host/HostPlayerList";
 import HostLeaderboard from "./components/host/HostLeaderboard";
-import HostGameOverOverlay from "./components/host/HostGameOverOverlay";
 import HostRoundOverOverlay from "./components/host/HostRoundOverOverlay";
 import type {
     GameConfig,
@@ -81,13 +80,7 @@ type FullscreenCapableDocument = Document & {
     webkitFullscreenEnabled?: boolean;
 };
 
-const PLAYER_COLOR_CLASS_BY_HEX: Record<string, string> = PLAYER_COLORS.reduce(
-    (map, color, index) => {
-        map[color.toLowerCase()] = styles[`bar-color-${index}`];
-        return map;
-    },
-    {} as Record<string, string>,
-);
+const GAME_OVER_RETURN_DELAY_MS = 5000;
 
 export default function Host({ onLeave }: Props) {
     const [roomCode, setRoomCode] = useState<string | null>(() => {
@@ -154,14 +147,6 @@ export default function Host({ onLeave }: Props) {
             return DISCONNECTED_DOT_COLOR;
         }
         return playerColorById.get(player.id) ?? PLAYER_COLORS[0];
-    };
-
-    const getBarColorClassName = (color: string | undefined, index: number) => {
-        const normalizedColor = color?.toLowerCase();
-        if (normalizedColor && PLAYER_COLOR_CLASS_BY_HEX[normalizedColor]) {
-            return PLAYER_COLOR_CLASS_BY_HEX[normalizedColor];
-        }
-        return styles[`bar-color-${index % PLAYER_COLORS.length}`];
     };
 
     const leaderboard = useMemo(() => {
@@ -248,10 +233,29 @@ export default function Host({ onLeave }: Props) {
             })),
         });
     }, [roundDisplayLeaderboard, roundOverData]);
-    const highestScore = displayLeaderboard[0]?.score ?? 0;
-    const winnerName =
-        displayLeaderboard.find((entry) => entry.id === gameOverData?.winnerId)
-            ?.name ?? displayLeaderboard[0]?.name;
+    const gameOverOverlayData = useMemo(() => {
+        if (!gameOverData) return null;
+
+        return {
+            winnerId: gameOverData.winnerId,
+            gameMode: gameOverData.gameMode ?? gameMode,
+            leaderboard: displayLeaderboard,
+            scoreBeforeById: Object.fromEntries(
+                displayLeaderboard.map((entry) => [entry.id, 0]),
+            ),
+        } satisfies RoundOverPayload;
+    }, [displayLeaderboard, gameMode, gameOverData]);
+    const gameOverOverlayKey = useMemo(() => {
+        if (!gameOverData) return null;
+
+        return JSON.stringify({
+            winnerId: gameOverData.winnerId ?? null,
+            leaderboard: displayLeaderboard.map((entry) => ({
+                id: entry.id,
+                score: entry.score ?? 0,
+            })),
+        });
+    }, [displayLeaderboard, gameOverData]);
     const roundStartCountdown =
         roundStartRemainingMs > 0 ? Math.ceil(roundStartRemainingMs / 1000) : 0;
     const renderPlayers = roundOverData?.frozenPlayers ?? players;
@@ -315,6 +319,19 @@ export default function Host({ onLeave }: Props) {
         }, 1500);
         return () => window.clearTimeout(timeoutId);
     }, [copiedCode]);
+
+    useEffect(() => {
+        if (!gameOverData) return;
+
+        const timeoutId = window.setTimeout(() => {
+            setGameOverData(null);
+            setRoundOverData(null);
+            setRoundStartRemainingMs(0);
+            setPlaying(false);
+        }, GAME_OVER_RETURN_DELAY_MS);
+
+        return () => window.clearTimeout(timeoutId);
+    }, [gameOverData]);
 
     function handleSubmitGameSetup() {
         if (roomCode && !hasDraftGameSetupChanges) {
@@ -724,17 +741,22 @@ export default function Host({ onLeave }: Props) {
                     )}
                 </div>
 
-                {gameOverData && (
-                    <HostGameOverOverlay
+                {gameOverData && gameOverOverlayData && (
+                    <HostRoundOverOverlay
+                        key={gameOverOverlayKey ?? undefined}
                         gameMode={gameMode}
-                        gameOverData={gameOverData}
-                        winnerName={winnerName}
+                        roundOverData={gameOverOverlayData}
+                        goalScore={
+                            gameMode === "battle-royale" ? null : effectiveTargetScore
+                        }
                         displayLeaderboard={displayLeaderboard}
-                        highestScore={highestScore}
-                        playersCount={players.length}
-                        getBarColorClassName={getBarColorClassName}
-                        onPlayAgain={handleStartGame}
-                        onEndGame={handleLeaveGame}
+                        title={
+                            gameMode === "battle-royale"
+                                ? "Battle Royale Over"
+                                : "Game Over"
+                        }
+                        winnerStatusLabel="Game winner"
+                        countdownLabel="Returning to lobby in"
                     />
                 )}
             </div>

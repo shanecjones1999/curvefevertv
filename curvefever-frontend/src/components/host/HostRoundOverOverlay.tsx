@@ -20,6 +20,10 @@ type Props = {
     roundOverData: RoundOverPayload;
     goalScore?: number | null;
     displayLeaderboard: RoundOverLeaderboardEntry[];
+    title?: string;
+    winnerStatusLabel?: string;
+    showCountdown?: boolean;
+    countdownLabel?: string;
 };
 
 function getInitial(name: string) {
@@ -61,6 +65,10 @@ export default function HostRoundOverOverlay({
     roundOverData,
     goalScore,
     displayLeaderboard,
+    title = "Round results",
+    winnerStatusLabel = "Round winner",
+    showCountdown = true,
+    countdownLabel = "Next round starts in",
 }: Props) {
     const previousScores = useMemo(
         () =>
@@ -159,6 +167,8 @@ export default function HostRoundOverOverlay({
     }, [orderedEntryIds]);
 
     useEffect(() => {
+        if (!showCountdown) return;
+
         const restartAt = Date.now() + ROUND_RESTART_DELAY_MS;
         const intervalId = window.setInterval(() => {
             const remainingMs = restartAt - Date.now();
@@ -166,31 +176,26 @@ export default function HostRoundOverOverlay({
         }, 100);
 
         return () => window.clearInterval(intervalId);
-    }, []);
+    }, [showCountdown]);
 
     const maxScore = Math.max(
         goalScore ?? 0,
         ...displayLeaderboard.map((entry) => entry.score ?? 0),
         1,
     );
+
     return (
         <section className={styles["round-over-overlay"]} aria-live="polite">
             <div className={styles["round-over-panel"]}>
                 <div className={styles["round-over-header"]}>
                     <div className={styles["round-over-heading"]}>
                         <h2 className={styles["round-over-title"]}>
-                            Round results
+                            {title}
                         </h2>
                     </div>
                 </div>
 
                 <div className={styles["round-over-board"]}>
-                    {gameMode !== "battle-royale" && (
-                        <div
-                            className={styles["round-over-finish-line"]}
-                            aria-hidden="true"
-                        />
-                    )}
                     <div className={styles["round-over-rows"]} role="list">
                         {orderedEntries.map((entry, index) => {
                             const startScore =
@@ -249,13 +254,6 @@ export default function HostRoundOverOverlay({
                                         }}
                                         aria-hidden="true"
                                     />
-                                    <span
-                                        className={styles["round-over-row-start"]}
-                                        style={{
-                                            left: `clamp(12px, ${startFillPercent}%, calc(100% - 8px))`,
-                                        }}
-                                        aria-hidden="true"
-                                    />
                                     <div
                                         className={styles["round-over-row-grid"]}
                                     >
@@ -287,7 +285,7 @@ export default function HostRoundOverOverlay({
                                                         styles["round-over-status"]
                                                     }
                                                 >
-                                                    Round winner
+                                                    {winnerStatusLabel}
                                                 </span>
                                             )}
                                         </span>
@@ -304,26 +302,19 @@ export default function HostRoundOverOverlay({
                                             {finalScore}
                                         </span>
                                     </div>
-                                    {gameMode !== "battle-royale" && (
-                                        <span
-                                            className={styles["round-over-marker"]}
-                                            style={{
-                                                left: `clamp(18px, calc(${baseFillPercent}% - 14px), calc(100% - 18px))`,
-                                            }}
-                                            aria-hidden="true"
-                                        />
-                                    )}
                                 </div>
                             );
                         })}
                     </div>
                 </div>
 
-                <div className={styles["round-over-footer"]}>
-                    <p className={styles["round-over-next-round"]}>
-                        Next round starts in {nextRoundCountdown}
-                    </p>
-                </div>
+                {showCountdown && (
+                    <div className={styles["round-over-footer"]}>
+                        <p className={styles["round-over-next-round"]}>
+                            {countdownLabel} {nextRoundCountdown}
+                        </p>
+                    </div>
+                )}
             </div>
         </section>
     );

@@ -310,22 +310,14 @@ export function useHostRoomSync({
                     Math.max(0, state?.roundStartRemainingMs ?? 0),
                 );
                 if (state && Array.isArray(state.players)) {
-                    const nextPlayers = applyPlayers(state.players);
-                    setRoundOverData((current) =>
-                        current && !current.frozenPlayers
-                            ? {
-                                  ...current,
-                                  frozenPlayers: clonePlayers(nextPlayers),
-                              }
-                            : current,
-                    );
+                    applyPlayers(state.players);
                 }
             },
         );
 
         socket.on(
             EVENTS.ROUND_OVER,
-            (data?: Omit<RoundOverPayload, "frozenPlayers">) => {
+            (data?: RoundOverPayload) => {
                 if (!data) return;
                 setRoundStartRemainingMs(0);
                 setRoundOverData({

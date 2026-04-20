@@ -582,13 +582,7 @@ export function startGameLoop(roomCode: string, io: TypedServer) {
             currentTickCount === 1 ||
             currentTickCount % STATE_BROADCAST_EVERY_N_TICKS === 0;
 
-        const roundPaused = pendingRoundRestartMap.has(roomCode);
-        if (roundPaused) {
-            if (shouldBroadcastState) {
-                emitGameState(roomCode, io);
-            }
-            return;
-        }
+        const roundRestartPending = pendingRoundRestartMap.has(roomCode);
 
         const roundStartRemainingMs =
             (roundStartFreezeUntilMap.get(roomCode) ?? 0) - Date.now();
@@ -623,7 +617,6 @@ export function startGameLoop(roomCode: string, io: TypedServer) {
             restartGraceMap.set(roomCode, graceTicksRemaining - 1);
         }
 
-        // Check for collisions and determine round winner
         const players = Array.from(room.players.values());
         const aliveTeamIdsBeforeDeath = new Set(
             getAliveTeamIds(players.filter((player) => player.alive)),
@@ -642,7 +635,47 @@ export function startGameLoop(roomCode: string, io: TypedServer) {
                     );
                 }
             }
+        }
 
+        if (roundRestartPending) {
+            if (room.gameMode === "battle-royale" && deadPlayerIds.size > 0) {
+                const eliminatedPlayerIds =
+                    room.battleRoyaleEliminatedPlayerIds ?? new Set<string>();
+                room.battleRoyaleEliminatedPlayerIds = eliminatedPlayerIds;
+                for (const deadPlayerId of deadPlayerIds) {
+                    eliminatedPlayerIds.add(deadPlayerId);
+                }
+
+                const survivingPlayers = players.filter(
+                    (player) => !eliminatedPlayerIds.has(player.id),
+                );
+
+                if (survivingPlayers.length <= 1) {
+                    const winner = survivingPlayers[0] ?? null;
+                    const sortedLeaderboard = buildBattleRoyaleLeaderboard(
+                        players,
+                        eliminatedPlayerIds,
+                    );
+
+                    room.state = "finished";
+                    io.to(roomCode).emit("gameOver", {
+                        winnerId: winner?.id ?? null,
+                        gameMode: room.gameMode,
+                        leaderboard: sortedLeaderboard,
+                    });
+                    stopGameLoop(roomCode);
+                    return;
+                }
+            }
+
+            if (shouldBroadcastState || deadPlayerIds.size > 0) {
+                emitGameState(roomCode, io);
+            }
+            return;
+        }
+
+        // Check for collisions and determine round winner
+        if (deadPlayerIds.size > 0) {
             const isBattleRoyale = room.gameMode === "battle-royale";
             const isTeamMode = room.gameMode === "teams";
 

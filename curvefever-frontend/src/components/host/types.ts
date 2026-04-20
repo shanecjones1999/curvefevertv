@@ -1,4 +1,4 @@
-import type { GameMode, LeaderboardEntry, Player } from "../../types";
+import type { GameMode, LeaderboardEntry } from "../../types";
 
 export type GameConfig = {
     width: number;
@@ -21,6 +21,5 @@ export type RoundOverPayload = {
     gameMode?: GameMode;
     eliminatedPlayerIds?: string[];
     leaderboard?: RoundOverLeaderboardEntry[];
-    frozenPlayers?: Player[];
     scoreBeforeById?: Record<string, number>;
 };

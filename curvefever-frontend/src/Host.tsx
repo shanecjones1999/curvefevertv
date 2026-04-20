@@ -258,7 +258,7 @@ export default function Host({ onLeave }: Props) {
     }, [displayLeaderboard, gameOverData]);
     const roundStartCountdown =
         roundStartRemainingMs > 0 ? Math.ceil(roundStartRemainingMs / 1000) : 0;
-    const renderPlayers = roundOverData?.frozenPlayers ?? players;
+    const renderPlayers = players;
     const hasDraftGameSetupChanges =
         draftGameMode !== gameMode ||
         (draftGameMode === "teams" && draftTeamCount !== teamCount);

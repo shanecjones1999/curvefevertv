@@ -188,11 +188,11 @@ class CurvefeverScene extends Phaser.Scene {
 
         this.tweens.add({
             targets: skull,
-            y: player.y - 34,
+            y: player.y - 40,
             alpha: 0,
             scale: { from: 0.9, to: 1.08 },
             angle: Phaser.Math.Between(-10, 10),
-            duration: 420,
+            duration: 650,
             ease: "Sine.easeOut",
             onComplete: () => skull.destroy(),
         });

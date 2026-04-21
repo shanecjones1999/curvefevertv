@@ -41,6 +41,7 @@ type UseHostRoomSyncParams = {
         React.SetStateAction<RoundOverPayload | null>
     >;
     setGameConfig: React.Dispatch<React.SetStateAction<GameConfig>>;
+    onPlayerJoined?: (player: Player) => void;
     autoCreateRoom?: boolean;
 };
 
@@ -56,6 +57,7 @@ export function useHostRoomSync({
     setGameOverData,
     setRoundOverData,
     setGameConfig,
+    onPlayerJoined,
     autoCreateRoom = true,
 }: UseHostRoomSyncParams) {
     const latestPlayersRef = useRef<Player[]>([]);
@@ -256,6 +258,7 @@ export function useHostRoomSync({
         });
 
         socket.on("playerJoined", (data: { player: Player }) => {
+            onPlayerJoined?.(data.player);
             setPlayers((players) => {
                 const nextPlayers = clonePlayers([
                     ...players,
@@ -377,6 +380,7 @@ export function useHostRoomSync({
         setGameOverData,
         setRoundOverData,
         setGameConfig,
+        onPlayerJoined,
         autoCreateRoom,
     ]);
 }

@@ -192,7 +192,7 @@ class CurvefeverScene extends Phaser.Scene {
             alpha: 0,
             scale: { from: 0.9, to: 1.08 },
             angle: Phaser.Math.Between(-10, 10),
-            duration: 650,
+            duration: 1200,
             ease: "Sine.easeOut",
             onComplete: () => skull.destroy(),
         });

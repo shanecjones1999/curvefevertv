@@ -1,6 +1,6 @@
 import { getRoom } from "./rooms";
 import { TypedServer } from "./socket/events";
-import { GameMode, GameState, Player } from "./types";
+import { GameMode, GameState, LeaderboardEntry, Player } from "./types";
 import {
     GAME_HEIGHT,
     GAME_WIDTH,
@@ -61,6 +61,21 @@ function scheduleLobbyReturn(roomCode: string, io: TypedServer) {
     }, GAME_OVER_RETURN_DELAY_MS);
 
     pendingGameOverReturnMap.set(roomCode, handle);
+}
+
+function emitFinalGameOver(
+    roomCode: string,
+    io: TypedServer,
+    payload: {
+        winnerId: string | null;
+        gameMode: GameMode;
+        targetScore?: number;
+        teamCount?: number;
+        leaderboard: LeaderboardEntry[];
+    },
+) {
+    emitGameState(roomCode, io);
+    io.to(roomCode).emit("gameOver", payload);
 }
 
 function randomCoordinateAwayFromWalls(arenaSize: number, wallMargin: number) {
@@ -769,7 +784,7 @@ export function startGameLoop(roomCode: string, io: TypedServer) {
                     );
 
                     room.state = "finished";
-                    io.to(roomCode).emit("gameOver", {
+                    emitFinalGameOver(roomCode, io, {
                         winnerId: winner?.id ?? null,
                         gameMode: room.gameMode,
                         leaderboard: sortedLeaderboard,
@@ -811,7 +826,7 @@ export function startGameLoop(roomCode: string, io: TypedServer) {
                     );
 
                     room.state = "finished";
-                    io.to(roomCode).emit("gameOver", {
+                    emitFinalGameOver(roomCode, io, {
                         winnerId: winner?.id ?? null,
                         gameMode: room.gameMode,
                         leaderboard: sortedLeaderboard,
@@ -889,7 +904,7 @@ export function startGameLoop(roomCode: string, io: TypedServer) {
 
                 if (sortedLeaderboard.some((team) => team.score >= targetScore)) {
                     room.state = "finished";
-                    io.to(roomCode).emit("gameOver", {
+                    emitFinalGameOver(roomCode, io, {
                         winnerId: sortedLeaderboard[0]?.id ?? null,
                         gameMode: room.gameMode,
                         targetScore,
@@ -972,7 +987,7 @@ export function startGameLoop(roomCode: string, io: TypedServer) {
                 const sortedLeaderboard = buildClassicLeaderboard(players);
 
                 room.state = "finished";
-                io.to(roomCode).emit("gameOver", {
+                emitFinalGameOver(roomCode, io, {
                     winnerId: sortedLeaderboard[0]?.id ?? null,
                     gameMode: room.gameMode,
                     targetScore,

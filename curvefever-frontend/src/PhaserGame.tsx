@@ -20,7 +20,10 @@ import {
     getTeamLabel,
     getTeamSymbol,
 } from "./utils/teamMode";
-import { getSharedAudioContext } from "./utils/audioContext";
+import {
+    getSharedAudioContext,
+    getSharedAudioDestination,
+} from "./utils/audioContext";
 
 interface PhaserGameProps {
     players: Player[];
@@ -104,7 +107,8 @@ class CurvefeverScene extends Phaser.Scene {
 
     playCrashSound() {
         const context = getSharedAudioContext();
-        if (!context) {
+        const destination = getSharedAudioDestination();
+        if (!context || !destination) {
             return;
         }
         this.audioContext = context;
@@ -141,7 +145,7 @@ class CurvefeverScene extends Phaser.Scene {
         bodyGain.connect(filter);
         biteGain.connect(filter);
         filter.connect(masterGain);
-        masterGain.connect(context.destination);
+        masterGain.connect(destination);
 
         bodyOscillator.start(now);
         biteOscillator.start(now);

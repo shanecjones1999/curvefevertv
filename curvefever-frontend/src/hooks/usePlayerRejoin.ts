@@ -24,7 +24,7 @@ type UsePlayerRejoinParams = {
     playerIdRef: React.MutableRefObject<string | null>;
     setPlayerId: React.Dispatch<React.SetStateAction<string | null>>;
     stopSendingInput: () => void;
-    onLeave: () => void;
+    onRoomClosed: () => void;
     setJoined: React.Dispatch<React.SetStateAction<boolean>>;
     setIsRejoining: React.Dispatch<React.SetStateAction<boolean>>;
     setRejoinError: React.Dispatch<React.SetStateAction<string | null>>;
@@ -36,7 +36,7 @@ export function usePlayerRejoin({
     playerIdRef,
     setPlayerId,
     stopSendingInput,
-    onLeave,
+    onRoomClosed,
     setJoined,
     setIsRejoining,
     setRejoinError,
@@ -169,13 +169,12 @@ export function usePlayerRejoin({
 
         // if the host deletes the room, the client should depart too
         const handleRoomClosed = () => {
-            alert("Room has been closed by the host.");
             playerIdRef.current = null;
             setPlayerId(null);
             setJoined(false);
             setIsRejoining(false);
             localStorage.removeItem(PLAYER_SESSION_KEY);
-            onLeave();
+            onRoomClosed();
         };
         socket.on(EVENTS.ROOM_CLOSED, handleRoomClosed);
 
@@ -192,7 +191,7 @@ export function usePlayerRejoin({
         playerIdRef,
         setPlayerId,
         stopSendingInput,
-        onLeave,
+        onRoomClosed,
         setJoined,
         setIsRejoining,
         setRejoinError,

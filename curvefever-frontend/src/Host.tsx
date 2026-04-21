@@ -11,6 +11,7 @@ import HostGameSetup from "./components/host/HostGameSetup";
 import HostPlayerList from "./components/host/HostPlayerList";
 import HostLeaderboard from "./components/host/HostLeaderboard";
 import HostRoundOverOverlay from "./components/host/HostRoundOverOverlay";
+import AppPopupDialog from "./components/AppPopupDialog";
 import type {
     GameConfig,
     GameOverPayload,
@@ -83,6 +84,17 @@ type FullscreenCapableDocument = Document & {
 
 const GAME_OVER_RETURN_DELAY_MS = 10000;
 
+type PopupDialogState = {
+    eyebrow?: string;
+    title: string;
+    description: string;
+    confirmLabel: string;
+    onConfirm: () => void;
+    cancelLabel?: string;
+    onCancel?: () => void;
+    confirmTone?: "default" | "danger";
+};
+
 export default function Host({ onLeave }: Props) {
     const [roomCode, setRoomCode] = useState<string | null>(() => {
         const raw = localStorage.getItem(HOST_SESSION_KEY);
@@ -116,6 +128,7 @@ export default function Host({ onLeave }: Props) {
     const [isEditingGameSetup, setIsEditingGameSetup] = useState(false);
     const [draftGameMode, setDraftGameMode] = useState<GameMode>("classic");
     const [draftTeamCount, setDraftTeamCount] = useState(DEFAULT_TEAM_COUNT);
+    const [dialogState, setDialogState] = useState<PopupDialogState | null>(null);
     const hostScreenRef = useRef<HTMLElement | null>(null);
     const [isFullscreen, setIsFullscreen] = useState(() =>
         Boolean(
@@ -432,20 +445,10 @@ export default function Host({ onLeave }: Props) {
         return () => window.clearTimeout(timeoutId);
     }, [gameOverData]);
 
-    function handleSubmitGameSetup() {
+    function submitGameSetup() {
         if (roomCode && !hasDraftGameSetupChanges) {
             setStartError(null);
             setIsEditingGameSetup(false);
-            return;
-        }
-
-        if (
-            roomCode &&
-            willReshuffleTeams &&
-            !window.confirm(
-                "Changing the game setup may reshuffle teams for players already in the room. Continue?",
-            )
-        ) {
             return;
         }
 
@@ -509,6 +512,27 @@ export default function Host({ onLeave }: Props) {
         );
     }
 
+    function handleSubmitGameSetup() {
+        if (roomCode && willReshuffleTeams) {
+            setDialogState({
+                eyebrow: "Update setup",
+                title: "Apply the new team setup?",
+                description:
+                    "Players already in the room may be reassigned when the team configuration changes.",
+                confirmLabel: "Apply changes",
+                cancelLabel: "Keep current setup",
+                onCancel: () => setDialogState(null),
+                onConfirm: () => {
+                    setDialogState(null);
+                    submitGameSetup();
+                },
+            });
+            return;
+        }
+
+        submitGameSetup();
+    }
+
     function handleStartGame() {
         if (!roomCode) return;
         socket.emit(
@@ -565,12 +589,40 @@ export default function Host({ onLeave }: Props) {
     }
 
     function handleLeaveGame() {
-        if (roomCode && !window.confirm("End session and leave the room?")) {
-            return;
-        }
-
         if (roomCode) {
-            socket.emit(EVENTS.LEAVE_ROOM, { roomCode }, () => {});
+            setDialogState({
+                eyebrow: "Leave host mode",
+                title: "End this session?",
+                description:
+                    "This will close the room for players and return you to role selection.",
+                confirmLabel: "End session",
+                cancelLabel: "Stay here",
+                confirmTone: "danger",
+                onCancel: () => setDialogState(null),
+                onConfirm: () => {
+                    setDialogState(null);
+                    if (roomCode) {
+                        socket.emit(EVENTS.LEAVE_ROOM, { roomCode }, () => {});
+                    }
+
+                    localStorage.removeItem(HOST_SESSION_KEY);
+                    setRoomCode(null);
+                    setPlayers([]);
+                    setPlaying(false);
+                    setTargetScore(null);
+                    setGameMode("classic");
+                    setTeamCount(DEFAULT_TEAM_COUNT);
+                    setDraftGameMode("classic");
+                    setDraftTeamCount(DEFAULT_TEAM_COUNT);
+                    setGameOverData(null);
+                    setRoundOverData(null);
+                    setRoundStartRemainingMs(0);
+                    setIsSubmittingGameSetup(false);
+                    setIsEditingGameSetup(false);
+                    onLeave();
+                },
+            });
+            return;
         }
 
         localStorage.removeItem(HOST_SESSION_KEY);
@@ -589,6 +641,20 @@ export default function Host({ onLeave }: Props) {
         setIsEditingGameSetup(false);
         onLeave();
     }
+
+    const popupDialog = (
+        <AppPopupDialog
+            isOpen={Boolean(dialogState)}
+            eyebrow={dialogState?.eyebrow}
+            title={dialogState?.title ?? ""}
+            description={dialogState?.description ?? ""}
+            confirmLabel={dialogState?.confirmLabel ?? "OK"}
+            onConfirm={dialogState?.onConfirm ?? (() => {})}
+            cancelLabel={dialogState?.cancelLabel}
+            onCancel={dialogState?.onCancel}
+            confirmTone={dialogState?.confirmTone}
+        />
+    );
 
     const getLeaderboardRowClassName = (entry: LeaderboardEntry) => {
         if (entry.kind === "team") {
@@ -687,6 +753,7 @@ export default function Host({ onLeave }: Props) {
             startError={startError}
             isFullscreen={isFullscreen}
             isFullscreenSupported={isFullscreenSupported}
+            isSoundMuted={hostSoundboard.isMuted}
             layout={playing ? "sidebar" : "lobby"}
             playersSlot={
                 !playing ? (
@@ -704,6 +771,7 @@ export default function Host({ onLeave }: Props) {
             onChangeMode={handleOpenGameSetup}
             onCopyGameCode={handleCopyGameCode}
             onStartGame={handleStartGame}
+            onToggleSound={hostSoundboard.toggleMuted}
             onToggleFullscreen={handleFullscreenToggle}
         />
     );
@@ -748,6 +816,7 @@ export default function Host({ onLeave }: Props) {
                         onGameModeChange={handleDraftGameModeChange}
                         onTeamCountChange={handleDraftTeamCountChange}
                     />
+                    {popupDialog}
                 </main>
             );
         }
@@ -792,6 +861,7 @@ export default function Host({ onLeave }: Props) {
                         />
                     </div>
                 )}
+                {popupDialog}
             </main>
         );
     }
@@ -881,6 +951,7 @@ export default function Host({ onLeave }: Props) {
                     )}
                 </div>
             </div>
+            {popupDialog}
         </main>
     );
 }

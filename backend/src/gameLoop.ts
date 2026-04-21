@@ -1,6 +1,6 @@
 import { getRoom } from "./rooms";
 import { TypedServer } from "./socket/events";
-import { GameMode, GameState, Player } from "./types";
+import { GameMode, GameState, LeaderboardEntry, Player } from "./types";
 import {
     GAME_HEIGHT,
     GAME_WIDTH,
@@ -13,6 +13,7 @@ import {
     buildClassicLeaderboard,
 } from "./domain/leaderboard";
 import { buildTeamLeaderboard, getAliveTeamIds } from "./domain/teamMode";
+import { emitLobbyUpdate } from "./socket/lobbyEmitter";
 
 const TICK_RATE = 60;
 const MS_PER_TICK = 1000 / TICK_RATE;
@@ -28,8 +29,54 @@ const roundStartNoTrailMap = new Map<string, number>();
 const ROUND_START_FREEZE_MS = 3000;
 const roundStartFreezeUntilMap = new Map<string, number>();
 const ROUND_RESTART_DELAY_MS = 5000;
+const GAME_OVER_RETURN_DELAY_MS = 10000;
 const pendingRoundRestartMap = new Map<string, NodeJS.Timeout>();
+const pendingGameOverReturnMap = new Map<string, NodeJS.Timeout>();
 const MAX_SPAWN_ATTEMPTS = 40;
+
+function clearPendingGameOverReturn(roomCode: string) {
+    const handle = pendingGameOverReturnMap.get(roomCode);
+    if (!handle) return;
+
+    clearTimeout(handle);
+    pendingGameOverReturnMap.delete(roomCode);
+}
+
+function scheduleLobbyReturn(roomCode: string, io: TypedServer) {
+    clearPendingGameOverReturn(roomCode);
+
+    const handle = setTimeout(() => {
+        pendingGameOverReturnMap.delete(roomCode);
+
+        const room = getRoom(roomCode);
+        if (!room || room.state !== "finished") {
+            return;
+        }
+
+        restartRound(Array.from(room.players.values()));
+        room.state = "lobby";
+        room.battleRoyaleEliminatedPlayerIds = new Set<string>();
+        room.roundStartScoreById = {};
+        emitLobbyUpdate(io, room.code);
+    }, GAME_OVER_RETURN_DELAY_MS);
+
+    pendingGameOverReturnMap.set(roomCode, handle);
+}
+
+function emitFinalGameOver(
+    roomCode: string,
+    io: TypedServer,
+    payload: {
+        winnerId: string | null;
+        gameMode: GameMode;
+        targetScore?: number;
+        teamCount?: number;
+        leaderboard: LeaderboardEntry[];
+    },
+) {
+    emitGameState(roomCode, io);
+    io.to(roomCode).emit("gameOver", payload);
+}
 
 function randomCoordinateAwayFromWalls(arenaSize: number, wallMargin: number) {
     const usableSize = arenaSize - wallMargin * 2;
@@ -639,6 +686,8 @@ export function restartRound(
 export function startGameLoop(roomCode: string, io: TypedServer) {
     if (runningLoops.has(roomCode)) return;
 
+    clearPendingGameOverReturn(roomCode);
+
     const room = getRoom(roomCode);
     if (room) {
         room.roundStartScoreById = buildRoundStartScoreMap(room);
@@ -735,12 +784,13 @@ export function startGameLoop(roomCode: string, io: TypedServer) {
                     );
 
                     room.state = "finished";
-                    io.to(roomCode).emit("gameOver", {
+                    emitFinalGameOver(roomCode, io, {
                         winnerId: winner?.id ?? null,
                         gameMode: room.gameMode,
                         leaderboard: sortedLeaderboard,
                     });
                     stopGameLoop(roomCode);
+                    scheduleLobbyReturn(roomCode, io);
                     return;
                 }
             }
@@ -776,12 +826,13 @@ export function startGameLoop(roomCode: string, io: TypedServer) {
                     );
 
                     room.state = "finished";
-                    io.to(roomCode).emit("gameOver", {
+                    emitFinalGameOver(roomCode, io, {
                         winnerId: winner?.id ?? null,
                         gameMode: room.gameMode,
                         leaderboard: sortedLeaderboard,
                     });
                     stopGameLoop(roomCode);
+                    scheduleLobbyReturn(roomCode, io);
                     return;
                 }
 
@@ -853,7 +904,7 @@ export function startGameLoop(roomCode: string, io: TypedServer) {
 
                 if (sortedLeaderboard.some((team) => team.score >= targetScore)) {
                     room.state = "finished";
-                    io.to(roomCode).emit("gameOver", {
+                    emitFinalGameOver(roomCode, io, {
                         winnerId: sortedLeaderboard[0]?.id ?? null,
                         gameMode: room.gameMode,
                         targetScore,
@@ -861,6 +912,7 @@ export function startGameLoop(roomCode: string, io: TypedServer) {
                         leaderboard: sortedLeaderboard,
                     });
                     stopGameLoop(roomCode);
+                    scheduleLobbyReturn(roomCode, io);
                     return;
                 }
 
@@ -935,13 +987,14 @@ export function startGameLoop(roomCode: string, io: TypedServer) {
                 const sortedLeaderboard = buildClassicLeaderboard(players);
 
                 room.state = "finished";
-                io.to(roomCode).emit("gameOver", {
+                emitFinalGameOver(roomCode, io, {
                     winnerId: sortedLeaderboard[0]?.id ?? null,
                     gameMode: room.gameMode,
                     targetScore,
                     leaderboard: sortedLeaderboard,
                 });
                 stopGameLoop(roomCode);
+                scheduleLobbyReturn(roomCode, io);
                 return;
             }
 
@@ -1016,4 +1069,5 @@ export function stopGameLoop(roomCode: string) {
     roundStartNoTrailMap.delete(roomCode);
     roundStartFreezeUntilMap.delete(roomCode);
     roomTickCounterMap.delete(roomCode);
+    clearPendingGameOverReturn(roomCode);
 }

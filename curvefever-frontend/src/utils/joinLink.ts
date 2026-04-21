@@ -51,3 +51,14 @@ export function buildPlayerJoinUrl(roomCode: string): string | null {
 
     return url.toString();
 }
+
+export function clearJoinUrlParams() {
+    const url = getCurrentUrl();
+
+    if (!url) {
+        return;
+    }
+
+    url.search = "";
+    window.history.replaceState({}, "", url);
+}

@@ -17,6 +17,7 @@ import type {
     RoundOverPayload,
 } from "./components/host/types";
 import { useHostRoomSync } from "./hooks/useHostRoomSync";
+import { useHostSoundboard } from "./hooks/useHostSoundboard";
 import styles from "./ui.module.css";
 import { cx } from "./utils/cx";
 import { buildPlayerJoinUrl } from "./utils/joinLink";
@@ -129,6 +130,14 @@ export default function Host({ onLeave }: Props) {
             (document as FullscreenCapableDocument).webkitFullscreenEnabled,
         ),
     );
+    const hostSoundboard = useHostSoundboard();
+    const previousCanStartRef = useRef<boolean | null>(null);
+    const previousRoundStartCountdownRef = useRef(0);
+    const previousTeamAssignmentsRef = useRef<Map<string, number | undefined> | null>(
+        null,
+    );
+    const lastTeamRoundWinKeyRef = useRef<string | null>(null);
+    const lastTeamGameWinKeyRef = useRef<string | null>(null);
 
     const playerColorById = useMemo(() => {
         return buildPlayerColorById(players);
@@ -279,6 +288,7 @@ export default function Host({ onLeave }: Props) {
         setGameOverData,
         setRoundOverData,
         setGameConfig,
+        onPlayerJoined: () => hostSoundboard.playLobbyJoin(),
         autoCreateRoom: false,
     });
 
@@ -319,6 +329,95 @@ export default function Host({ onLeave }: Props) {
         }, 1500);
         return () => window.clearTimeout(timeoutId);
     }, [copiedCode]);
+
+    useEffect(() => {
+        if (
+            previousCanStartRef.current !== null &&
+            !playing &&
+            canStart &&
+            !previousCanStartRef.current &&
+            players.length > 0
+        ) {
+            hostSoundboard.playLobbyReady();
+        }
+
+        previousCanStartRef.current = canStart;
+    }, [canStart, hostSoundboard, players.length, playing]);
+
+    useEffect(() => {
+        const previousCountdown = previousRoundStartCountdownRef.current;
+
+        if (playing && !roundOverData && !gameOverData) {
+            if (
+                roundStartCountdown > 0 &&
+                roundStartCountdown <= 3 &&
+                roundStartCountdown !== previousCountdown
+            ) {
+                hostSoundboard.playRoundCountdown(roundStartCountdown);
+            }
+
+            if (previousCountdown > 0 && roundStartCountdown === 0) {
+                hostSoundboard.playRoundGo();
+            }
+        }
+
+        previousRoundStartCountdownRef.current = roundStartCountdown;
+    }, [
+        gameOverData,
+        hostSoundboard,
+        playing,
+        roundOverData,
+        roundStartCountdown,
+    ]);
+
+    useEffect(() => {
+        const nextAssignments = new Map(
+            players.map((player) => [player.id, player.teamId]),
+        );
+        const previousAssignments = previousTeamAssignmentsRef.current;
+
+        if (previousAssignments && !playing && gameMode === "teams") {
+            const didSwitchTeams = players.some(
+                (player) =>
+                    previousAssignments.has(player.id) &&
+                    previousAssignments.get(player.id) !== player.teamId,
+            );
+
+            if (didSwitchTeams) {
+                hostSoundboard.playTeamSwitch();
+            }
+        }
+
+        previousTeamAssignmentsRef.current = nextAssignments;
+    }, [gameMode, hostSoundboard, players, playing]);
+
+    useEffect(() => {
+        if (gameMode !== "teams" || !roundOverData?.winnerId) {
+            return;
+        }
+
+        const nextKey = `${roundOverData.winnerId}:${roundOverOverlayKey ?? ""}`;
+        if (lastTeamRoundWinKeyRef.current === nextKey) {
+            return;
+        }
+
+        lastTeamRoundWinKeyRef.current = nextKey;
+        hostSoundboard.playTeamWin();
+    }, [gameMode, hostSoundboard, roundOverData, roundOverOverlayKey]);
+
+    useEffect(() => {
+        if (gameMode !== "teams" || !gameOverData?.winnerId) {
+            return;
+        }
+
+        const nextKey = `${gameOverData.winnerId}:${gameOverOverlayKey ?? ""}`;
+        if (lastTeamGameWinKeyRef.current === nextKey) {
+            return;
+        }
+
+        lastTeamGameWinKeyRef.current = nextKey;
+        hostSoundboard.playTeamWin();
+    }, [gameMode, gameOverData, gameOverOverlayKey, hostSoundboard]);
 
     useEffect(() => {
         if (!gameOverData) return;
@@ -442,11 +541,13 @@ export default function Host({ onLeave }: Props) {
     function handleDraftGameModeChange(nextGameMode: GameMode) {
         setStartError(null);
         setDraftGameMode(nextGameMode);
+        hostSoundboard.playUiSelect();
     }
 
     function handleDraftTeamCountChange(nextTeamCount: number) {
         setStartError(null);
         setDraftTeamCount(nextTeamCount);
+        hostSoundboard.playUiSelect();
     }
 
     function handleOpenGameSetup() {
@@ -607,6 +708,24 @@ export default function Host({ onLeave }: Props) {
         />
     );
 
+    const hostUiEventHandlers = {
+        onPointerOverCapture: (event: React.PointerEvent<HTMLElement>) => {
+            hostSoundboard.handleUiPointerOver(event.target);
+        },
+        onPointerLeave: () => {
+            hostSoundboard.resetHoveredButton();
+        },
+        onFocusCapture: (event: React.FocusEvent<HTMLElement>) => {
+            hostSoundboard.handleUiFocus(event.target);
+        },
+        onBlurCapture: () => {
+            hostSoundboard.resetHoveredButton();
+        },
+        onClickCapture: (event: React.MouseEvent<HTMLElement>) => {
+            hostSoundboard.handleUiClick(event.target);
+        },
+    };
+
     if (!roomCode || isEditingGameSetup) {
         if (!roomCode) {
             return (
@@ -615,6 +734,7 @@ export default function Host({ onLeave }: Props) {
                         styles["page-shell"],
                         styles["page-shell-host-lobby"],
                     )}
+                    {...hostUiEventHandlers}
                 >
                     <HostGameSetup
                         gameMode={draftGameMode}
@@ -641,6 +761,7 @@ export default function Host({ onLeave }: Props) {
                     styles["page-shell-host-lobby"],
                 )}
                 ref={hostScreenRef}
+                {...hostUiEventHandlers}
             >
                 <section
                     className={cx(
@@ -682,6 +803,7 @@ export default function Host({ onLeave }: Props) {
                 styles["page-shell-host-playing"],
             )}
             ref={hostScreenRef}
+            {...hostUiEventHandlers}
         >
             <div className={styles["host-playing-screen"]}>
                 <div className={styles["host-side-column"]}>

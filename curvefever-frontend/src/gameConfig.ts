@@ -1,3 +1,9 @@
 export const DEFAULT_GAME_WIDTH = 1280;
 export const DEFAULT_GAME_HEIGHT = 1000;
 export const PLAYER_TRAIL_WIDTH = 5;
+export const PLAYER_HEAD_RADIUS = 8;
+export const PLAYER_HEAD_GLOW_RADIUS = 12;
+export const PLAYER_HEAD_GLOW_ALPHA = 0.18;
+export const PLAYER_HEAD_PULSE_ALPHA_VARIATION = 0.06;
+export const PLAYER_HEAD_PULSE_RADIUS_VARIATION = 1.5;
+export const PLAYER_HEAD_PULSE_SPEED = 0.004;

@@ -24,6 +24,11 @@ interface PhaserGameProps {
     className?: string;
 }
 
+const PLAYER_HEAD_RADIUS = 8;
+const PLAYER_HEAD_GLOW_RADIUS = 18;
+const PLAYER_HEAD_INNER_GLOW_RADIUS = 13;
+const PLAYER_HEAD_HIGHLIGHT_RADIUS = 5;
+
 class CurvefeverScene extends Phaser.Scene {
     players: Player[] = [];
     playerSprites: Map<string, Phaser.GameObjects.Graphics> = new Map();
@@ -37,6 +42,30 @@ class CurvefeverScene extends Phaser.Scene {
         super("CurvefeverScene");
     }
 
+    drawPlayerHead(graphic: Phaser.GameObjects.Graphics, color: string) {
+        const baseColor = Phaser.Display.Color.HexStringToColor(color);
+        const highlightColor = Phaser.Display.Color.Interpolate.ColorWithColor(
+            baseColor,
+            new Phaser.Display.Color(255, 255, 255),
+            100,
+            35,
+        );
+        const highlightColorValue = Phaser.Display.Color.GetColor(
+            highlightColor.r,
+            highlightColor.g,
+            highlightColor.b,
+        );
+
+        graphic.fillStyle(baseColor.color, 0.12);
+        graphic.fillCircle(0, 0, PLAYER_HEAD_GLOW_RADIUS);
+        graphic.fillStyle(baseColor.color, 0.22);
+        graphic.fillCircle(0, 0, PLAYER_HEAD_INNER_GLOW_RADIUS);
+        graphic.fillStyle(baseColor.color, 1);
+        graphic.fillCircle(0, 0, PLAYER_HEAD_RADIUS);
+        graphic.fillStyle(highlightColorValue, 0.45);
+        graphic.fillCircle(-2, -2, PLAYER_HEAD_HIGHLIGHT_RADIUS);
+    }
+
     create() {
         this.playerSprites.clear();
         this.markerTexts.clear();
@@ -47,10 +76,8 @@ class CurvefeverScene extends Phaser.Scene {
         const players = Array.isArray(this.players) ? this.players : [];
         players.forEach((p, i) => {
             const g = this.add.graphics();
-            // Convert color string to number for Phaser
             const colorHex = p.color || PLAYER_COLORS[i % PLAYER_COLORS.length];
-            g.fillStyle(parseInt(colorHex.replace("#", ""), 16), 1);
-            g.fillCircle(0, 0, 8);
+            this.drawPlayerHead(g, colorHex);
             g.x = p.x;
             g.y = p.y;
             this.playerSprites.set(p.id, g);
@@ -278,8 +305,7 @@ class CurvefeverScene extends Phaser.Scene {
             }
             g.clear();
             if (p.alive) {
-                g.fillStyle(Phaser.Display.Color.HexStringToColor(color).color, 1);
-                g.fillCircle(0, 0, 8);
+                this.drawPlayerHead(g, color);
                 g.x = p.x;
                 g.y = p.y;
                 g.setVisible(true);

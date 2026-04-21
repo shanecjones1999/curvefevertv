@@ -1,14 +1,16 @@
 import { useEffect, useState } from "react";
 import Host from "./Host";
+import HowToPlayScreen from "./HowToPlayScreen";
 import PlayerController from "./PlayerController";
 import styles from "./ui.module.css";
 import { cx } from "./utils/cx";
 import { getRequestedRoleFromUrl } from "./utils/joinLink";
 
 const ROLE_KEY = "curvefever:role";
+type AppRole = "none" | "host" | "phone" | "tutorial";
 
 function App() {
-    const [role, setRole] = useState<"none" | "host" | "phone">(() => {
+    const [role, setRole] = useState<AppRole>(() => {
         const requestedRole = getRequestedRoleFromUrl();
         if (requestedRole) return requestedRole;
 
@@ -18,7 +20,7 @@ function App() {
     });
 
     useEffect(() => {
-        if (role === "none") {
+        if (role === "none" || role === "tutorial") {
             localStorage.removeItem(ROLE_KEY);
             return;
         }
@@ -26,7 +28,7 @@ function App() {
         localStorage.setItem(ROLE_KEY, role);
     }, [role]);
 
-    function selectRole(nextRole: "host" | "phone") {
+    function selectRole(nextRole: Exclude<AppRole, "none">) {
         setRole(nextRole);
     }
 
@@ -36,6 +38,15 @@ function App() {
 
     if (role === "host") return <Host onLeave={clearRole} />;
     if (role === "phone") return <PlayerController onLeave={clearRole} />;
+    if (role === "tutorial") {
+        return (
+            <HowToPlayScreen
+                onBack={clearRole}
+                onStartHost={() => selectRole("host")}
+                onStartPlayer={() => selectRole("phone")}
+            />
+        );
+    }
 
     return (
         <main className={cx(styles["page-shell"], styles["page-shell-landing"])}>
@@ -129,6 +140,15 @@ function App() {
                         onClick={() => selectRole("phone")}
                     >
                         Join as Player
+                    </button>
+                    <button
+                        className={cx(
+                            styles["ui-button"],
+                            styles["ui-button-secondary"],
+                        )}
+                        onClick={() => selectRole("tutorial")}
+                    >
+                        How to Play
                     </button>
                 </div>
             </section>

@@ -1,5 +1,10 @@
-import { useCallback, useRef } from "react";
-import { getSharedAudioContext } from "../utils/audioContext";
+import { useCallback, useRef, useState } from "react";
+import {
+    getSharedAudioContext,
+    getSharedAudioDestination,
+    isSharedAudioMuted,
+    setSharedAudioMuted,
+} from "../utils/audioContext";
 
 type ToneSpec = {
     offsetMs?: number;
@@ -12,7 +17,8 @@ type ToneSpec = {
 
 function playToneSequence(tones: ToneSpec[]) {
     const context = getSharedAudioContext();
-    if (!context) {
+    const destination = getSharedAudioDestination();
+    if (!context || !destination) {
         return;
     }
 
@@ -40,7 +46,7 @@ function playToneSequence(tones: ToneSpec[]) {
         gainNode.gain.exponentialRampToValueAtTime(0.0001, stopTime);
 
         oscillator.connect(gainNode);
-        gainNode.connect(context.destination);
+        gainNode.connect(destination);
         oscillator.start(startTime);
         oscillator.stop(stopTime);
         oscillator.onended = () => {
@@ -60,11 +66,16 @@ function findEnabledButton(target: EventTarget | null) {
         return null;
     }
 
+    if (button.dataset.uiSound === "off") {
+        return null;
+    }
+
     return button;
 }
 
 export function useHostSoundboard() {
     const hoveredButtonRef = useRef<HTMLButtonElement | null>(null);
+    const [isMuted, setIsMuted] = useState(() => isSharedAudioMuted());
 
     const playUiHover = useCallback(() => {
         playToneSequence([
@@ -290,7 +301,17 @@ export function useHostSoundboard() {
         hoveredButtonRef.current = null;
     }, []);
 
+    const toggleMuted = useCallback(() => {
+        setIsMuted((current) => {
+            const next = !current;
+            setSharedAudioMuted(next);
+            return next;
+        });
+    }, []);
+
     return {
+        isMuted,
+        toggleMuted,
         playLobbyJoin,
         playLobbyReady,
         playRoundCountdown,

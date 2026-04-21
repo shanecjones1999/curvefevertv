@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import type { GameMode } from "../../types";
 import styles from "../../ui.module.css";
 import { cx } from "../../utils/cx";
-import { FullscreenIcon, LeaveGameIcon } from "../ActionIcons";
+import { FullscreenIcon, LeaveGameIcon, SoundIcon } from "../ActionIcons";
 import HostJoinQr from "./HostJoinQr";
 
 type Props = {
@@ -17,12 +17,14 @@ type Props = {
     startError: string | null;
     isFullscreen: boolean;
     isFullscreenSupported: boolean;
+    isSoundMuted: boolean;
     layout?: "lobby" | "sidebar";
     playersSlot?: ReactNode;
     onLeaveGame: () => void;
     onChangeMode: () => void;
     onCopyGameCode: () => void;
     onStartGame: () => void;
+    onToggleSound: () => void;
     onToggleFullscreen: () => void;
 };
 
@@ -38,17 +40,20 @@ export default function HostControls({
     startError,
     isFullscreen,
     isFullscreenSupported,
+    isSoundMuted,
     layout = "sidebar",
     playersSlot = null,
     onLeaveGame,
     onChangeMode,
     onCopyGameCode,
     onStartGame,
+    onToggleSound,
     onToggleFullscreen,
 }: Props) {
     const fullscreenLabel = isFullscreen
         ? "Exit fullscreen"
         : "Enter fullscreen";
+    const soundLabel = isSoundMuted ? "Enable sound" : "Mute sound";
     const qrJoinUrl = playing ? null : joinUrl;
     const scoreText =
         gameMode === "classic"
@@ -76,6 +81,22 @@ export default function HostControls({
                         <p className={styles.eyebrow}>Host Console</p>
                     </div>
                     <div className={styles["panel-header-actions"]}>
+                        <button
+                            className={cx(
+                                styles["ui-button"],
+                                styles["ui-button-ghost"],
+                                styles["ui-icon-button"],
+                            )}
+                            onClick={onToggleSound}
+                            data-ui-sound="off"
+                            aria-label={soundLabel}
+                            title={soundLabel}
+                        >
+                            <SoundIcon
+                                muted={isSoundMuted}
+                                className={styles["ui-button-icon"]}
+                            />
+                        </button>
                         <button
                             className={cx(
                                 styles["ui-button"],
@@ -201,6 +222,22 @@ export default function HostControls({
                     <p className={styles.eyebrow}>Host Console</p>
                 </div>
                 <div className={styles["panel-header-actions"]}>
+                    <button
+                        className={cx(
+                            styles["ui-button"],
+                            styles["ui-button-ghost"],
+                            styles["ui-icon-button"],
+                        )}
+                        onClick={onToggleSound}
+                        data-ui-sound="off"
+                        aria-label={soundLabel}
+                        title={soundLabel}
+                    >
+                        <SoundIcon
+                            muted={isSoundMuted}
+                            className={styles["ui-button-icon"]}
+                        />
+                    </button>
                     <button
                         className={cx(
                             styles["ui-button"],

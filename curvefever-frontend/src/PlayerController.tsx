@@ -9,6 +9,7 @@ import { clearJoinUrlParams, getRequestedRoomCodeFromUrl } from "./utils/joinLin
 import PlayerJoinForm from "./components/player/PlayerJoinForm";
 import PlayerLiveControls from "./components/player/PlayerLiveControls";
 import { LeaveGameIcon } from "./components/ActionIcons";
+import AppPopupDialog from "./components/AppPopupDialog";
 import { usePlayerRejoin } from "./hooks/usePlayerRejoin";
 import { DEFAULT_TEAM_COUNT } from "./utils/teamMode";
 import { buildPlayerColorById } from "./utils/playerColor";
@@ -28,6 +29,17 @@ type JoinRoomResponse = {
 
 type Props = { onLeave: () => void };
 
+type PopupDialogState = {
+    eyebrow?: string;
+    title: string;
+    description: string;
+    confirmLabel: string;
+    onConfirm: () => void;
+    cancelLabel?: string;
+    onCancel?: () => void;
+    confirmTone?: "default" | "danger";
+};
+
 export default function PlayerController({ onLeave }: Props) {
     const storedSession = useMemo(() => getStoredPlayerSession(), []);
     const requestedRoomCode = useMemo(() => getRequestedRoomCodeFromUrl(), []);
@@ -46,6 +58,7 @@ export default function PlayerController({ onLeave }: Props) {
     const [gameMode, setGameMode] = useState<GameMode>("classic");
     const [teamCount, setTeamCount] = useState(DEFAULT_TEAM_COUNT);
     const [players, setPlayers] = useState<Player[]>([]);
+    const [dialogState, setDialogState] = useState<PopupDialogState | null>(null);
     const playerIdRef = useRef<string | null>(rejoinSession?.playerId ?? null);
     const [playerId, setPlayerId] = useState<string | null>(
         rejoinSession?.playerId ?? null,
@@ -94,6 +107,59 @@ export default function PlayerController({ onLeave }: Props) {
             intervalRef.current = null;
         }
     }, []);
+
+    const resetControllerState = useCallback(() => {
+        pressRef.current.left = false;
+        pressRef.current.right = false;
+        playerIdRef.current = null;
+        setLeftPressed(false);
+        setRightPressed(false);
+        setPlayerId(null);
+        setJoined(false);
+        setPlayers([]);
+        setRoomState("lobby");
+        setGameMode("classic");
+        setTeamCount(DEFAULT_TEAM_COUNT);
+        setRejoinError(null);
+        stopSendingInput();
+    }, [stopSendingInput]);
+
+    const exitController = useCallback(
+        (notifyServer: boolean) => {
+            if (notifyServer && playerIdRef.current && roomCode) {
+                socket.emit(
+                    EVENTS.LEAVE_ROOM,
+                    {
+                        roomCode,
+                        playerId: playerIdRef.current,
+                    },
+                    () => {},
+                );
+            }
+
+            localStorage.removeItem(PLAYER_SESSION_KEY);
+            resetControllerState();
+            onLeave();
+        },
+        [onLeave, resetControllerState, roomCode],
+    );
+
+    const handleRoomClosed = useCallback(() => {
+        resetControllerState();
+        setIsRejoining(false);
+        localStorage.removeItem(PLAYER_SESSION_KEY);
+        setDialogState({
+            eyebrow: "Room closed",
+            title: "This session has ended",
+            description:
+                "The host closed the room, so this controller has been disconnected.",
+            confirmLabel: "Back to home",
+            onConfirm: () => {
+                setDialogState(null);
+                onLeave();
+            },
+        });
+    }, [onLeave, resetControllerState]);
 
     const resetInputState = useCallback(() => {
         const hadInput = pressRef.current.left || pressRef.current.right;
@@ -225,7 +291,7 @@ export default function PlayerController({ onLeave }: Props) {
         playerIdRef,
         setPlayerId,
         stopSendingInput,
-        onLeave,
+        onRoomClosed: handleRoomClosed,
         setJoined,
         setIsRejoining,
         setRejoinError,
@@ -413,36 +479,25 @@ export default function PlayerController({ onLeave }: Props) {
 
     function handleLeaveGame() {
         if (joined) {
-            const shouldLeave = window.confirm(
-                "Are you sure you want to leave the game?",
-            );
-            if (!shouldLeave) return;
-
-            pressRef.current.left = false;
-            pressRef.current.right = false;
-            setLeftPressed(false);
-            setRightPressed(false);
-            stopSendingInput();
-            if (playerIdRef.current && roomCode) {
-                socket.emit(
-                    EVENTS.LEAVE_ROOM,
-                    {
-                        roomCode,
-                        playerId: playerIdRef.current,
-                    },
-                    () => {},
-                );
-            }
-            playerIdRef.current = null;
-            setPlayerId(null);
-            setJoined(false);
+            setDialogState({
+                eyebrow: "Leave game",
+                title: "Leave this session?",
+                description:
+                    "You will disconnect this controller and return to role selection.",
+                confirmLabel: "Leave game",
+                cancelLabel: "Stay here",
+                confirmTone: "danger",
+                onCancel: () => setDialogState(null),
+                onConfirm: () => {
+                    setDialogState(null);
+                    exitController(true);
+                },
+            });
+            return;
         }
 
         localStorage.removeItem(PLAYER_SESSION_KEY);
-        setPlayers([]);
-        setRoomState("lobby");
-        setGameMode("classic");
-        setTeamCount(DEFAULT_TEAM_COUNT);
+        resetControllerState();
         onLeave();
     }
 
@@ -459,6 +514,17 @@ export default function PlayerController({ onLeave }: Props) {
                         Restoring your previous game session.
                     </p>
                 </section>
+                <AppPopupDialog
+                    isOpen={Boolean(dialogState)}
+                    eyebrow={dialogState?.eyebrow}
+                    title={dialogState?.title ?? ""}
+                    description={dialogState?.description ?? ""}
+                    confirmLabel={dialogState?.confirmLabel ?? "OK"}
+                    onConfirm={dialogState?.onConfirm ?? (() => {})}
+                    cancelLabel={dialogState?.cancelLabel}
+                    onCancel={dialogState?.onCancel}
+                    confirmTone={dialogState?.confirmTone}
+                />
             </main>
         );
     }
@@ -518,6 +584,17 @@ export default function PlayerController({ onLeave }: Props) {
                     />
                 )}
             </section>
+            <AppPopupDialog
+                isOpen={Boolean(dialogState)}
+                eyebrow={dialogState?.eyebrow}
+                title={dialogState?.title ?? ""}
+                description={dialogState?.description ?? ""}
+                confirmLabel={dialogState?.confirmLabel ?? "OK"}
+                onConfirm={dialogState?.onConfirm ?? (() => {})}
+                cancelLabel={dialogState?.cancelLabel}
+                onCancel={dialogState?.onCancel}
+                confirmTone={dialogState?.confirmTone}
+            />
         </main>
     );
 }

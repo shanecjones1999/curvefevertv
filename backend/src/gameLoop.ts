@@ -13,6 +13,7 @@ import {
     buildClassicLeaderboard,
 } from "./domain/leaderboard";
 import { buildTeamLeaderboard, getAliveTeamIds } from "./domain/teamMode";
+import { emitLobbyUpdate } from "./socket/lobbyEmitter";
 
 const TICK_RATE = 60;
 const MS_PER_TICK = 1000 / TICK_RATE;
@@ -28,8 +29,39 @@ const roundStartNoTrailMap = new Map<string, number>();
 const ROUND_START_FREEZE_MS = 3000;
 const roundStartFreezeUntilMap = new Map<string, number>();
 const ROUND_RESTART_DELAY_MS = 5000;
+const GAME_OVER_RETURN_DELAY_MS = 10000;
 const pendingRoundRestartMap = new Map<string, NodeJS.Timeout>();
+const pendingGameOverReturnMap = new Map<string, NodeJS.Timeout>();
 const MAX_SPAWN_ATTEMPTS = 40;
+
+function clearPendingGameOverReturn(roomCode: string) {
+    const handle = pendingGameOverReturnMap.get(roomCode);
+    if (!handle) return;
+
+    clearTimeout(handle);
+    pendingGameOverReturnMap.delete(roomCode);
+}
+
+function scheduleLobbyReturn(roomCode: string, io: TypedServer) {
+    clearPendingGameOverReturn(roomCode);
+
+    const handle = setTimeout(() => {
+        pendingGameOverReturnMap.delete(roomCode);
+
+        const room = getRoom(roomCode);
+        if (!room || room.state !== "finished") {
+            return;
+        }
+
+        restartRound(Array.from(room.players.values()));
+        room.state = "lobby";
+        room.battleRoyaleEliminatedPlayerIds = new Set<string>();
+        room.roundStartScoreById = {};
+        emitLobbyUpdate(io, room.code);
+    }, GAME_OVER_RETURN_DELAY_MS);
+
+    pendingGameOverReturnMap.set(roomCode, handle);
+}
 
 function randomCoordinateAwayFromWalls(arenaSize: number, wallMargin: number) {
     const usableSize = arenaSize - wallMargin * 2;
@@ -639,6 +671,8 @@ export function restartRound(
 export function startGameLoop(roomCode: string, io: TypedServer) {
     if (runningLoops.has(roomCode)) return;
 
+    clearPendingGameOverReturn(roomCode);
+
     const room = getRoom(roomCode);
     if (room) {
         room.roundStartScoreById = buildRoundStartScoreMap(room);
@@ -741,6 +775,7 @@ export function startGameLoop(roomCode: string, io: TypedServer) {
                         leaderboard: sortedLeaderboard,
                     });
                     stopGameLoop(roomCode);
+                    scheduleLobbyReturn(roomCode, io);
                     return;
                 }
             }
@@ -782,6 +817,7 @@ export function startGameLoop(roomCode: string, io: TypedServer) {
                         leaderboard: sortedLeaderboard,
                     });
                     stopGameLoop(roomCode);
+                    scheduleLobbyReturn(roomCode, io);
                     return;
                 }
 
@@ -861,6 +897,7 @@ export function startGameLoop(roomCode: string, io: TypedServer) {
                         leaderboard: sortedLeaderboard,
                     });
                     stopGameLoop(roomCode);
+                    scheduleLobbyReturn(roomCode, io);
                     return;
                 }
 
@@ -942,6 +979,7 @@ export function startGameLoop(roomCode: string, io: TypedServer) {
                     leaderboard: sortedLeaderboard,
                 });
                 stopGameLoop(roomCode);
+                scheduleLobbyReturn(roomCode, io);
                 return;
             }
 
@@ -1016,4 +1054,5 @@ export function stopGameLoop(roomCode: string) {
     roundStartNoTrailMap.delete(roomCode);
     roundStartFreezeUntilMap.delete(roomCode);
     roomTickCounterMap.delete(roomCode);
+    clearPendingGameOverReturn(roomCode);
 }

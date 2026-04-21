@@ -31,6 +31,7 @@ class CurvefeverScene extends Phaser.Scene {
     showTeamLabels = false;
     markerTexts: Map<string, Phaser.GameObjects.Text> = new Map();
     playerLabels: Map<string, Phaser.GameObjects.Text> = new Map();
+    playerAliveStates: Map<string, boolean> = new Map();
 
     constructor() {
         super("CurvefeverScene");
@@ -40,6 +41,7 @@ class CurvefeverScene extends Phaser.Scene {
         this.playerSprites.clear();
         this.markerTexts.clear();
         this.playerLabels.clear();
+        this.playerAliveStates.clear();
         this.cameras.main.setBackgroundColor("#222");
         // Defensive: always use array
         const players = Array.isArray(this.players) ? this.players : [];
@@ -52,6 +54,147 @@ class CurvefeverScene extends Phaser.Scene {
             g.x = p.x;
             g.y = p.y;
             this.playerSprites.set(p.id, g);
+        });
+    }
+
+    playEliminationEffect(player: Player, color: string) {
+        const baseColor = Phaser.Display.Color.HexStringToColor(color);
+        const colorValue = baseColor.color;
+        const flashColor = Phaser.Display.Color.Interpolate.ColorWithColor(
+            baseColor,
+            new Phaser.Display.Color(255, 255, 255),
+            100,
+            45,
+        );
+        const flashColorValue = Phaser.Display.Color.GetColor(
+            flashColor.r,
+            flashColor.g,
+            flashColor.b,
+        );
+        const flash = this.add.circle(player.x, player.y, 5, flashColorValue, 0.95);
+        const poof = this.add.circle(player.x, player.y, 8, colorValue, 0.28);
+        const ring = this.add.circle(player.x, player.y, 11);
+        ring.setStrokeStyle(2, colorValue, 0.9);
+
+        this.tweens.add({
+            targets: flash,
+            scale: { from: 0.6, to: 1.7 },
+            alpha: { from: 0.95, to: 0 },
+            duration: 120,
+            ease: "Quad.easeOut",
+            onComplete: () => flash.destroy(),
+        });
+
+        this.tweens.add({
+            targets: [poof, ring],
+            scale: { from: 0.8, to: 1.9 },
+            alpha: { from: 1, to: 0 },
+            duration: 240,
+            ease: "Cubic.easeOut",
+            onComplete: () => {
+                poof.destroy();
+                ring.destroy();
+            },
+        });
+
+        const fragmentCount = Phaser.Math.Between(6, 10);
+        for (let index = 0; index < fragmentCount; index += 1) {
+            const angle =
+                (Math.PI * 2 * index) / fragmentCount +
+                Phaser.Math.FloatBetween(-0.2, 0.2);
+            const distance = Phaser.Math.Between(14, 28);
+            const fragment = this.add.circle(
+                player.x,
+                player.y,
+                Phaser.Math.FloatBetween(1.5, 3.5),
+                colorValue,
+                0.95,
+            );
+
+            this.tweens.add({
+                targets: fragment,
+                x: player.x + Math.cos(angle) * distance,
+                y: player.y + Math.sin(angle) * distance,
+                alpha: 0,
+                scale: { from: 1, to: 0.4 },
+                duration: Phaser.Math.Between(180, 280),
+                ease: "Cubic.easeOut",
+                onComplete: () => fragment.destroy(),
+            });
+        }
+
+        const sparkCount = Phaser.Math.Between(3, 5);
+        for (let index = 0; index < sparkCount; index += 1) {
+            const angle = Phaser.Math.FloatBetween(0, Math.PI * 2);
+            const sparkLength = Phaser.Math.Between(12, 20);
+            const spark = this.add.rectangle(
+                player.x,
+                player.y,
+                sparkLength,
+                2,
+                flashColorValue,
+                0.9,
+            );
+            spark.setRotation(angle);
+
+            this.tweens.add({
+                targets: spark,
+                x: player.x + Math.cos(angle) * Phaser.Math.Between(10, 16),
+                y: player.y + Math.sin(angle) * Phaser.Math.Between(10, 16),
+                alpha: 0,
+                scaleX: 0.35,
+                scaleY: 0.6,
+                duration: Phaser.Math.Between(120, 180),
+                ease: "Quad.easeOut",
+                onComplete: () => spark.destroy(),
+            });
+        }
+
+        const skull = this.add.container(player.x, player.y - 10);
+        const skullOutlineColor = 0x041122;
+        const skullFillColor = 0xf6fbff;
+
+        const crossboneLeft = this.add.rectangle(-5, 8, 11, 2, skullOutlineColor);
+        crossboneLeft.setRotation(-0.7);
+        const crossboneLeftInner = this.add.rectangle(-5, 8, 8, 1, skullFillColor);
+        crossboneLeftInner.setRotation(-0.7);
+
+        const crossboneRight = this.add.rectangle(5, 8, 11, 2, skullOutlineColor);
+        crossboneRight.setRotation(0.7);
+        const crossboneRightInner = this.add.rectangle(5, 8, 8, 1, skullFillColor);
+        crossboneRightInner.setRotation(0.7);
+
+        const headOutline = this.add.circle(0, 0, 8, skullOutlineColor, 1);
+        const headFill = this.add.circle(0, 0, 6, skullFillColor, 1);
+        const jawOutline = this.add.rectangle(0, 6, 10, 5, skullOutlineColor, 1);
+        const jawFill = this.add.rectangle(0, 6, 7, 3, skullFillColor, 1);
+        const eyeLeft = this.add.circle(-3, -1, 1.5, skullOutlineColor, 1);
+        const eyeRight = this.add.circle(3, -1, 1.5, skullOutlineColor, 1);
+        const nose = this.add.triangle(0, 2.5, 0, 0, 2.2, 3, -2.2, 3, skullOutlineColor, 1);
+
+        skull.add([
+            crossboneLeft,
+            crossboneLeftInner,
+            crossboneRight,
+            crossboneRightInner,
+            headOutline,
+            headFill,
+            jawOutline,
+            jawFill,
+            eyeLeft,
+            eyeRight,
+            nose,
+        ]);
+
+        this.tweens.add({
+            targets: skull,
+            y: player.y - 34,
+            alpha: 0,
+            scale: { from: 0.9, to: 1.08 },
+            angle: Phaser.Math.Between(-10, 10),
+            duration: 420,
+            ease: "Sine.easeOut",
+            onComplete: () => skull.destroy(),
         });
     }
 
@@ -68,6 +211,7 @@ class CurvefeverScene extends Phaser.Scene {
     updatePlayers(players: Player[] = []) {
         if (!this.add) return;
         this.players = Array.isArray(players) ? players : [];
+        const previousAliveStates = new Map(this.playerAliveStates);
 
         const incomingPlayerIds = new Set(
             this.players.map((player) => player.id),
@@ -78,6 +222,7 @@ class CurvefeverScene extends Phaser.Scene {
             if (!incomingPlayerIds.has(playerId)) {
                 graphic.destroy();
                 this.playerSprites.delete(key);
+                this.playerAliveStates.delete(playerId);
             }
         }
         for (const [playerId, markerText] of this.markerTexts.entries()) {
@@ -106,6 +251,9 @@ class CurvefeverScene extends Phaser.Scene {
                 p.color && /^#/.test(p.color)
                     ? p.color
                     : PLAYER_COLORS[i % PLAYER_COLORS.length];
+            const becameEliminated =
+                previousAliveStates.get(p.id) === true && !p.alive;
+
             trailG.lineStyle(
                 PLAYER_TRAIL_WIDTH,
                 Phaser.Display.Color.HexStringToColor(color).color,
@@ -128,14 +276,18 @@ class CurvefeverScene extends Phaser.Scene {
                 g = this.add.graphics();
                 this.playerSprites.set(p.id, g);
             }
-            g.setVisible(true);
             g.clear();
-            g.fillStyle(Phaser.Display.Color.HexStringToColor(color).color, 1);
-            g.fillCircle(0, 0, 8);
-            g.x = p.x;
-            g.y = p.y;
+            if (p.alive) {
+                g.fillStyle(Phaser.Display.Color.HexStringToColor(color).color, 1);
+                g.fillCircle(0, 0, 8);
+                g.x = p.x;
+                g.y = p.y;
+                g.setVisible(true);
+            } else {
+                g.setVisible(false);
+            }
 
-            if (this.teamMode && typeof p.teamId === "number") {
+            if (this.teamMode && typeof p.teamId === "number" && p.alive) {
                 let markerText = this.markerTexts.get(p.id);
                 if (!markerText) {
                     markerText = this.add.text(0, 0, "", {
@@ -179,6 +331,12 @@ class CurvefeverScene extends Phaser.Scene {
                 this.markerTexts.get(p.id)?.setVisible(false);
                 this.playerLabels.get(p.id)?.setVisible(false);
             }
+
+            if (becameEliminated) {
+                this.playEliminationEffect(p, color);
+            }
+
+            this.playerAliveStates.set(p.id, p.alive);
         });
     }
 

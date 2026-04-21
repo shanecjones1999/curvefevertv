@@ -5,7 +5,7 @@ import { PLAYER_SESSION_KEY } from "./constants/storage";
 import type { GameMode, Player, RoomState } from "./types";
 import { ROOM_CODE_REGEX, sanitizeRoomCodeInput } from "./utils/roomCode";
 import { getStoredPlayerSession } from "./utils/playerSession";
-import { getRequestedRoomCodeFromUrl } from "./utils/joinLink";
+import { clearJoinUrlParams, getRequestedRoomCodeFromUrl } from "./utils/joinLink";
 import PlayerJoinForm from "./components/player/PlayerJoinForm";
 import PlayerLiveControls from "./components/player/PlayerLiveControls";
 import { LeaveGameIcon } from "./components/ActionIcons";
@@ -37,6 +37,7 @@ export default function PlayerController({ onLeave }: Props) {
     );
     const [name, setName] = useState(storedSession?.name ?? "");
     const [joined, setJoined] = useState(false);
+    const joinedRef = useRef(false);
     const [leftPressed, setLeftPressed] = useState(false);
     const [rightPressed, setRightPressed] = useState(false);
     const [isRejoining, setIsRejoining] = useState(Boolean(rejoinSession));
@@ -67,6 +68,18 @@ export default function PlayerController({ onLeave }: Props) {
         return playerColorById.get(currentPlayer.id) ?? null;
     }, [currentPlayer, playerColorById]);
     const isCurrentPlayerAlive = currentPlayer?.alive !== false;
+
+    useEffect(() => {
+        joinedRef.current = joined;
+    }, [joined]);
+
+    useEffect(() => {
+        if (!requestedRoomCode || roomCode !== requestedRoomCode) {
+            return;
+        }
+
+        clearJoinUrlParams();
+    }, [requestedRoomCode, roomCode]);
 
     const emitInput = useCallback(() => {
         socket.emit("input", {
@@ -208,6 +221,7 @@ export default function PlayerController({ onLeave }: Props) {
 
     usePlayerRejoin({
         storedSession: rejoinSession,
+        joinedRef,
         playerIdRef,
         setPlayerId,
         stopSendingInput,

@@ -20,6 +20,7 @@ type JoinRoomResponse = {
 
 type UsePlayerRejoinParams = {
     storedSession: PlayerSession | null;
+    joinedRef: React.MutableRefObject<boolean>;
     playerIdRef: React.MutableRefObject<string | null>;
     setPlayerId: React.Dispatch<React.SetStateAction<string | null>>;
     stopSendingInput: () => void;
@@ -31,6 +32,7 @@ type UsePlayerRejoinParams = {
 
 export function usePlayerRejoin({
     storedSession,
+    joinedRef,
     playerIdRef,
     setPlayerId,
     stopSendingInput,
@@ -69,8 +71,16 @@ export function usePlayerRejoin({
             }, REJOIN_TIMEOUT_MS);
         };
 
+        const getActiveSession = () => {
+            if (joinedRef.current) {
+                return getStoredPlayerSession();
+            }
+
+            return storedSession;
+        };
+
         const rejoinFromSession = () => {
-            const activeSession = storedSession ?? getStoredPlayerSession();
+            const activeSession = getActiveSession();
             const activePlayerId =
                 playerIdRef.current ?? activeSession?.playerId ?? null;
 
@@ -135,7 +145,7 @@ export function usePlayerRejoin({
 
         // Set up listener for socket connection
         const handleDisconnect = () => {
-            if (!rejoinResolved) {
+            if (!rejoinResolved && getActiveSession()) {
                 armRejoinTimeout();
             }
         };
@@ -143,16 +153,18 @@ export function usePlayerRejoin({
         socket.on("disconnect", handleDisconnect);
 
         // Try to rejoin immediately if socket is already connected
-        if (socket.connected) {
+        if (socket.connected && storedSession) {
             console.log(
                 "[PlayerController] Socket already connected, attempting rejoin",
             );
             rejoinFromSession();
-        } else {
+        } else if (storedSession) {
             armRejoinTimeout();
             console.log(
                 "[PlayerController] Socket not connected yet, waiting for connection event",
             );
+        } else {
+            setIsRejoining(false);
         }
 
         // if the host deletes the room, the client should depart too
@@ -176,6 +188,7 @@ export function usePlayerRejoin({
         };
     }, [
         storedSession,
+        joinedRef,
         playerIdRef,
         setPlayerId,
         stopSendingInput,

@@ -19,10 +19,16 @@ import type {
 } from "./components/host/types";
 import { useHostBackgroundMusic } from "./hooks/useHostBackgroundMusic";
 import { useHostRoomSync } from "./hooks/useHostRoomSync";
-import { useHostSoundboard } from "./hooks/useHostSoundboard";
 import styles from "./ui.module.css";
 import { cx } from "./utils/cx";
 import { buildPlayerJoinUrl } from "./utils/joinLink";
+import {
+    areSoundEffectsMuted,
+    getRoundCountdownSoundEffect,
+    playSoundEffect,
+    preloadHostSoundEffects,
+    setSoundEffectsMuted,
+} from "./utils/soundEffects";
 import { buildTeamLeaderboard, DEFAULT_TEAM_COUNT, getActiveTeamCount } from "./utils/teamMode";
 import {
     buildPlayerColorById,
@@ -144,13 +150,12 @@ export default function Host({ onLeave }: Props) {
             (document as FullscreenCapableDocument).webkitFullscreenEnabled,
         ),
     );
-    const hostSoundboard = useHostSoundboard();
-    useHostBackgroundMusic(playing && !gameOverData, hostSoundboard.isMuted);
+    const [isSoundMuted, setIsSoundMuted] = useState(() =>
+        areSoundEffectsMuted(),
+    );
+    useHostBackgroundMusic(playing && !gameOverData, isSoundMuted);
     const previousCanStartRef = useRef<boolean | null>(null);
     const previousRoundStartCountdownRef = useRef(0);
-    const previousTeamAssignmentsRef = useRef<Map<string, number | undefined> | null>(
-        null,
-    );
     const lastTeamRoundWinKeyRef = useRef<string | null>(null);
     const lastTeamGameWinKeyRef = useRef<string | null>(null);
 
@@ -303,9 +308,13 @@ export default function Host({ onLeave }: Props) {
         setGameOverData,
         setRoundOverData,
         setGameConfig,
-        onPlayerJoined: () => hostSoundboard.playLobbyJoin(),
+        onPlayerJoined: () => playSoundEffect("lobbyJoin"),
         autoCreateRoom: false,
     });
+
+    useEffect(() => {
+        preloadHostSoundEffects();
+    }, []);
 
     useEffect(() => {
         const fullscreenDocument = document as FullscreenCapableDocument;
@@ -353,11 +362,11 @@ export default function Host({ onLeave }: Props) {
             !previousCanStartRef.current &&
             players.length > 0
         ) {
-            hostSoundboard.playLobbyReady();
+            playSoundEffect("lobbyReady");
         }
 
         previousCanStartRef.current = canStart;
-    }, [canStart, hostSoundboard, players.length, playing]);
+    }, [canStart, players.length, playing]);
 
     useEffect(() => {
         const previousCountdown = previousRoundStartCountdownRef.current;
@@ -368,43 +377,20 @@ export default function Host({ onLeave }: Props) {
                 roundStartCountdown <= 3 &&
                 roundStartCountdown !== previousCountdown
             ) {
-                hostSoundboard.playRoundCountdown(roundStartCountdown);
+                const countdownEffect =
+                    getRoundCountdownSoundEffect(roundStartCountdown);
+                if (countdownEffect) {
+                    playSoundEffect(countdownEffect);
+                }
             }
 
             if (previousCountdown > 0 && roundStartCountdown === 0) {
-                hostSoundboard.playRoundGo();
+                playSoundEffect("roundGo");
             }
         }
 
         previousRoundStartCountdownRef.current = roundStartCountdown;
-    }, [
-        gameOverData,
-        hostSoundboard,
-        playing,
-        roundOverData,
-        roundStartCountdown,
-    ]);
-
-    useEffect(() => {
-        const nextAssignments = new Map(
-            players.map((player) => [player.id, player.teamId]),
-        );
-        const previousAssignments = previousTeamAssignmentsRef.current;
-
-        if (previousAssignments && !playing && gameMode === "teams") {
-            const didSwitchTeams = players.some(
-                (player) =>
-                    previousAssignments.has(player.id) &&
-                    previousAssignments.get(player.id) !== player.teamId,
-            );
-
-            if (didSwitchTeams) {
-                hostSoundboard.playTeamSwitch();
-            }
-        }
-
-        previousTeamAssignmentsRef.current = nextAssignments;
-    }, [gameMode, hostSoundboard, players, playing]);
+    }, [gameOverData, playing, roundOverData, roundStartCountdown]);
 
     useEffect(() => {
         if (gameMode !== "teams" || !roundOverData?.winnerId) {
@@ -417,8 +403,8 @@ export default function Host({ onLeave }: Props) {
         }
 
         lastTeamRoundWinKeyRef.current = nextKey;
-        hostSoundboard.playTeamWin();
-    }, [gameMode, hostSoundboard, roundOverData, roundOverOverlayKey]);
+        playSoundEffect("teamWin");
+    }, [gameMode, roundOverData, roundOverOverlayKey]);
 
     useEffect(() => {
         if (gameMode !== "teams" || !gameOverData?.winnerId) {
@@ -431,8 +417,8 @@ export default function Host({ onLeave }: Props) {
         }
 
         lastTeamGameWinKeyRef.current = nextKey;
-        hostSoundboard.playTeamWin();
-    }, [gameMode, gameOverData, gameOverOverlayKey, hostSoundboard]);
+        playSoundEffect("teamWin");
+    }, [gameMode, gameOverData, gameOverOverlayKey]);
 
     useEffect(() => {
         if (!gameOverData) return;
@@ -567,13 +553,19 @@ export default function Host({ onLeave }: Props) {
     function handleDraftGameModeChange(nextGameMode: GameMode) {
         setStartError(null);
         setDraftGameMode(nextGameMode);
-        hostSoundboard.playUiSelect();
     }
 
     function handleDraftTeamCountChange(nextTeamCount: number) {
         setStartError(null);
         setDraftTeamCount(nextTeamCount);
-        hostSoundboard.playUiSelect();
+    }
+
+    function handleToggleSound() {
+        setIsSoundMuted((current) => {
+            const next = !current;
+            setSoundEffectsMuted(next);
+            return next;
+        });
     }
 
     function handleOpenGameSetup() {
@@ -755,7 +747,7 @@ export default function Host({ onLeave }: Props) {
             startError={startError}
             isFullscreen={isFullscreen}
             isFullscreenSupported={isFullscreenSupported}
-            isSoundMuted={hostSoundboard.isMuted}
+            isSoundMuted={isSoundMuted}
             layout={playing ? "sidebar" : "lobby"}
             playersSlot={
                 !playing ? (
@@ -773,28 +765,10 @@ export default function Host({ onLeave }: Props) {
             onChangeMode={handleOpenGameSetup}
             onCopyGameCode={handleCopyGameCode}
             onStartGame={handleStartGame}
-            onToggleSound={hostSoundboard.toggleMuted}
+            onToggleSound={handleToggleSound}
             onToggleFullscreen={handleFullscreenToggle}
         />
     );
-
-    const hostUiEventHandlers = {
-        onPointerOverCapture: (event: React.PointerEvent<HTMLElement>) => {
-            hostSoundboard.handleUiPointerOver(event.target);
-        },
-        onPointerLeave: () => {
-            hostSoundboard.resetHoveredButton();
-        },
-        onFocusCapture: (event: React.FocusEvent<HTMLElement>) => {
-            hostSoundboard.handleUiFocus(event.target);
-        },
-        onBlurCapture: () => {
-            hostSoundboard.resetHoveredButton();
-        },
-        onClickCapture: (event: React.MouseEvent<HTMLElement>) => {
-            hostSoundboard.handleUiClick(event.target);
-        },
-    };
 
     if (!roomCode || isEditingGameSetup) {
         if (!roomCode) {
@@ -804,7 +778,6 @@ export default function Host({ onLeave }: Props) {
                         styles["page-shell"],
                         styles["page-shell-host-lobby"],
                     )}
-                    {...hostUiEventHandlers}
                 >
                     <HostGameSetup
                         gameMode={draftGameMode}
@@ -832,7 +805,6 @@ export default function Host({ onLeave }: Props) {
                     styles["page-shell-host-lobby"],
                 )}
                 ref={hostScreenRef}
-                {...hostUiEventHandlers}
             >
                 <section
                     className={cx(
@@ -875,7 +847,6 @@ export default function Host({ onLeave }: Props) {
                 styles["page-shell-host-playing"],
             )}
             ref={hostScreenRef}
-            {...hostUiEventHandlers}
         >
             <div className={styles["host-playing-screen"]}>
                 <div className={styles["host-side-column"]}>

@@ -8,9 +8,6 @@ import {
     DEFAULT_GAME_WIDTH,
     PLAYER_HEAD_GLOW_ALPHA,
     PLAYER_HEAD_GLOW_RADIUS,
-    PLAYER_HEAD_PULSE_ALPHA_VARIATION,
-    PLAYER_HEAD_PULSE_RADIUS_VARIATION,
-    PLAYER_HEAD_PULSE_SPEED,
     PLAYER_HEAD_RADIUS,
     PLAYER_TRAIL_WIDTH,
 } from "./gameConfig";
@@ -20,10 +17,7 @@ import {
     getTeamLabel,
     getTeamSymbol,
 } from "./utils/teamMode";
-import {
-    getSharedAudioContext,
-    getSharedAudioDestination,
-} from "./utils/audioContext";
+import { playSoundEffect } from "./utils/soundEffects";
 
 interface PhaserGameProps {
     players: Player[];
@@ -42,7 +36,6 @@ class CurvefeverScene extends Phaser.Scene {
     markerTexts: Map<string, Phaser.GameObjects.Text> = new Map();
     playerLabels: Map<string, Phaser.GameObjects.Text> = new Map();
     playerAliveStates: Map<string, boolean> = new Map();
-    audioContext: AudioContext | null = null;
 
     constructor() {
         super("CurvefeverScene");
@@ -54,112 +47,21 @@ class CurvefeverScene extends Phaser.Scene {
             : PLAYER_COLORS[index % PLAYER_COLORS.length];
     }
 
-    getPulseOffset(playerId: string) {
-        let hash = 0;
-        for (let index = 0; index < playerId.length; index += 1) {
-            hash = (hash * 31 + playerId.charCodeAt(index)) % 360;
-        }
-
-        return Phaser.Math.DegToRad(hash);
-    }
-
     drawPlayerHead(
         graphic: Phaser.GameObjects.Graphics,
         player: Player,
         color: string,
-        time = 0,
     ) {
         const colorValue = Phaser.Display.Color.HexStringToColor(color).color;
-        const pulse =
-            (Math.sin(time * PLAYER_HEAD_PULSE_SPEED + this.getPulseOffset(player.id)) +
-                1) /
-            2;
-        const glowRadius =
-            PLAYER_HEAD_GLOW_RADIUS + pulse * PLAYER_HEAD_PULSE_RADIUS_VARIATION;
-        const glowAlpha =
-            PLAYER_HEAD_GLOW_ALPHA + pulse * PLAYER_HEAD_PULSE_ALPHA_VARIATION;
 
         graphic.clear();
-        graphic.fillStyle(colorValue, glowAlpha);
-        graphic.fillCircle(0, 0, glowRadius);
+        graphic.fillStyle(colorValue, PLAYER_HEAD_GLOW_ALPHA);
+        graphic.fillCircle(0, 0, PLAYER_HEAD_GLOW_RADIUS);
         graphic.fillStyle(colorValue, 1);
         graphic.fillCircle(0, 0, PLAYER_HEAD_RADIUS);
         graphic.x = player.x;
         graphic.y = player.y;
         graphic.setVisible(true);
-    }
-
-    renderPlayerHeads(time = 0) {
-        this.players.forEach((player, index) => {
-            const graphic = this.playerSprites.get(player.id);
-            if (!graphic) {
-                return;
-            }
-
-            if (!player.alive) {
-                graphic.setVisible(false);
-                return;
-            }
-
-            this.drawPlayerHead(graphic, player, this.getPlayerColor(player, index), time);
-        });
-    }
-
-    playCrashSound() {
-        const context = getSharedAudioContext();
-        const destination = getSharedAudioDestination();
-        if (!context || !destination) {
-            return;
-        }
-        this.audioContext = context;
-        const now = context.currentTime;
-        const masterGain = context.createGain();
-        const bodyGain = context.createGain();
-        const biteGain = context.createGain();
-        const bodyOscillator = context.createOscillator();
-        const biteOscillator = context.createOscillator();
-        const filter = context.createBiquadFilter();
-
-        filter.type = "lowpass";
-        filter.frequency.setValueAtTime(1200, now);
-        filter.Q.setValueAtTime(1.2, now);
-
-        masterGain.gain.setValueAtTime(0.0001, now);
-        masterGain.gain.exponentialRampToValueAtTime(0.12, now + 0.012);
-        masterGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.19);
-
-        bodyGain.gain.setValueAtTime(1, now);
-        biteGain.gain.setValueAtTime(0.55, now);
-        biteGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.09);
-
-        bodyOscillator.type = "triangle";
-        bodyOscillator.frequency.setValueAtTime(210, now);
-        bodyOscillator.frequency.exponentialRampToValueAtTime(78, now + 0.19);
-
-        biteOscillator.type = "square";
-        biteOscillator.frequency.setValueAtTime(640, now);
-        biteOscillator.frequency.exponentialRampToValueAtTime(140, now + 0.09);
-
-        bodyOscillator.connect(bodyGain);
-        biteOscillator.connect(biteGain);
-        bodyGain.connect(filter);
-        biteGain.connect(filter);
-        filter.connect(masterGain);
-        masterGain.connect(destination);
-
-        bodyOscillator.start(now);
-        biteOscillator.start(now);
-        bodyOscillator.stop(now + 0.19);
-        biteOscillator.stop(now + 0.09);
-
-        bodyOscillator.onended = () => {
-            bodyOscillator.disconnect();
-            biteOscillator.disconnect();
-            bodyGain.disconnect();
-            biteGain.disconnect();
-            filter.disconnect();
-            masterGain.disconnect();
-        };
     }
 
     create() {
@@ -178,7 +80,7 @@ class CurvefeverScene extends Phaser.Scene {
     }
 
     playEliminationEffect(player: Player, color: string) {
-        this.playCrashSound();
+        playSoundEffect("crash");
         const baseColor = Phaser.Display.Color.HexStringToColor(color);
         const colorValue = baseColor.color;
         const flashColor = Phaser.Display.Color.Interpolate.ColorWithColor(
@@ -395,7 +297,7 @@ class CurvefeverScene extends Phaser.Scene {
                 this.playerSprites.set(p.id, g);
             }
             if (p.alive) {
-                this.drawPlayerHead(g, p, color, this.time.now);
+                this.drawPlayerHead(g, p, color);
             } else {
                 g.setVisible(false);
             }
@@ -452,10 +354,6 @@ class CurvefeverScene extends Phaser.Scene {
             this.playerAliveStates.set(p.id, p.alive);
         });
     }
-
-    update(time: number) {
-        this.renderPlayerHeads(time);
-    }
 }
 
 export default function PhaserGame({
@@ -482,6 +380,9 @@ export default function PhaserGame({
             height,
             parent: gameRef.current,
             scene,
+            audio: {
+                noAudio: true,
+            },
             physics: { default: "arcade" },
             backgroundColor: "#222",
             scale: {

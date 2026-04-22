@@ -1,6 +1,15 @@
 import { getRoom } from "./rooms";
 import { TypedServer } from "./socket/events";
-import { GameMode, GameState, LeaderboardEntry, Player } from "./types";
+import {
+    GameMode,
+    GameState,
+    GameStatePlayer,
+    LeaderboardEntry,
+    Player,
+    Trail,
+    TrailPoint,
+    TrailSegmentUpdate,
+} from "./types";
 import {
     GAME_HEIGHT,
     GAME_WIDTH,
@@ -33,6 +42,42 @@ const GAME_OVER_RETURN_DELAY_MS = 10000;
 const pendingRoundRestartMap = new Map<string, NodeJS.Timeout>();
 const pendingGameOverReturnMap = new Map<string, NodeJS.Timeout>();
 const MAX_SPAWN_ATTEMPTS = 40;
+const TRAIL_SPATIAL_HASH_CELL_SIZE = 64;
+const emittedGameStatePlayerMap = new Map<string, Map<string, EmittedGameStatePlayer>>();
+
+type TrailCollisionEdge = {
+    ownerPlayerId: string;
+    segmentIndex: number;
+    pointIndex: number;
+    x1: number;
+    y1: number;
+    x2: number;
+    y2: number;
+    minX: number;
+    maxX: number;
+    minY: number;
+    maxY: number;
+};
+
+type EmittedGameStatePlayer = {
+    id: string;
+    name: string;
+    score: number;
+    socketId: string | null;
+    color?: string;
+    teamId?: number;
+    alive: boolean;
+    x: number;
+    y: number;
+    direction: number;
+    speed?: number;
+    distanceSinceLastGap?: number;
+    gapInterval?: number;
+    gapLength?: number;
+    inGap?: boolean;
+    gapStartDistance?: number;
+    trailSegmentLengths: number[];
+};
 
 function clearPendingGameOverReturn(roomCode: string) {
     const handle = pendingGameOverReturnMap.get(roomCode);
@@ -74,7 +119,7 @@ function emitFinalGameOver(
         leaderboard: LeaderboardEntry[];
     },
 ) {
-    emitGameState(roomCode, io);
+    emitGameState(roomCode, io, { forceFullSnapshot: true });
     io.to(roomCode).emit("gameOver", payload);
 }
 
@@ -306,6 +351,151 @@ function movePlayer(
 }
 
 export function buildGameState(roomCode: string): GameState | null {
+    return buildGameStatePayload(roomCode, true);
+}
+
+function cloneTrailPoint(point: TrailPoint): TrailPoint {
+    return { x: point.x, y: point.y };
+}
+
+function cloneTrail(trail?: Trail): Trail | undefined {
+    return trail?.map((segment) => segment.map(cloneTrailPoint));
+}
+
+function buildGameStatePlayer(player: Player, trail?: Trail): GameStatePlayer {
+    return {
+        id: player.id,
+        name: player.name,
+        score: player.score ?? 0,
+        socketId: player.socketId,
+        color: player.color,
+        teamId: player.teamId,
+        alive: player.alive,
+        x: player.x,
+        y: player.y,
+        direction: player.direction,
+        speed: player.speed,
+        trail,
+        distanceSinceLastGap: player.distanceSinceLastGap,
+        gapInterval: player.gapInterval,
+        gapLength: player.gapLength,
+        inGap: player.inGap,
+        gapStartDistance: player.gapStartDistance,
+    };
+}
+
+function getPlayerTrailSegmentLengths(player: Player) {
+    return Array.isArray(player.trail)
+        ? player.trail.map((segment) => (Array.isArray(segment) ? segment.length : 0))
+        : [];
+}
+
+function buildEmittedGameStatePlayer(player: Player): EmittedGameStatePlayer {
+    return {
+        id: player.id,
+        name: player.name,
+        score: player.score ?? 0,
+        socketId: player.socketId,
+        color: player.color,
+        teamId: player.teamId,
+        alive: player.alive,
+        x: player.x,
+        y: player.y,
+        direction: player.direction,
+        speed: player.speed,
+        distanceSinceLastGap: player.distanceSinceLastGap,
+        gapInterval: player.gapInterval,
+        gapLength: player.gapLength,
+        inGap: player.inGap,
+        gapStartDistance: player.gapStartDistance,
+        trailSegmentLengths: getPlayerTrailSegmentLengths(player),
+    };
+}
+
+function isPlayerStateChanged(
+    previousPlayer: EmittedGameStatePlayer | undefined,
+    player: Player,
+) {
+    if (!previousPlayer) {
+        return true;
+    }
+
+    return (
+        previousPlayer.name !== player.name ||
+        previousPlayer.score !== (player.score ?? 0) ||
+        previousPlayer.socketId !== player.socketId ||
+        previousPlayer.color !== player.color ||
+        previousPlayer.teamId !== player.teamId ||
+        previousPlayer.alive !== player.alive ||
+        previousPlayer.x !== player.x ||
+        previousPlayer.y !== player.y ||
+        previousPlayer.direction !== player.direction ||
+        previousPlayer.speed !== player.speed ||
+        previousPlayer.distanceSinceLastGap !== player.distanceSinceLastGap ||
+        previousPlayer.gapInterval !== player.gapInterval ||
+        previousPlayer.gapLength !== player.gapLength ||
+        previousPlayer.inGap !== player.inGap ||
+        previousPlayer.gapStartDistance !== player.gapStartDistance
+    );
+}
+
+function buildTrailSegmentUpdates(
+    previousPlayer: EmittedGameStatePlayer | undefined,
+    player: Player,
+) {
+    const currentTrail = Array.isArray(player.trail) ? player.trail : [];
+    if (!previousPlayer) {
+        return {
+            reset: true,
+            trail: cloneTrail(currentTrail) ?? [],
+        };
+    }
+
+    const previousSegmentLengths = previousPlayer.trailSegmentLengths;
+    if (currentTrail.length < previousSegmentLengths.length) {
+        return {
+            reset: true,
+            trail: cloneTrail(currentTrail) ?? [],
+        };
+    }
+
+    const segments: TrailSegmentUpdate[] = [];
+    for (let segmentIndex = 0; segmentIndex < currentTrail.length; segmentIndex++) {
+        const segment = currentTrail[segmentIndex];
+        if (!Array.isArray(segment)) {
+            continue;
+        }
+
+        const previousLength = previousSegmentLengths[segmentIndex] ?? 0;
+        if (segment.length < previousLength) {
+            return {
+                reset: true,
+                trail: cloneTrail(currentTrail) ?? [],
+            };
+        }
+
+        if (segment.length === previousLength) {
+            continue;
+        }
+
+        segments.push({
+            index: segmentIndex,
+            points: segment.slice(previousLength).map(cloneTrailPoint),
+        });
+    }
+
+    return segments.length > 0
+        ? {
+              reset: false,
+              segments,
+          }
+        : null;
+}
+
+function buildGameStatePayload(
+    roomCode: string,
+    forceFullSnapshot = false,
+): GameState | null {
     const room = getRoom(roomCode);
     if (!room) return null;
     const roundStartFreezeUntil = roundStartFreezeUntilMap.get(roomCode) ?? 0;
@@ -313,26 +503,50 @@ export function buildGameState(roomCode: string): GameState | null {
         0,
         roundStartFreezeUntil - Date.now(),
     );
-    const players = Array.from(room.players.values()).map((p) => ({
-        id: p.id,
-        name: p.name,
-        score: p.score ?? 0,
-        socketId: p.socketId,
-        color: p.color,
-        teamId: p.teamId,
-        alive: p.alive,
-        x: p.x,
-        y: p.y,
-        direction: p.direction,
-        speed: p.speed,
-        // Only send trail and gap state to host
-        trail: p.trail,
-        distanceSinceLastGap: p.distanceSinceLastGap,
-        gapInterval: p.gapInterval,
-        gapLength: p.gapLength,
-        inGap: p.inGap,
-        gapStartDistance: p.gapStartDistance,
-    }));
+    const roomPlayers = Array.from(room.players.values());
+    const previousPlayers = emittedGameStatePlayerMap.get(roomCode) ?? new Map();
+    const nextPlayers = new Map<string, EmittedGameStatePlayer>();
+    const removedPlayerIds = Array.from(previousPlayers.keys()).filter(
+        (playerId) => !room.players.has(playerId),
+    );
+    const shouldSendFullSnapshot =
+        forceFullSnapshot ||
+        previousPlayers.size === 0 ||
+        roomPlayers.some((player) => {
+            const trailUpdate = buildTrailSegmentUpdates(
+                previousPlayers.get(player.id),
+                player,
+            );
+            return !previousPlayers.has(player.id) || Boolean(trailUpdate?.reset);
+        });
+
+    const players: GameStatePlayer[] = [];
+
+    for (const player of roomPlayers) {
+        const previousPlayer = previousPlayers.get(player.id);
+        nextPlayers.set(player.id, buildEmittedGameStatePlayer(player));
+
+        if (shouldSendFullSnapshot) {
+            players.push(buildGameStatePlayer(player, cloneTrail(player.trail)));
+            continue;
+        }
+
+        const trailUpdate = buildTrailSegmentUpdates(previousPlayer, player);
+        const playerChanged =
+            isPlayerStateChanged(previousPlayer, player) || trailUpdate !== null;
+        if (!playerChanged) {
+            continue;
+        }
+
+        const nextPlayer = buildGameStatePlayer(player);
+        if (trailUpdate?.segments) {
+            nextPlayer.trailUpdate = { segments: trailUpdate.segments };
+        }
+        players.push(nextPlayer);
+    }
+
+    emittedGameStatePlayerMap.set(roomCode, nextPlayers);
+
     return {
         tick: Date.now(),
         arena: {
@@ -340,6 +554,11 @@ export function buildGameState(roomCode: string): GameState | null {
             height: GAME_HEIGHT,
         },
         players,
+        isDelta: !shouldSendFullSnapshot,
+        removedPlayerIds:
+            !shouldSendFullSnapshot && removedPlayerIds.length > 0
+                ? removedPlayerIds
+                : undefined,
         gameMode: room.gameMode,
         targetScore:
             room.gameMode === "battle-royale"
@@ -356,8 +575,12 @@ export function buildGameState(roomCode: string): GameState | null {
     };
 }
 
-function emitGameState(roomCode: string, io: TypedServer) {
-    const state = buildGameState(roomCode);
+function emitGameState(
+    roomCode: string,
+    io: TypedServer,
+    options?: { forceFullSnapshot?: boolean },
+) {
+    const state = buildGameStatePayload(roomCode, options?.forceFullSnapshot);
     if (state) {
         io.to(roomCode).emit("gameState", state);
     }
@@ -481,6 +704,152 @@ function distanceToLineSegment(
     return Math.sqrt(distX * distX + distY * distY);
 }
 
+function getTrailSpatialHashKey(cellX: number, cellY: number) {
+    return `${cellX},${cellY}`;
+}
+
+function getTrailSpatialHashCellRange(min: number, max: number) {
+    return {
+        start: Math.floor(min / TRAIL_SPATIAL_HASH_CELL_SIZE),
+        end: Math.floor(max / TRAIL_SPATIAL_HASH_CELL_SIZE),
+    };
+}
+
+function buildTrailSpatialHash(players: Player[]) {
+    const trailSpatialHash = new Map<string, TrailCollisionEdge[]>();
+
+    for (const player of players) {
+        if (!Array.isArray(player.trail)) continue;
+
+        for (
+            let segmentIndex = 0;
+            segmentIndex < player.trail.length;
+            segmentIndex++
+        ) {
+            const segment = player.trail[segmentIndex];
+            if (!Array.isArray(segment) || segment.length < 2) continue;
+
+            for (
+                let pointIndex = 0;
+                pointIndex < segment.length - 1;
+                pointIndex++
+            ) {
+                const firstPoint = segment[pointIndex];
+                const secondPoint = segment[pointIndex + 1];
+                if (!firstPoint || !secondPoint) continue;
+
+                const minX = Math.min(firstPoint.x, secondPoint.x);
+                const maxX = Math.max(firstPoint.x, secondPoint.x);
+                const minY = Math.min(firstPoint.y, secondPoint.y);
+                const maxY = Math.max(firstPoint.y, secondPoint.y);
+
+                const edge: TrailCollisionEdge = {
+                    ownerPlayerId: player.id,
+                    segmentIndex,
+                    pointIndex,
+                    x1: firstPoint.x,
+                    y1: firstPoint.y,
+                    x2: secondPoint.x,
+                    y2: secondPoint.y,
+                    minX,
+                    maxX,
+                    minY,
+                    maxY,
+                };
+
+                const xRange = getTrailSpatialHashCellRange(minX, maxX);
+                const yRange = getTrailSpatialHashCellRange(minY, maxY);
+
+                for (let cellX = xRange.start; cellX <= xRange.end; cellX++) {
+                    for (let cellY = yRange.start; cellY <= yRange.end; cellY++) {
+                        const key = getTrailSpatialHashKey(cellX, cellY);
+                        const cellEdges = trailSpatialHash.get(key);
+                        if (cellEdges) {
+                            cellEdges.push(edge);
+                            continue;
+                        }
+
+                        trailSpatialHash.set(key, [edge]);
+                    }
+                }
+            }
+        }
+    }
+
+    return trailSpatialHash;
+}
+
+function getNearbyTrailCollisionEdges(
+    trailSpatialHash: Map<string, TrailCollisionEdge[]>,
+    x: number,
+    y: number,
+    collisionRadius: number,
+) {
+    const xRange = getTrailSpatialHashCellRange(x - collisionRadius, x + collisionRadius);
+    const yRange = getTrailSpatialHashCellRange(y - collisionRadius, y + collisionRadius);
+    const nearbyEdges = new Set<TrailCollisionEdge>();
+
+    for (let cellX = xRange.start; cellX <= xRange.end; cellX++) {
+        for (let cellY = yRange.start; cellY <= yRange.end; cellY++) {
+            const cellEdges = trailSpatialHash.get(getTrailSpatialHashKey(cellX, cellY));
+            if (!cellEdges) continue;
+
+            for (const edge of cellEdges) {
+                nearbyEdges.add(edge);
+            }
+        }
+    }
+
+    return nearbyEdges;
+}
+
+function buildSelfCollisionSkipMap(
+    player: Player,
+    selfCollisionIgnoreDistance: number,
+) {
+    const selfSkipFromBySegment = new Map<number, number>();
+    if (!Array.isArray(player.trail)) {
+        return selfSkipFromBySegment;
+    }
+
+    let remainingIgnoreDistance = selfCollisionIgnoreDistance;
+
+    for (
+        let reverseSegmentIndex = player.trail.length - 1;
+        reverseSegmentIndex >= 0 && remainingIgnoreDistance > 0;
+        reverseSegmentIndex--
+    ) {
+        const reverseSegment = player.trail[reverseSegmentIndex];
+        if (!Array.isArray(reverseSegment) || reverseSegment.length < 2) {
+            continue;
+        }
+
+        let skipFromEdgeIndex = reverseSegment.length - 1;
+        for (
+            let edgeIndex = reverseSegment.length - 2;
+            edgeIndex >= 0;
+            edgeIndex--
+        ) {
+            const firstPoint = reverseSegment[edgeIndex];
+            const secondPoint = reverseSegment[edgeIndex + 1];
+            if (!firstPoint || !secondPoint) continue;
+
+            const dx = secondPoint.x - firstPoint.x;
+            const dy = secondPoint.y - firstPoint.y;
+            remainingIgnoreDistance -= Math.sqrt(dx * dx + dy * dy);
+            skipFromEdgeIndex = edgeIndex;
+
+            if (remainingIgnoreDistance <= 0) {
+                break;
+            }
+        }
+
+        selfSkipFromBySegment.set(reverseSegmentIndex, skipFromEdgeIndex);
+    }
+
+    return selfSkipFromBySegment;
+}
+
 function detectCollisions(
     players: Player[],
     skipGraceTickCount: number,
@@ -497,6 +866,7 @@ function detectCollisions(
     const selfCollisionIgnoreDistance = 60;
     const deadPlayers = new Set<string>();
     const deathReasonSets = new Map<string, Set<string>>();
+    const trailSpatialHash = buildTrailSpatialHash(players);
 
     const markDead = (playerId: string, reason: string) => {
         deadPlayers.add(playerId);
@@ -542,101 +912,54 @@ function detectCollisions(
             continue;
         }
 
-        // Check collision with all trails, including own trail
-        for (const otherPlayer of players) {
-            if (!Array.isArray(otherPlayer.trail)) continue;
+        const selfSkipFromBySegment = buildSelfCollisionSkipMap(
+            p,
+            selfCollisionIgnoreDistance,
+        );
+        const nearbyEdges = getNearbyTrailCollisionEdges(
+            trailSpatialHash,
+            p.x,
+            p.y,
+            collisionRadius,
+        );
 
-            const isSelf = otherPlayer.id === p.id;
-            const selfSkipFromBySegment = new Map<number, number>();
-
-            if (isSelf) {
-                let remainingIgnoreDistance = selfCollisionIgnoreDistance;
-
-                for (
-                    let reverseSegmentIndex = otherPlayer.trail.length - 1;
-                    reverseSegmentIndex >= 0 && remainingIgnoreDistance > 0;
-                    reverseSegmentIndex--
-                ) {
-                    const reverseSegment =
-                        otherPlayer.trail[reverseSegmentIndex];
-                    if (
-                        !Array.isArray(reverseSegment) ||
-                        reverseSegment.length < 2
-                    ) {
-                        continue;
-                    }
-
-                    let skipFromEdgeIndex = reverseSegment.length - 1;
-                    for (
-                        let edgeIndex = reverseSegment.length - 2;
-                        edgeIndex >= 0;
-                        edgeIndex--
-                    ) {
-                        const firstPoint = reverseSegment[edgeIndex];
-                        const secondPoint = reverseSegment[edgeIndex + 1];
-                        if (!firstPoint || !secondPoint) continue;
-
-                        const dx = secondPoint.x - firstPoint.x;
-                        const dy = secondPoint.y - firstPoint.y;
-                        remainingIgnoreDistance -= Math.sqrt(dx * dx + dy * dy);
-                        skipFromEdgeIndex = edgeIndex;
-
-                        if (remainingIgnoreDistance <= 0) {
-                            break;
-                        }
-                    }
-
-                    selfSkipFromBySegment.set(
-                        reverseSegmentIndex,
-                        skipFromEdgeIndex,
-                    );
-                }
+        for (const edge of nearbyEdges) {
+            const isSelf = edge.ownerPlayerId === p.id;
+            const selfSkipFromSegmentIndex = selfSkipFromBySegment.get(
+                edge.segmentIndex,
+            );
+            if (
+                isSelf &&
+                typeof selfSkipFromSegmentIndex === "number" &&
+                edge.pointIndex >= selfSkipFromSegmentIndex
+            ) {
+                continue;
             }
 
-            for (let segIdx = 0; segIdx < otherPlayer.trail.length; segIdx++) {
-                const segment = otherPlayer.trail[segIdx];
-                if (!Array.isArray(segment) || segment.length === 0) continue;
-                const selfSkipFromSegmentIndex =
-                    selfSkipFromBySegment.get(segIdx);
-
-                for (
-                    let segmentPointIndex = 0;
-                    segmentPointIndex < segment.length - 1;
-                    segmentPointIndex++
-                ) {
-                    if (
-                        isSelf &&
-                        typeof selfSkipFromSegmentIndex === "number" &&
-                        segmentPointIndex >= selfSkipFromSegmentIndex
-                    ) {
-                        continue;
-                    }
-
-                    const pt1 = segment[segmentPointIndex];
-                    const pt2 = segment[segmentPointIndex + 1];
-                    if (!pt1 || !pt2) continue;
-
-                    const dist = distanceToLineSegment(
-                        p.x,
-                        p.y,
-                        pt1.x,
-                        pt1.y,
-                        pt2.x,
-                        pt2.y,
-                    );
-                    if (dist < collisionRadius) {
-                        markDead(
-                            p.id,
-                            isSelf ? "self-trail" : `trail:${otherPlayer.id}`,
-                        );
-                        break;
-                    }
-                }
-
-                if (deadPlayers.has(p.id)) break;
+            if (
+                p.x < edge.minX - collisionRadius ||
+                p.x > edge.maxX + collisionRadius ||
+                p.y < edge.minY - collisionRadius ||
+                p.y > edge.maxY + collisionRadius
+            ) {
+                continue;
             }
 
-            if (deadPlayers.has(p.id)) break;
+            const dist = distanceToLineSegment(
+                p.x,
+                p.y,
+                edge.x1,
+                edge.y1,
+                edge.x2,
+                edge.y2,
+            );
+            if (dist < collisionRadius) {
+                markDead(
+                    p.id,
+                    isSelf ? "self-trail" : `trail:${edge.ownerPlayerId}`,
+                );
+                break;
+            }
         }
     }
 
@@ -863,7 +1186,12 @@ export function startGameLoop(roomCode: string, io: TypedServer) {
                             roomCode,
                             ROUND_START_NO_TRAIL_TICKS,
                         );
+                        roundStartFreezeUntilMap.set(
+                            roomCode,
+                            Date.now() + ROUND_START_FREEZE_MS,
+                        );
                         io.to(roomCode).emit("roundRestart");
+                        emitGameState(roomCode, io, { forceFullSnapshot: true });
                     }, ROUND_RESTART_DELAY_MS);
 
                     pendingRoundRestartMap.set(roomCode, restartHandle);
@@ -951,7 +1279,9 @@ export function startGameLoop(roomCode: string, io: TypedServer) {
                                 Date.now() + ROUND_START_FREEZE_MS,
                             );
                             io.to(roomCode).emit("roundRestart");
-                            emitGameState(roomCode, io);
+                            emitGameState(roomCode, io, {
+                                forceFullSnapshot: true,
+                            });
                         }, ROUND_RESTART_DELAY_MS);
 
                         pendingRoundRestartMap.set(roomCode, restartHandle);
@@ -1035,7 +1365,9 @@ export function startGameLoop(roomCode: string, io: TypedServer) {
                             Date.now() + ROUND_START_FREEZE_MS,
                         );
                         io.to(roomCode).emit("roundRestart");
-                        emitGameState(roomCode, io);
+                        emitGameState(roomCode, io, {
+                            forceFullSnapshot: true,
+                        });
                     }, ROUND_RESTART_DELAY_MS);
 
                     pendingRoundRestartMap.set(roomCode, restartHandle);
@@ -1069,5 +1401,6 @@ export function stopGameLoop(roomCode: string) {
     roundStartNoTrailMap.delete(roomCode);
     roundStartFreezeUntilMap.delete(roomCode);
     roomTickCounterMap.delete(roomCode);
+    emittedGameStatePlayerMap.delete(roomCode);
     clearPendingGameOverReturn(roomCode);
 }

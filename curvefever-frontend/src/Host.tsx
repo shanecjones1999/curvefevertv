@@ -17,6 +17,7 @@ import type {
     GameOverPayload,
     RoundOverPayload,
 } from "./components/host/types";
+import { useHostBackgroundMusic } from "./hooks/useHostBackgroundMusic";
 import { useHostRoomSync } from "./hooks/useHostRoomSync";
 import { useHostSoundboard } from "./hooks/useHostSoundboard";
 import styles from "./ui.module.css";
@@ -144,6 +145,7 @@ export default function Host({ onLeave }: Props) {
         ),
     );
     const hostSoundboard = useHostSoundboard();
+    useHostBackgroundMusic(playing && !gameOverData, hostSoundboard.isMuted);
     const previousCanStartRef = useRef<boolean | null>(null);
     const previousRoundStartCountdownRef = useRef(0);
     const previousTeamAssignmentsRef = useRef<Map<string, number | undefined> | null>(

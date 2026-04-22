@@ -2,7 +2,14 @@ import { useEffect, useRef } from "react";
 import socket from "../socket";
 import { EVENTS } from "../events";
 import { HOST_SESSION_KEY } from "../constants/storage";
-import type { GameMode, GameState, LeaderboardEntry, Player } from "../types";
+import type {
+    GameMode,
+    GameState,
+    GameStatePlayer,
+    LeaderboardEntry,
+    Player,
+    Trail,
+} from "../types";
 import type {
     GameConfig,
     GameOverPayload,
@@ -63,19 +70,110 @@ export function useHostRoomSync({
     const latestPlayersRef = useRef<Player[]>([]);
 
     useEffect(() => {
+        const cloneTrail = (trail?: Trail) =>
+            trail?.map((segment) => segment.map((point) => ({ ...point })));
+
+        const clonePlayer = (player: Player): Player => ({
+            ...player,
+            trail: cloneTrail(player.trail),
+        });
+
         const clonePlayers = (players: Player[]) =>
-            players.map((player) => ({
-                ...player,
-                trail: player.trail?.map((segment) =>
-                    segment.map((point) => ({ ...point })),
-                ),
-            }));
+            players.map((player) => clonePlayer(player));
+
+        const toPlayerFromGameState = (player: GameStatePlayer): Player => {
+            const { trailUpdate, ...rest } = player;
+            void trailUpdate;
+            return {
+                ...rest,
+                trail: cloneTrail(player.trail),
+            };
+        };
+
+        const mergePlayerFromGameState = (
+            existingPlayer: Player | undefined,
+            playerUpdate: GameStatePlayer,
+        ): Player => {
+            const { trailUpdate, trail, ...rest } = playerUpdate;
+            const nextPlayer: Player = {
+                ...(existingPlayer ?? (rest as Player)),
+                ...rest,
+            };
+
+            if (trail) {
+                nextPlayer.trail = cloneTrail(trail);
+                return nextPlayer;
+            }
+
+            if (!trailUpdate?.segments?.length) {
+                if (!existingPlayer) {
+                    nextPlayer.trail = [];
+                }
+                return nextPlayer;
+            }
+
+            const nextTrail = [...(existingPlayer?.trail ?? [])];
+            for (const segmentUpdate of trailUpdate.segments) {
+                const previousSegment = nextTrail[segmentUpdate.index] ?? [];
+                const nextSegment = previousSegment.slice();
+                nextSegment.push(
+                    ...segmentUpdate.points.map((point) => ({ ...point })),
+                );
+                nextTrail[segmentUpdate.index] = nextSegment;
+            }
+            nextPlayer.trail = nextTrail;
+            return nextPlayer;
+        };
 
         const applyPlayers = (players: Player[]) => {
             const nextPlayers = clonePlayers(players);
             latestPlayersRef.current = nextPlayers;
             setPlayers(nextPlayers);
             return nextPlayers;
+        };
+
+        const applyGameStatePlayers = (state: GameState) => {
+            if (!state.isDelta) {
+                const nextPlayers = state.players.map((player) =>
+                    toPlayerFromGameState(player),
+                );
+                latestPlayersRef.current = nextPlayers;
+                setPlayers(nextPlayers);
+                return;
+            }
+
+            setPlayers((previousPlayers) => {
+                const removedPlayerIds = new Set(state.removedPlayerIds ?? []);
+                const nextPlayers = previousPlayers
+                    .filter((player) => !removedPlayerIds.has(player.id))
+                    .map((player) => player);
+                const playerIndexById = new Map(
+                    nextPlayers.map((player, index) => [player.id, index]),
+                );
+
+                for (const playerUpdate of state.players) {
+                    const playerIndex = playerIndexById.get(playerUpdate.id);
+                    const existingPlayer =
+                        typeof playerIndex === "number"
+                            ? nextPlayers[playerIndex]
+                            : undefined;
+                    const nextPlayer = mergePlayerFromGameState(
+                        existingPlayer,
+                        playerUpdate,
+                    );
+
+                    if (typeof playerIndex === "number") {
+                        nextPlayers[playerIndex] = nextPlayer;
+                        continue;
+                    }
+
+                    playerIndexById.set(playerUpdate.id, nextPlayers.length);
+                    nextPlayers.push(nextPlayer);
+                }
+
+                latestPlayersRef.current = nextPlayers;
+                return nextPlayers;
+            });
         };
 
         const applyGameConfig = (incoming?: GameConfig) => {
@@ -319,7 +417,7 @@ export function useHostRoomSync({
                     Math.max(0, state?.roundStartRemainingMs ?? 0),
                 );
                 if (state && Array.isArray(state.players)) {
-                    applyPlayers(state.players);
+                    applyGameStatePlayers(state);
                 }
             },
         );

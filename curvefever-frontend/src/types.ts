@@ -1,3 +1,10 @@
+export interface TrailPoint {
+    x: number;
+    y: number;
+}
+
+export type Trail = TrailPoint[][];
+
 export interface Player {
     id: string;
     name: string;
@@ -11,7 +18,7 @@ export interface Player {
     direction: number; // radians
     speed?: number;
     // Server-side trail: array of segments, each segment is an array of points
-    trail?: Array<Array<{ x: number; y: number }>>;
+    trail?: Trail;
     // For gap logic
     distanceSinceLastGap?: number;
     gapInterval?: number;
@@ -44,13 +51,30 @@ export interface Room {
     game?: GameState | null;
 }
 
+export interface TrailSegmentUpdate {
+    index: number;
+    points: TrailPoint[];
+}
+
+export interface TrailUpdate {
+    reset?: boolean;
+    segments?: TrailSegmentUpdate[];
+}
+
+export interface GameStatePlayer extends Omit<Player, "trail"> {
+    trail?: Trail;
+    trailUpdate?: TrailUpdate;
+}
+
 export interface GameState {
     tick: number;
     arena: {
         width: number;
         height: number;
     };
-    players: Player[];
+    players: GameStatePlayer[];
+    isDelta?: boolean;
+    removedPlayerIds?: string[];
     gameMode: GameMode;
     targetScore?: number;
     teamCount?: number;

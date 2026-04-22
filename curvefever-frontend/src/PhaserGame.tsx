@@ -36,6 +36,10 @@ class CurvefeverScene extends Phaser.Scene {
     markerTexts: Map<string, Phaser.GameObjects.Text> = new Map();
     playerLabels: Map<string, Phaser.GameObjects.Text> = new Map();
     playerAliveStates: Map<string, boolean> = new Map();
+    trailRenderStates: Map<
+        string,
+        { segmentLengths: number[]; color: string }
+    > = new Map();
 
     constructor() {
         super("CurvefeverScene");
@@ -69,6 +73,7 @@ class CurvefeverScene extends Phaser.Scene {
         this.markerTexts.clear();
         this.playerLabels.clear();
         this.playerAliveStates.clear();
+        this.trailRenderStates.clear();
         this.cameras.main.setBackgroundColor("#222");
         // Defensive: always use array
         const players = Array.isArray(this.players) ? this.players : [];
@@ -76,6 +81,101 @@ class CurvefeverScene extends Phaser.Scene {
             const g = this.add.graphics();
             this.drawPlayerHead(g, p, this.getPlayerColor(p, i));
             this.playerSprites.set(p.id, g);
+        });
+    }
+
+    drawFullTrail(
+        graphic: Phaser.GameObjects.Graphics,
+        trail: Player["trail"],
+        color: string,
+    ) {
+        graphic.clear();
+        graphic.setVisible(true);
+        graphic.lineStyle(
+            PLAYER_TRAIL_WIDTH,
+            Phaser.Display.Color.HexStringToColor(color).color,
+            1,
+        );
+
+        const segments = Array.isArray(trail) ? trail : [];
+        for (const segment of segments) {
+            if (!Array.isArray(segment) || segment.length < 2) continue;
+            graphic.beginPath();
+            graphic.moveTo(segment[0].x, segment[0].y);
+            for (let index = 1; index < segment.length; index += 1) {
+                graphic.lineTo(segment[index].x, segment[index].y);
+            }
+            graphic.strokePath();
+        }
+    }
+
+    appendTrailSegments(
+        graphic: Phaser.GameObjects.Graphics,
+        trail: Player["trail"],
+        color: string,
+        previousSegmentLengths: number[],
+    ) {
+        graphic.setVisible(true);
+        graphic.lineStyle(
+            PLAYER_TRAIL_WIDTH,
+            Phaser.Display.Color.HexStringToColor(color).color,
+            1,
+        );
+
+        const segments = Array.isArray(trail) ? trail : [];
+        for (let segmentIndex = 0; segmentIndex < segments.length; segmentIndex += 1) {
+            const segment = segments[segmentIndex];
+            if (!Array.isArray(segment) || segment.length < 2) continue;
+
+            const previousLength = previousSegmentLengths[segmentIndex] ?? 0;
+            if (segment.length <= previousLength) continue;
+
+            const startIndex = Math.max(1, previousLength);
+            graphic.beginPath();
+            graphic.moveTo(
+                segment[startIndex - 1].x,
+                segment[startIndex - 1].y,
+            );
+            for (let pointIndex = startIndex; pointIndex < segment.length; pointIndex += 1) {
+                graphic.lineTo(segment[pointIndex].x, segment[pointIndex].y);
+            }
+            graphic.strokePath();
+        }
+    }
+
+    syncTrail(
+        player: Player,
+        trailGraphic: Phaser.GameObjects.Graphics,
+        color: string,
+    ) {
+        const segments = Array.isArray(player.trail) ? player.trail : [];
+        const nextSegmentLengths = segments.map((segment) =>
+            Array.isArray(segment) ? segment.length : 0,
+        );
+        const previousTrailState = this.trailRenderStates.get(player.id);
+        const shouldRedrawFullTrail =
+            !previousTrailState ||
+            previousTrailState.color !== color ||
+            nextSegmentLengths.length < previousTrailState.segmentLengths.length ||
+            nextSegmentLengths.some(
+                (length, index) =>
+                    length < (previousTrailState.segmentLengths[index] ?? 0),
+            );
+
+        if (shouldRedrawFullTrail) {
+            this.drawFullTrail(trailGraphic, segments, color);
+        } else {
+            this.appendTrailSegments(
+                trailGraphic,
+                segments,
+                color,
+                previousTrailState.segmentLengths,
+            );
+        }
+
+        this.trailRenderStates.set(player.id, {
+            segmentLengths: nextSegmentLengths,
+            color,
         });
     }
 
@@ -246,6 +346,7 @@ class CurvefeverScene extends Phaser.Scene {
                 graphic.destroy();
                 this.playerSprites.delete(key);
                 this.playerAliveStates.delete(playerId);
+                this.trailRenderStates.delete(playerId);
             }
         }
         for (const [playerId, markerText] of this.markerTexts.entries()) {
@@ -262,33 +363,15 @@ class CurvefeverScene extends Phaser.Scene {
         }
 
         this.players.forEach((p, i) => {
-            // Draw trail
             let trailG = this.playerSprites.get(p.id + "_trail");
             if (!trailG) {
                 trailG = this.add.graphics();
                 this.playerSprites.set(p.id + "_trail", trailG);
             }
-            trailG.clear();
-            trailG.setVisible(true);
             const color = this.getPlayerColor(p, i);
             const becameEliminated =
                 previousAliveStates.get(p.id) === true && !p.alive;
-
-            trailG.lineStyle(
-                PLAYER_TRAIL_WIDTH,
-                Phaser.Display.Color.HexStringToColor(color).color,
-                1,
-            );
-            const segments = Array.isArray(p.trail) ? p.trail : [];
-            for (const segment of segments) {
-                if (!Array.isArray(segment) || segment.length < 2) continue;
-                trailG.beginPath();
-                trailG.moveTo(segment[0].x, segment[0].y);
-                for (let j = 1; j < segment.length; j++) {
-                    trailG.lineTo(segment[j].x, segment[j].y);
-                }
-                trailG.strokePath();
-            }
+            this.syncTrail(p, trailG, color);
 
             // Draw player
             let g = this.playerSprites.get(p.id);

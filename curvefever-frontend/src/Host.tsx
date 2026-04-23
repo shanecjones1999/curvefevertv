@@ -154,6 +154,7 @@ export default function Host({ onLeave }: Props) {
         areSoundEffectsMuted(),
     );
     useHostBackgroundMusic(playing && !gameOverData, isSoundMuted);
+    const livePlayersRef = useRef<Player[]>([]);
     const previousCanStartRef = useRef<boolean | null>(null);
     const previousRoundStartCountdownRef = useRef(0);
     const lastTeamRoundWinKeyRef = useRef<string | null>(null);
@@ -287,7 +288,6 @@ export default function Host({ onLeave }: Props) {
     }, [displayLeaderboard, gameOverData]);
     const roundStartCountdown =
         roundStartRemainingMs > 0 ? Math.ceil(roundStartRemainingMs / 1000) : 0;
-    const renderPlayers = players;
     const hasDraftGameSetupChanges =
         draftGameMode !== gameMode ||
         (draftGameMode === "teams" && draftTeamCount !== teamCount);
@@ -308,6 +308,7 @@ export default function Host({ onLeave }: Props) {
         setGameOverData,
         setRoundOverData,
         setGameConfig,
+        livePlayersRef,
         onPlayerJoined: () => playSoundEffect("lobbyJoin"),
         autoCreateRoom: false,
     });
@@ -872,7 +873,8 @@ export default function Host({ onLeave }: Props) {
 
                 <div className={styles["game-stage"]}>
                     <PhaserGame
-                        players={renderPlayers}
+                        players={players}
+                        livePlayersRef={livePlayersRef}
                         gameMode={gameMode}
                         showTeamLabels={gameMode === "teams" && roundStartCountdown > 0}
                         width={gameConfig.width}

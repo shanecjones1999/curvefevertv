@@ -21,6 +21,7 @@ import { playSoundEffect } from "./utils/soundEffects";
 
 interface PhaserGameProps {
     players: Player[];
+    livePlayersRef?: React.MutableRefObject<Player[]>;
     gameMode?: GameMode;
     showTeamLabels?: boolean;
     width?: number;
@@ -441,6 +442,7 @@ class CurvefeverScene extends Phaser.Scene {
 
 export default function PhaserGame({
     players,
+    livePlayersRef,
     gameMode,
     showTeamLabels = false,
     width = DEFAULT_GAME_WIDTH,
@@ -450,6 +452,12 @@ export default function PhaserGame({
     const gameRef = useRef<HTMLDivElement>(null);
     const phaserRef = useRef<Phaser.Game | null>(null);
     const sceneRef = useRef<CurvefeverScene | null>(null);
+    const fallbackPlayersRef = useRef(players);
+    const lastRenderedPlayersRef = useRef<Player[] | null>(null);
+
+    useEffect(() => {
+        fallbackPlayersRef.current = players;
+    }, [players]);
 
     useEffect(() => {
         if (!gameRef.current) return;
@@ -485,9 +493,31 @@ export default function PhaserGame({
     useEffect(() => {
         if (sceneRef.current) {
             sceneRef.current.setDisplayMode(gameMode, showTeamLabels);
-            sceneRef.current.updatePlayers(players);
         }
-    }, [gameMode, players, showTeamLabels]);
+    }, [gameMode, showTeamLabels]);
+
+    useEffect(() => {
+        let animationFrameId: number | null = null;
+
+        const syncPlayers = () => {
+            const nextPlayers = livePlayersRef?.current ?? fallbackPlayersRef.current;
+            if (sceneRef.current && nextPlayers !== lastRenderedPlayersRef.current) {
+                sceneRef.current.updatePlayers(nextPlayers);
+                lastRenderedPlayersRef.current = nextPlayers;
+            }
+
+            animationFrameId = window.requestAnimationFrame(syncPlayers);
+        };
+
+        animationFrameId = window.requestAnimationFrame(syncPlayers);
+
+        return () => {
+            if (animationFrameId !== null) {
+                window.cancelAnimationFrame(animationFrameId);
+            }
+            lastRenderedPlayersRef.current = null;
+        };
+    }, [livePlayersRef]);
 
     return (
         <div className={cx(styles["phaser-shell"], className)}>

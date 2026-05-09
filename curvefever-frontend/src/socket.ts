@@ -23,6 +23,7 @@ if (shouldUseSameOriginProxy) {
 export const socket: Socket = io(socketTarget, {
     autoConnect: true,
     path: "/socket.io",
+    transports: ["websocket"],
     reconnection: true,
     reconnectionAttempts: Infinity,
     reconnectionDelay: 500,

@@ -8,6 +8,7 @@ import type {
     GameStatePlayer,
     LeaderboardEntry,
     Player,
+    ServerLagDiagnostics,
     Trail,
 } from "../types";
 import type {
@@ -16,6 +17,8 @@ import type {
     RoundOverPayload,
 } from "../components/host/types";
 import { buildTeamLeaderboard } from "../utils/teamMode";
+
+const LIVE_UI_PLAYER_SYNC_INTERVAL_MS = 100;
 
 type ReconnectHostResponse = {
     ok: boolean;
@@ -48,6 +51,10 @@ type UseHostRoomSyncParams = {
         React.SetStateAction<RoundOverPayload | null>
     >;
     setGameConfig: React.Dispatch<React.SetStateAction<GameConfig>>;
+    livePlayersRef?: React.MutableRefObject<Player[]>;
+    onServerLagDiagnostics?: (
+        diagnostics: ServerLagDiagnostics | null,
+    ) => void;
     onPlayerJoined?: (player: Player) => void;
     autoCreateRoom?: boolean;
 };
@@ -64,12 +71,141 @@ export function useHostRoomSync({
     setGameOverData,
     setRoundOverData,
     setGameConfig,
+    livePlayersRef,
+    onServerLagDiagnostics,
     onPlayerJoined,
     autoCreateRoom = true,
 }: UseHostRoomSyncParams) {
     const latestPlayersRef = useRef<Player[]>([]);
+    const pendingUiPlayersRef = useRef<Player[] | null>(null);
+    const uiPlayersSyncTimeoutRef = useRef<number | null>(null);
+    const isPlayingRef = useRef(false);
+    const gameStateLastReceivedAtRef = useRef<number | null>(null);
+    const gameStateLastTickRef = useRef<number | null>(null);
+    const gameStateArrivalIntervalsRef = useRef<number[]>([]);
+    const gameStateTickDeltasRef = useRef<number[]>([]);
+    const gameStateTrailPointSamplesRef = useRef<number[]>([]);
+    const gameStateLastDiagnosticsEmitAtRef = useRef(0);
 
     useEffect(() => {
+        const METRIC_SAMPLE_SIZE = 45;
+        const DIAGNOSTIC_EMIT_INTERVAL_MS = 250;
+
+        const pushSample = (samples: number[], value: number) => {
+            samples.push(value);
+            if (samples.length > METRIC_SAMPLE_SIZE) {
+                samples.shift();
+            }
+        };
+
+        const average = (samples: number[]) => {
+            if (samples.length === 0) return 0;
+            return samples.reduce((sum, sample) => sum + sample, 0) / samples.length;
+        };
+
+        const standardDeviation = (samples: number[]) => {
+            if (samples.length < 2) return 0;
+            const mean = average(samples);
+            const variance =
+                samples.reduce(
+                    (sum, sample) => sum + (sample - mean) * (sample - mean),
+                    0,
+                ) / samples.length;
+            return Math.sqrt(variance);
+        };
+
+        const getTrailPointsFromState = (state: GameState) => {
+            let totalTrailPoints = 0;
+            for (const player of state.players) {
+                if (Array.isArray(player.trail)) {
+                    for (const segment of player.trail) {
+                        totalTrailPoints += segment.length;
+                    }
+                    continue;
+                }
+
+                if (player.trailUpdate?.segments) {
+                    for (const segment of player.trailUpdate.segments) {
+                        totalTrailPoints += segment.points.length;
+                    }
+                }
+            }
+            return totalTrailPoints;
+        };
+
+        const resetServerLagDiagnostics = () => {
+            gameStateLastReceivedAtRef.current = null;
+            gameStateLastTickRef.current = null;
+            gameStateArrivalIntervalsRef.current = [];
+            gameStateTickDeltasRef.current = [];
+            gameStateTrailPointSamplesRef.current = [];
+            gameStateLastDiagnosticsEmitAtRef.current = 0;
+            onServerLagDiagnostics?.(null);
+        };
+
+        const collectServerLagDiagnostics = (state: GameState) => {
+            const now = performance.now();
+            const previousReceivedAt = gameStateLastReceivedAtRef.current;
+            const previousTick = gameStateLastTickRef.current;
+
+            if (typeof previousReceivedAt === "number") {
+                pushSample(
+                    gameStateArrivalIntervalsRef.current,
+                    now - previousReceivedAt,
+                );
+            }
+            gameStateLastReceivedAtRef.current = now;
+
+            if (
+                typeof previousTick === "number" &&
+                Number.isFinite(state.tick) &&
+                state.tick >= previousTick
+            ) {
+                pushSample(
+                    gameStateTickDeltasRef.current,
+                    state.tick - previousTick,
+                );
+            }
+            gameStateLastTickRef.current = state.tick;
+
+            pushSample(
+                gameStateTrailPointSamplesRef.current,
+                getTrailPointsFromState(state),
+            );
+
+            if (
+                now - gameStateLastDiagnosticsEmitAtRef.current <
+                DIAGNOSTIC_EMIT_INTERVAL_MS
+            ) {
+                return;
+            }
+
+            gameStateLastDiagnosticsEmitAtRef.current = now;
+
+            const updateIntervalMs = average(gameStateArrivalIntervalsRef.current);
+            const updateRateHz = updateIntervalMs > 0 ? 1000 / updateIntervalMs : 0;
+            const jitterMs = standardDeviation(gameStateArrivalIntervalsRef.current);
+            const tickDelta = average(gameStateTickDeltasRef.current);
+            const trailPointsPerUpdate = average(
+                gameStateTrailPointSamplesRef.current,
+            );
+            const sampleCount = Math.max(
+                gameStateArrivalIntervalsRef.current.length,
+                gameStateTickDeltasRef.current.length,
+                gameStateTrailPointSamplesRef.current.length,
+            );
+
+            onServerLagDiagnostics?.({
+                updateIntervalMs,
+                updateRateHz,
+                jitterMs,
+                tickDelta,
+                payloadPlayers: state.players.length,
+                trailPointsPerUpdate,
+                sampleCount,
+            });
+        };
+
         const cloneTrail = (trail?: Trail) =>
             trail?.map((segment) => segment.map((point) => ({ ...point })));
 
@@ -125,64 +261,138 @@ export function useHostRoomSync({
             return nextPlayer;
         };
 
-        const applyPlayers = (players: Player[]) => {
-            const nextPlayers = clonePlayers(players);
+        const clearScheduledUiPlayerSync = () => {
+            if (uiPlayersSyncTimeoutRef.current === null) {
+                return;
+            }
+
+            window.clearTimeout(uiPlayersSyncTimeoutRef.current);
+            uiPlayersSyncTimeoutRef.current = null;
+        };
+
+        const flushUiPlayers = () => {
+            clearScheduledUiPlayerSync();
+            if (!pendingUiPlayersRef.current) {
+                return;
+            }
+
+            setPlayers(pendingUiPlayersRef.current);
+            pendingUiPlayersRef.current = null;
+        };
+
+        const commitPlayers = (
+            nextPlayers: Player[],
+            options?: { immediateUi?: boolean },
+        ) => {
             latestPlayersRef.current = nextPlayers;
-            setPlayers(nextPlayers);
+            if (livePlayersRef) {
+                livePlayersRef.current = nextPlayers;
+            }
+
+            if (options?.immediateUi || !isPlayingRef.current) {
+                pendingUiPlayersRef.current = null;
+                clearScheduledUiPlayerSync();
+                setPlayers(nextPlayers);
+                return nextPlayers;
+            }
+
+            pendingUiPlayersRef.current = nextPlayers;
+            if (uiPlayersSyncTimeoutRef.current === null) {
+                uiPlayersSyncTimeoutRef.current = window.setTimeout(() => {
+                    flushUiPlayers();
+                }, LIVE_UI_PLAYER_SYNC_INTERVAL_MS);
+            }
+
             return nextPlayers;
         };
 
+        const applyPlayers = (
+            players: Player[],
+            options?: { immediateUi?: boolean },
+        ) => {
+            const nextPlayers = clonePlayers(players);
+            return commitPlayers(nextPlayers, options);
+        };
+
         const applyGameStatePlayers = (state: GameState) => {
+            const previousPlayers = latestPlayersRef.current;
             if (!state.isDelta) {
                 const nextPlayers = state.players.map((player) =>
                     toPlayerFromGameState(player),
                 );
-                latestPlayersRef.current = nextPlayers;
-                setPlayers(nextPlayers);
+                commitPlayers(nextPlayers);
                 return;
             }
 
-            setPlayers((previousPlayers) => {
-                const removedPlayerIds = new Set(state.removedPlayerIds ?? []);
-                const nextPlayers = previousPlayers
-                    .filter((player) => !removedPlayerIds.has(player.id))
-                    .map((player) => player);
-                const playerIndexById = new Map(
-                    nextPlayers.map((player, index) => [player.id, index]),
+            const removedPlayerIds = new Set(state.removedPlayerIds ?? []);
+            const nextPlayers = previousPlayers
+                .filter((player) => !removedPlayerIds.has(player.id))
+                .map((player) => player);
+            const playerIndexById = new Map(
+                nextPlayers.map((player, index) => [player.id, index]),
+            );
+
+            for (const playerUpdate of state.players) {
+                const playerIndex = playerIndexById.get(playerUpdate.id);
+                const existingPlayer =
+                    typeof playerIndex === "number"
+                        ? nextPlayers[playerIndex]
+                        : undefined;
+                const nextPlayer = mergePlayerFromGameState(
+                    existingPlayer,
+                    playerUpdate,
                 );
 
-                for (const playerUpdate of state.players) {
-                    const playerIndex = playerIndexById.get(playerUpdate.id);
-                    const existingPlayer =
-                        typeof playerIndex === "number"
-                            ? nextPlayers[playerIndex]
-                            : undefined;
-                    const nextPlayer = mergePlayerFromGameState(
-                        existingPlayer,
-                        playerUpdate,
-                    );
-
-                    if (typeof playerIndex === "number") {
-                        nextPlayers[playerIndex] = nextPlayer;
-                        continue;
-                    }
-
-                    playerIndexById.set(playerUpdate.id, nextPlayers.length);
-                    nextPlayers.push(nextPlayer);
+                if (typeof playerIndex === "number") {
+                    nextPlayers[playerIndex] = nextPlayer;
+                    continue;
                 }
 
-                latestPlayersRef.current = nextPlayers;
-                return nextPlayers;
-            });
+                playerIndexById.set(playerUpdate.id, nextPlayers.length);
+                nextPlayers.push(nextPlayer);
+            }
+
+            commitPlayers(nextPlayers);
         };
 
         const applyGameConfig = (incoming?: GameConfig) => {
             if (!incoming) return;
             if (incoming.width <= 0 || incoming.height <= 0) return;
-            setGameConfig({
-                width: incoming.width,
-                height: incoming.height,
+            setGameConfig((current) => {
+                if (
+                    current.width === incoming.width &&
+                    current.height === incoming.height
+                ) {
+                    return current;
+                }
+
+                return {
+                    width: incoming.width,
+                    height: incoming.height,
+                };
             });
+        };
+
+        const applyRoundStartRemainingMs = (incoming?: number) => {
+            const nextRemainingMs = Math.max(0, incoming ?? 0);
+            setRoundStartRemainingMs((current) => {
+                const currentCountdown =
+                    current > 0 ? Math.ceil(current / 1000) : 0;
+                const nextCountdown =
+                    nextRemainingMs > 0 ? Math.ceil(nextRemainingMs / 1000) : 0;
+                return currentCountdown === nextCountdown
+                    ? current
+                    : nextRemainingMs;
+            });
+        };
+
+        const applyPlayingState = (nextPlaying: boolean) => {
+            isPlayingRef.current = nextPlaying;
+            if (!nextPlaying) {
+                flushUiPlayers();
+                resetServerLagDiagnostics();
+            }
+            setPlaying(nextPlaying);
         };
 
         const applyTargetScore = (incoming?: number) => {
@@ -297,7 +507,7 @@ export function useHostRoomSync({
                                     | null,
                             );
                             if (Array.isArray(res.players)) {
-                                applyPlayers(res.players);
+                                applyPlayers(res.players, { immediateUi: true });
                             }
                             applyGameMode(res.gameMode);
                             applyTargetScore(res.targetScore);
@@ -305,7 +515,7 @@ export function useHostRoomSync({
                             applyGameConfig(res.gameConfig);
                             if (res.state === "finished") {
                                 setRoundOverData(null);
-                                setRoundStartRemainingMs(0);
+                                applyRoundStartRemainingMs(0);
                                 const fallbackLeaderboard =
                                     buildFallbackLeaderboard(
                                         res.players ?? [],
@@ -322,8 +532,8 @@ export function useHostRoomSync({
                                     teamCount: res.teamCount,
                                     leaderboard:
                                         res.leaderboard ?? fallbackLeaderboard,
-                                });
-                                setPlaying(true);
+                                 });
+                                applyPlayingState(true);
                             } else {
                                 setGameOverData(null);
                                 setRoundOverData(
@@ -332,9 +542,9 @@ export function useHostRoomSync({
                                         : null,
                                 );
                                 if (res.state !== "playing") {
-                                    setRoundStartRemainingMs(0);
+                                    applyRoundStartRemainingMs(0);
                                 }
-                                setPlaying(res.state === "playing");
+                                applyPlayingState(res.state === "playing");
                             }
                         } else {
                             localStorage.removeItem(HOST_SESSION_KEY);
@@ -357,13 +567,8 @@ export function useHostRoomSync({
 
         socket.on("playerJoined", (data: { player: Player }) => {
             onPlayerJoined?.(data.player);
-            setPlayers((players) => {
-                const nextPlayers = clonePlayers([
-                    ...players,
-                    { ...data.player },
-                ]);
-                latestPlayersRef.current = nextPlayers;
-                return nextPlayers;
+            applyPlayers([...latestPlayersRef.current, { ...data.player }], {
+                immediateUi: true,
             });
         });
 
@@ -376,13 +581,14 @@ export function useHostRoomSync({
                 teamCount?: number;
                 gameConfig?: GameConfig;
             }) => {
-                applyPlayers(data.players);
+                applyPlayingState(false);
+                applyPlayers(data.players, { immediateUi: true });
                 applyGameMode(data.gameMode);
                 applyTargetScore(data.targetScore);
                 applyTeamCount(data.teamCount);
                 applyGameConfig(data.gameConfig);
                 setRoundOverData(null);
-                setRoundStartRemainingMs(0);
+                applyRoundStartRemainingMs(0);
             },
         );
 
@@ -400,23 +606,24 @@ export function useHostRoomSync({
                 applyGameConfig(data?.gameConfig);
                 setGameOverData(null);
                 setRoundOverData(null);
-                setPlaying(true);
+                applyPlayingState(true);
             },
         );
 
         socket.on(
             EVENTS.GAME_STATE,
             (state?: GameState) => {
+                if (!state) return;
+
+                collectServerLagDiagnostics(state);
                 if (state?.arena) {
                     applyGameConfig(state.arena);
                 }
                 applyGameMode(state?.gameMode);
                 applyTargetScore(state?.targetScore);
                 applyTeamCount(state?.teamCount);
-                setRoundStartRemainingMs(
-                    Math.max(0, state?.roundStartRemainingMs ?? 0),
-                );
-                if (state && Array.isArray(state.players)) {
+                applyRoundStartRemainingMs(state?.roundStartRemainingMs);
+                if (Array.isArray(state.players)) {
                     applyGameStatePlayers(state);
                 }
             },
@@ -426,7 +633,7 @@ export function useHostRoomSync({
             EVENTS.ROUND_OVER,
             (data?: RoundOverPayload) => {
                 if (!data) return;
-                setRoundStartRemainingMs(0);
+                applyRoundStartRemainingMs(0);
                 setRoundOverData({
                     ...data,
                     scoreBeforeById:
@@ -444,8 +651,8 @@ export function useHostRoomSync({
             if (data?.leaderboard && Array.isArray(data.leaderboard)) {
                 setGameOverData(data);
             }
-            setRoundStartRemainingMs(0);
-            setPlaying(true);
+            applyRoundStartRemainingMs(0);
+            applyPlayingState(true);
         });
 
         socket.on(EVENTS.ROUND_RESTART, () => {
@@ -465,6 +672,7 @@ export function useHostRoomSync({
             socket.off(EVENTS.GAME_OVER);
             socket.off(EVENTS.ROUND_RESTART);
             socket.off("connect", reconnectFromSession);
+            clearScheduledUiPlayerSync();
         };
     }, [
         setRoomCode,
@@ -478,6 +686,8 @@ export function useHostRoomSync({
         setGameOverData,
         setRoundOverData,
         setGameConfig,
+        livePlayersRef,
+        onServerLagDiagnostics,
         onPlayerJoined,
         autoCreateRoom,
     ]);

@@ -2,7 +2,12 @@ import type { ReactNode } from "react";
 import type { GameMode } from "../../types";
 import styles from "../../ui.module.css";
 import { cx } from "../../utils/cx";
-import { FullscreenIcon, LeaveGameIcon, SoundIcon } from "../ActionIcons";
+import {
+    DiagnosticsIcon,
+    FullscreenIcon,
+    LeaveGameIcon,
+    SoundIcon,
+} from "../ActionIcons";
 import HostJoinQr from "./HostJoinQr";
 
 type Props = {
@@ -18,6 +23,7 @@ type Props = {
     isFullscreen: boolean;
     isFullscreenSupported: boolean;
     isSoundMuted: boolean;
+    isLagDiagnosticsVisible: boolean;
     layout?: "lobby" | "sidebar";
     playersSlot?: ReactNode;
     onLeaveGame: () => void;
@@ -26,6 +32,7 @@ type Props = {
     onStartGame: () => void;
     onToggleSound: () => void;
     onToggleFullscreen: () => void;
+    onToggleLagDiagnostics: () => void;
 };
 
 export default function HostControls({
@@ -41,6 +48,7 @@ export default function HostControls({
     isFullscreen,
     isFullscreenSupported,
     isSoundMuted,
+    isLagDiagnosticsVisible,
     layout = "sidebar",
     playersSlot = null,
     onLeaveGame,
@@ -49,11 +57,15 @@ export default function HostControls({
     onStartGame,
     onToggleSound,
     onToggleFullscreen,
+    onToggleLagDiagnostics,
 }: Props) {
     const fullscreenLabel = isFullscreen
         ? "Exit fullscreen"
         : "Enter fullscreen";
     const soundLabel = isSoundMuted ? "Enable sound" : "Mute sound";
+    const lagDiagnosticsLabel = isLagDiagnosticsVisible
+        ? "Hide lag diagnostics"
+        : "Show lag diagnostics";
     const qrJoinUrl = playing ? null : joinUrl;
     const scoreText =
         gameMode === "classic"
@@ -118,6 +130,21 @@ export default function HostControls({
                         >
                             <FullscreenIcon
                                 active={isFullscreen}
+                                className={styles["ui-button-icon"]}
+                            />
+                        </button>
+                        <button
+                            className={cx(
+                                styles["ui-button"],
+                                styles["ui-button-ghost"],
+                                styles["ui-icon-button"],
+                            )}
+                            onClick={onToggleLagDiagnostics}
+                            aria-label={lagDiagnosticsLabel}
+                            title={lagDiagnosticsLabel}
+                        >
+                            <DiagnosticsIcon
+                                active={isLagDiagnosticsVisible}
                                 className={styles["ui-button-icon"]}
                             />
                         </button>
@@ -259,6 +286,21 @@ export default function HostControls({
                     >
                         <FullscreenIcon
                             active={isFullscreen}
+                            className={styles["ui-button-icon"]}
+                        />
+                    </button>
+                    <button
+                        className={cx(
+                            styles["ui-button"],
+                            styles["ui-button-ghost"],
+                            styles["ui-icon-button"],
+                        )}
+                        onClick={onToggleLagDiagnostics}
+                        aria-label={lagDiagnosticsLabel}
+                        title={lagDiagnosticsLabel}
+                    >
+                        <DiagnosticsIcon
+                            active={isLagDiagnosticsVisible}
                             className={styles["ui-button-icon"]}
                         />
                     </button>

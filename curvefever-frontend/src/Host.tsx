@@ -1,7 +1,13 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import socket from "./socket";
 import { EVENTS } from "./events";
-import type { GameMode, LeaderboardEntry, Player } from "./types";
+import type {
+    ClientLagDiagnostics,
+    GameMode,
+    LeaderboardEntry,
+    Player,
+    ServerLagDiagnostics,
+} from "./types";
 import PhaserGame from "./PhaserGame";
 import { DEFAULT_GAME_HEIGHT, DEFAULT_GAME_WIDTH } from "./gameConfig";
 import { PLAYER_COLORS, DISCONNECTED_DOT_COLOR } from "./constants/gameUi";
@@ -153,11 +159,20 @@ export default function Host({ onLeave }: Props) {
     const [isSoundMuted, setIsSoundMuted] = useState(() =>
         areSoundEffectsMuted(),
     );
+    const [isLagDiagnosticsVisible, setIsLagDiagnosticsVisible] = useState(true);
+    const [serverLagDiagnostics, setServerLagDiagnostics] =
+        useState<ServerLagDiagnostics | null>(null);
+    const [clientLagDiagnostics, setClientLagDiagnostics] =
+        useState<ClientLagDiagnostics | null>(null);
     useHostBackgroundMusic(playing && !gameOverData, isSoundMuted);
+    const livePlayersRef = useRef<Player[]>([]);
     const previousCanStartRef = useRef<boolean | null>(null);
     const previousRoundStartCountdownRef = useRef(0);
     const lastTeamRoundWinKeyRef = useRef<string | null>(null);
     const lastTeamGameWinKeyRef = useRef<string | null>(null);
+    const handlePlayerJoined = useCallback(() => {
+        playSoundEffect("lobbyJoin");
+    }, []);
 
     const playerColorById = useMemo(() => {
         return buildPlayerColorById(players);
@@ -285,9 +300,32 @@ export default function Host({ onLeave }: Props) {
             })),
         });
     }, [displayLeaderboard, gameOverData]);
+    const lagDiagnosticsSummary = useMemo(() => {
+        if (!serverLagDiagnostics || !clientLagDiagnostics) {
+            return "Collecting diagnostics...";
+        }
+
+        const serverLikelySlow =
+            serverLagDiagnostics.updateIntervalMs > 70 ||
+            serverLagDiagnostics.tickDelta > 1.2 ||
+            serverLagDiagnostics.jitterMs > 25;
+        const clientLikelySlow =
+            clientLagDiagnostics.frameTimeMs > 22 ||
+            clientLagDiagnostics.slowFramePercent > 20;
+
+        if (serverLikelySlow && clientLikelySlow) {
+            return "Both server cadence and client rendering are under pressure.";
+        }
+        if (serverLikelySlow) {
+            return "Server/network update cadence is likely the bottleneck.";
+        }
+        if (clientLikelySlow) {
+            return "Client rendering is likely the bottleneck.";
+        }
+        return "No clear bottleneck right now.";
+    }, [clientLagDiagnostics, serverLagDiagnostics]);
     const roundStartCountdown =
         roundStartRemainingMs > 0 ? Math.ceil(roundStartRemainingMs / 1000) : 0;
-    const renderPlayers = players;
     const hasDraftGameSetupChanges =
         draftGameMode !== gameMode ||
         (draftGameMode === "teams" && draftTeamCount !== teamCount);
@@ -308,7 +346,9 @@ export default function Host({ onLeave }: Props) {
         setGameOverData,
         setRoundOverData,
         setGameConfig,
-        onPlayerJoined: () => playSoundEffect("lobbyJoin"),
+        livePlayersRef,
+        onServerLagDiagnostics: setServerLagDiagnostics,
+        onPlayerJoined: handlePlayerJoined,
         autoCreateRoom: false,
     });
 
@@ -568,6 +608,10 @@ export default function Host({ onLeave }: Props) {
         });
     }
 
+    function handleToggleLagDiagnostics() {
+        setIsLagDiagnosticsVisible((current) => !current);
+    }
+
     function handleOpenGameSetup() {
         setDraftGameMode(gameMode);
         setDraftTeamCount(teamCount);
@@ -748,6 +792,7 @@ export default function Host({ onLeave }: Props) {
             isFullscreen={isFullscreen}
             isFullscreenSupported={isFullscreenSupported}
             isSoundMuted={isSoundMuted}
+            isLagDiagnosticsVisible={isLagDiagnosticsVisible}
             layout={playing ? "sidebar" : "lobby"}
             playersSlot={
                 !playing ? (
@@ -767,6 +812,7 @@ export default function Host({ onLeave }: Props) {
             onStartGame={handleStartGame}
             onToggleSound={handleToggleSound}
             onToggleFullscreen={handleFullscreenToggle}
+            onToggleLagDiagnostics={handleToggleLagDiagnostics}
         />
     );
 
@@ -872,12 +918,75 @@ export default function Host({ onLeave }: Props) {
 
                 <div className={styles["game-stage"]}>
                     <PhaserGame
-                        players={renderPlayers}
+                        players={players}
+                        livePlayersRef={livePlayersRef}
                         gameMode={gameMode}
                         showTeamLabels={gameMode === "teams" && roundStartCountdown > 0}
                         width={gameConfig.width}
                         height={gameConfig.height}
+                        onClientLagDiagnostics={setClientLagDiagnostics}
                     />
+                    {isLagDiagnosticsVisible && (
+                        <section
+                            className={styles["lag-diagnostics"]}
+                            aria-live="polite"
+                        >
+                            <p className={styles["lag-diagnostics-title"]}>
+                                Lag diagnostics
+                            </p>
+                            <p className={styles["lag-diagnostics-summary"]}>
+                                {lagDiagnosticsSummary}
+                            </p>
+                            <dl className={styles["lag-diagnostics-grid"]}>
+                                <dt>Server update</dt>
+                                <dd>
+                                    {serverLagDiagnostics
+                                        ? `${serverLagDiagnostics.updateIntervalMs.toFixed(
+                                              1,
+                                          )} ms (${serverLagDiagnostics.updateRateHz.toFixed(
+                                              1,
+                                          )} Hz)`
+                                        : "--"}
+                                </dd>
+                                <dt>Server jitter</dt>
+                                <dd>
+                                    {serverLagDiagnostics
+                                        ? `${serverLagDiagnostics.jitterMs.toFixed(1)} ms`
+                                        : "--"}
+                                </dd>
+                                <dt>Server tick delta</dt>
+                                <dd>
+                                    {serverLagDiagnostics
+                                        ? serverLagDiagnostics.tickDelta.toFixed(2)
+                                        : "--"}
+                                </dd>
+                                <dt>Trail points/update</dt>
+                                <dd>
+                                    {serverLagDiagnostics
+                                        ? `${Math.round(
+                                              serverLagDiagnostics.trailPointsPerUpdate,
+                                          )}`
+                                        : "--"}
+                                </dd>
+                                <dt>Client frame time</dt>
+                                <dd>
+                                    {clientLagDiagnostics
+                                        ? `${clientLagDiagnostics.frameTimeMs.toFixed(
+                                              1,
+                                          )} ms (${clientLagDiagnostics.fps.toFixed(1)} FPS)`
+                                        : "--"}
+                                </dd>
+                                <dt>Client slow frames</dt>
+                                <dd>
+                                    {clientLagDiagnostics
+                                        ? `${clientLagDiagnostics.slowFramePercent.toFixed(
+                                              0,
+                                          )}%`
+                                        : "--"}
+                                </dd>
+                            </dl>
+                        </section>
+                    )}
                     {roundStartCountdown > 0 && !gameOverData && !roundOverData && (
                         <div
                             className={styles["round-start-overlay"]}

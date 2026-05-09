@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import Phaser from "phaser";
-import type { GameMode, Player } from "./types";
+import type { ClientLagDiagnostics, GameMode, Player } from "./types";
 import styles from "./ui.module.css";
 import { cx } from "./utils/cx";
 import {
@@ -21,11 +21,15 @@ import { playSoundEffect } from "./utils/soundEffects";
 
 interface PhaserGameProps {
     players: Player[];
+    livePlayersRef?: React.MutableRefObject<Player[]>;
     gameMode?: GameMode;
     showTeamLabels?: boolean;
     width?: number;
     height?: number;
     className?: string;
+    onClientLagDiagnostics?: (
+        diagnostics: ClientLagDiagnostics | null,
+    ) => void;
 }
 
 class CurvefeverScene extends Phaser.Scene {
@@ -36,10 +40,22 @@ class CurvefeverScene extends Phaser.Scene {
     markerTexts: Map<string, Phaser.GameObjects.Text> = new Map();
     playerLabels: Map<string, Phaser.GameObjects.Text> = new Map();
     playerAliveStates: Map<string, boolean> = new Map();
+    playerHeadRenderStates: Map<string, { colorValue: number }> = new Map();
+    playerColorValueCache: Map<string, { color: string; colorValue: number }> =
+        new Map();
     trailRenderStates: Map<
         string,
         { segmentLengths: number[]; color: string }
     > = new Map();
+    livePlayersSourceRef: React.MutableRefObject<Player[]> | null = null;
+    fallbackPlayersSourceRef: React.MutableRefObject<Player[]> | null = null;
+    lastRenderedPlayers: Player[] | null = null;
+    clientLagDiagnosticsHandler:
+        | ((diagnostics: ClientLagDiagnostics | null) => void)
+        | null = null;
+    frameDurationSamples: number[] = [];
+    lastFrameAt: number | null = null;
+    lastClientLagEmitAt = 0;
 
     constructor() {
         super("CurvefeverScene");
@@ -54,18 +70,47 @@ class CurvefeverScene extends Phaser.Scene {
     drawPlayerHead(
         graphic: Phaser.GameObjects.Graphics,
         player: Player,
-        color: string,
+        playerId: string,
+        colorValue: number,
     ) {
-        const colorValue = Phaser.Display.Color.HexStringToColor(color).color;
+        const previousRenderState = this.playerHeadRenderStates.get(playerId);
+        if (!previousRenderState) {
+            graphic.clear();
+            graphic.fillStyle(colorValue, PLAYER_HEAD_GLOW_ALPHA);
+            graphic.fillCircle(0, 0, PLAYER_HEAD_GLOW_RADIUS);
+            graphic.fillStyle(colorValue, 1);
+            graphic.fillCircle(0, 0, PLAYER_HEAD_RADIUS);
+            this.playerHeadRenderStates.set(playerId, {
+                colorValue,
+            });
+        }
 
-        graphic.clear();
-        graphic.fillStyle(colorValue, PLAYER_HEAD_GLOW_ALPHA);
-        graphic.fillCircle(0, 0, PLAYER_HEAD_GLOW_RADIUS);
-        graphic.fillStyle(colorValue, 1);
-        graphic.fillCircle(0, 0, PLAYER_HEAD_RADIUS);
         graphic.x = player.x;
         graphic.y = player.y;
         graphic.setVisible(true);
+    }
+
+    getColorValue(playerId: string, color: string) {
+        const previousColorValue = this.playerColorValueCache.get(playerId);
+        if (previousColorValue && previousColorValue.color === color) {
+            return previousColorValue.colorValue;
+        }
+
+        const colorValue = Phaser.Display.Color.HexStringToColor(color).color;
+        this.playerColorValueCache.set(playerId, {
+            color,
+            colorValue,
+        });
+        return colorValue;
+    }
+
+    getHeadColorValue(playerId: string, color: string) {
+        const previousHeadRenderState = this.playerHeadRenderStates.get(playerId);
+        if (previousHeadRenderState) {
+            return previousHeadRenderState.colorValue;
+        }
+
+        return Phaser.Display.Color.HexStringToColor(color).color;
     }
 
     create() {
@@ -73,13 +118,21 @@ class CurvefeverScene extends Phaser.Scene {
         this.markerTexts.clear();
         this.playerLabels.clear();
         this.playerAliveStates.clear();
+        this.playerHeadRenderStates.clear();
+        this.playerColorValueCache.clear();
         this.trailRenderStates.clear();
+        this.lastRenderedPlayers = null;
+        this.frameDurationSamples = [];
+        this.lastFrameAt = null;
+        this.lastClientLagEmitAt = 0;
         this.cameras.main.setBackgroundColor("#222");
         // Defensive: always use array
         const players = Array.isArray(this.players) ? this.players : [];
         players.forEach((p, i) => {
             const g = this.add.graphics();
-            this.drawPlayerHead(g, p, this.getPlayerColor(p, i));
+            const color = this.getPlayerColor(p, i);
+            const headColorValue = this.getHeadColorValue(p.id, color);
+            this.drawPlayerHead(g, p, p.id, headColorValue);
             this.playerSprites.set(p.id, g);
         });
     }
@@ -87,15 +140,11 @@ class CurvefeverScene extends Phaser.Scene {
     drawFullTrail(
         graphic: Phaser.GameObjects.Graphics,
         trail: Player["trail"],
-        color: string,
+        colorValue: number,
     ) {
         graphic.clear();
         graphic.setVisible(true);
-        graphic.lineStyle(
-            PLAYER_TRAIL_WIDTH,
-            Phaser.Display.Color.HexStringToColor(color).color,
-            1,
-        );
+        graphic.lineStyle(PLAYER_TRAIL_WIDTH, colorValue, 1);
 
         const segments = Array.isArray(trail) ? trail : [];
         for (const segment of segments) {
@@ -112,15 +161,11 @@ class CurvefeverScene extends Phaser.Scene {
     appendTrailSegments(
         graphic: Phaser.GameObjects.Graphics,
         trail: Player["trail"],
-        color: string,
+        colorValue: number,
         previousSegmentLengths: number[],
     ) {
         graphic.setVisible(true);
-        graphic.lineStyle(
-            PLAYER_TRAIL_WIDTH,
-            Phaser.Display.Color.HexStringToColor(color).color,
-            1,
-        );
+        graphic.lineStyle(PLAYER_TRAIL_WIDTH, colorValue, 1);
 
         const segments = Array.isArray(trail) ? trail : [];
         for (let segmentIndex = 0; segmentIndex < segments.length; segmentIndex += 1) {
@@ -147,6 +192,7 @@ class CurvefeverScene extends Phaser.Scene {
         player: Player,
         trailGraphic: Phaser.GameObjects.Graphics,
         color: string,
+        colorValue: number,
     ) {
         const segments = Array.isArray(player.trail) ? player.trail : [];
         const nextSegmentLengths = segments.map((segment) =>
@@ -163,12 +209,12 @@ class CurvefeverScene extends Phaser.Scene {
             );
 
         if (shouldRedrawFullTrail) {
-            this.drawFullTrail(trailGraphic, segments, color);
+            this.drawFullTrail(trailGraphic, segments, colorValue);
         } else {
             this.appendTrailSegments(
                 trailGraphic,
                 segments,
-                color,
+                colorValue,
                 previousTrailState.segmentLengths,
             );
         }
@@ -179,10 +225,14 @@ class CurvefeverScene extends Phaser.Scene {
         });
     }
 
-    playEliminationEffect(player: Player, color: string) {
+    playEliminationEffect(player: Player, colorValue: number) {
         playSoundEffect("crash");
-        const baseColor = Phaser.Display.Color.HexStringToColor(color);
-        const colorValue = baseColor.color;
+        const rgbColor = Phaser.Display.Color.IntegerToRGB(colorValue);
+        const baseColor = new Phaser.Display.Color(
+            rgbColor.r,
+            rgbColor.g,
+            rgbColor.b,
+        );
         const flashColor = Phaser.Display.Color.Interpolate.ColorWithColor(
             baseColor,
             new Phaser.Display.Color(255, 255, 255),
@@ -326,9 +376,23 @@ class CurvefeverScene extends Phaser.Scene {
         // Do not call updatePlayers here; let React effect call it after scene is ready
     }
 
+    setPlayerSources(
+        livePlayersRef?: React.MutableRefObject<Player[]>,
+        fallbackPlayersRef?: React.MutableRefObject<Player[]>,
+    ) {
+        this.livePlayersSourceRef = livePlayersRef ?? null;
+        this.fallbackPlayersSourceRef = fallbackPlayersRef ?? null;
+    }
+
     setDisplayMode(gameMode?: GameMode, showTeamLabels = false) {
         this.teamMode = gameMode === "teams";
         this.showTeamLabels = showTeamLabels;
+    }
+
+    setClientLagDiagnosticsHandler(
+        handler?: (diagnostics: ClientLagDiagnostics | null) => void,
+    ) {
+        this.clientLagDiagnosticsHandler = handler ?? null;
     }
 
     updatePlayers(players: Player[] = []) {
@@ -346,6 +410,8 @@ class CurvefeverScene extends Phaser.Scene {
                 graphic.destroy();
                 this.playerSprites.delete(key);
                 this.playerAliveStates.delete(playerId);
+                this.playerHeadRenderStates.delete(playerId);
+                this.playerColorValueCache.delete(playerId);
                 this.trailRenderStates.delete(playerId);
             }
         }
@@ -369,9 +435,11 @@ class CurvefeverScene extends Phaser.Scene {
                 this.playerSprites.set(p.id + "_trail", trailG);
             }
             const color = this.getPlayerColor(p, i);
+            const colorValue = this.getColorValue(p.id, color);
+            const headColorValue = this.getHeadColorValue(p.id, color);
             const becameEliminated =
                 previousAliveStates.get(p.id) === true && !p.alive;
-            this.syncTrail(p, trailG, color);
+            this.syncTrail(p, trailG, color, colorValue);
 
             // Draw player
             let g = this.playerSprites.get(p.id);
@@ -380,7 +448,7 @@ class CurvefeverScene extends Phaser.Scene {
                 this.playerSprites.set(p.id, g);
             }
             if (p.alive) {
-                this.drawPlayerHead(g, p, color);
+                this.drawPlayerHead(g, p, p.id, headColorValue);
             } else {
                 g.setVisible(false);
             }
@@ -400,7 +468,10 @@ class CurvefeverScene extends Phaser.Scene {
                     markerText.setOrigin(0.5, 1);
                     this.markerTexts.set(p.id, markerText);
                 }
-                markerText.setText(getTeamSymbol(p.teamId));
+                const teamSymbol = getTeamSymbol(p.teamId);
+                if (markerText.text !== teamSymbol) {
+                    markerText.setText(teamSymbol);
+                }
                 markerText.setColor(getTeamColor(p.teamId));
                 markerText.setPosition(p.x, p.y - 14);
                 markerText.setVisible(true);
@@ -420,9 +491,12 @@ class CurvefeverScene extends Phaser.Scene {
                     playerLabel.setOrigin(0.5, 1);
                     this.playerLabels.set(p.id, playerLabel);
                 }
-                playerLabel.setText(
-                    `${p.name} ${getTeamSymbol(p.teamId)} ${getTeamLabel(p.teamId)}`,
-                );
+                const playerLabelText = `${p.name} ${getTeamSymbol(
+                    p.teamId,
+                )} ${getTeamLabel(p.teamId)}`;
+                if (playerLabel.text !== playerLabelText) {
+                    playerLabel.setText(playerLabelText);
+                }
                 playerLabel.setPosition(p.x, p.y - 34);
                 playerLabel.setVisible(this.showTeamLabels);
             } else {
@@ -431,31 +505,87 @@ class CurvefeverScene extends Phaser.Scene {
             }
 
             if (becameEliminated) {
-                this.playEliminationEffect(p, color);
+                this.playEliminationEffect(p, colorValue);
             }
 
             this.playerAliveStates.set(p.id, p.alive);
         });
     }
+
+    update() {
+        const now = performance.now();
+        if (typeof this.lastFrameAt === "number") {
+            const frameDuration = now - this.lastFrameAt;
+            this.frameDurationSamples.push(frameDuration);
+            if (this.frameDurationSamples.length > 90) {
+                this.frameDurationSamples.shift();
+            }
+
+            if (
+                this.clientLagDiagnosticsHandler &&
+                now - this.lastClientLagEmitAt >= 500 &&
+                this.frameDurationSamples.length > 0
+            ) {
+                const frameTimeMs =
+                    this.frameDurationSamples.reduce(
+                        (sum, sample) => sum + sample,
+                        0,
+                    ) / this.frameDurationSamples.length;
+                const fps = frameTimeMs > 0 ? 1000 / frameTimeMs : 0;
+                const slowFrameCount = this.frameDurationSamples.filter(
+                    (sample) => sample > 20,
+                ).length;
+                const slowFramePercent =
+                    (slowFrameCount / this.frameDurationSamples.length) * 100;
+                this.clientLagDiagnosticsHandler({
+                    frameTimeMs,
+                    fps,
+                    slowFramePercent,
+                    sampleCount: this.frameDurationSamples.length,
+                });
+                this.lastClientLagEmitAt = now;
+            }
+        }
+        this.lastFrameAt = now;
+
+        const nextPlayers =
+            this.livePlayersSourceRef?.current ??
+            this.fallbackPlayersSourceRef?.current ??
+            [];
+        if (nextPlayers === this.lastRenderedPlayers) {
+            return;
+        }
+
+        this.updatePlayers(nextPlayers);
+        this.lastRenderedPlayers = nextPlayers;
+    }
 }
 
 export default function PhaserGame({
     players,
+    livePlayersRef,
     gameMode,
     showTeamLabels = false,
     width = DEFAULT_GAME_WIDTH,
     height = DEFAULT_GAME_HEIGHT,
     className,
+    onClientLagDiagnostics,
 }: PhaserGameProps) {
     const gameRef = useRef<HTMLDivElement>(null);
     const phaserRef = useRef<Phaser.Game | null>(null);
     const sceneRef = useRef<CurvefeverScene | null>(null);
+    const fallbackPlayersRef = useRef(players);
+
+    useEffect(() => {
+        fallbackPlayersRef.current = players;
+    }, [players]);
 
     useEffect(() => {
         if (!gameRef.current) return;
         if (phaserRef.current) return;
 
         const scene = new CurvefeverScene();
+        scene.setPlayerSources(livePlayersRef, fallbackPlayersRef);
         sceneRef.current = scene;
         const config: Phaser.Types.Core.GameConfig = {
             type: Phaser.AUTO,
@@ -480,14 +610,23 @@ export default function PhaserGame({
             phaserRef.current?.destroy(true);
             phaserRef.current = null;
         };
-    }, [width, height]);
+    }, [width, height, livePlayersRef]);
+
+    useEffect(() => {
+        if (!sceneRef.current) return;
+        sceneRef.current.setPlayerSources(livePlayersRef, fallbackPlayersRef);
+    }, [livePlayersRef]);
+
+    useEffect(() => {
+        if (!sceneRef.current) return;
+        sceneRef.current.setClientLagDiagnosticsHandler(onClientLagDiagnostics);
+    }, [onClientLagDiagnostics]);
 
     useEffect(() => {
         if (sceneRef.current) {
             sceneRef.current.setDisplayMode(gameMode, showTeamLabels);
-            sceneRef.current.updatePlayers(players);
         }
-    }, [gameMode, players, showTeamLabels]);
+    }, [gameMode, showTeamLabels]);
 
     return (
         <div className={cx(styles["phaser-shell"], className)}>

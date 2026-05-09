@@ -90,3 +90,31 @@ export function SoundIcon({ muted = false, className }: SoundIconProps) {
         </svg>
     );
 }
+
+type DiagnosticsIconProps = IconProps & {
+    active?: boolean;
+};
+
+export function DiagnosticsIcon({
+    active = false,
+    className,
+}: DiagnosticsIconProps) {
+    return (
+        <svg
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+            className={className}
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+        >
+            <path d="M4 19h16" />
+            <path d="M7 15v-4" />
+            <path d="M12 15V9" />
+            <path d="M17 15V6" />
+            {active ? <circle cx="17" cy="6" r="2" fill="currentColor" /> : null}
+        </svg>
+    );
+}

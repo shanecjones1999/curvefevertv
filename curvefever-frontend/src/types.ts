@@ -81,6 +81,23 @@ export interface GameState {
     roundStartRemainingMs?: number;
 }
 
+export interface ServerLagDiagnostics {
+    updateIntervalMs: number;
+    updateRateHz: number;
+    jitterMs: number;
+    tickDelta: number;
+    payloadPlayers: number;
+    trailPointsPerUpdate: number;
+    sampleCount: number;
+}
+
+export interface ClientLagDiagnostics {
+    frameTimeMs: number;
+    fps: number;
+    slowFramePercent: number;
+    sampleCount: number;
+}
+
 export interface InputPayload {
     turnLeft: boolean;
     turnRight: boolean;

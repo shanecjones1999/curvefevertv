@@ -26,8 +26,9 @@ import { emitLobbyUpdate } from "./socket/lobbyEmitter";
 
 const TICK_RATE = 60;
 const MS_PER_TICK = 1000 / TICK_RATE;
-const STATE_BROADCAST_EVERY_N_TICKS = 2;
+const STATE_BROADCAST_EVERY_N_TICKS = 3;
 const PLAYER_TURN_RATE_PER_TICK = 0.045;
+const LOOP_METRIC_SAMPLE_SIZE = 45;
 
 const runningLoops = new Map<string, NodeJS.Timeout>();
 const restartGracePeriod = 30; // ticks to prevent immediate re-collision after restart
@@ -44,6 +45,8 @@ const pendingGameOverReturnMap = new Map<string, NodeJS.Timeout>();
 const MAX_SPAWN_ATTEMPTS = 40;
 const TRAIL_SPATIAL_HASH_CELL_SIZE = 64;
 const emittedGameStatePlayerMap = new Map<string, Map<string, EmittedGameStatePlayer>>();
+const loopLastTickAtMap = new Map<string, number>();
+const loopIntervalSamplesMap = new Map<string, number[]>();
 
 type TrailCollisionEdge = {
     ownerPlayerId: string;
@@ -78,6 +81,60 @@ type EmittedGameStatePlayer = {
     gapStartDistance?: number;
     trailSegmentLengths: number[];
 };
+
+function pushSample(samples: number[], value: number) {
+    samples.push(value);
+    if (samples.length > LOOP_METRIC_SAMPLE_SIZE) {
+        samples.shift();
+    }
+}
+
+function average(samples: number[]) {
+    if (samples.length === 0) {
+        return 0;
+    }
+
+    return samples.reduce((sum, sample) => sum + sample, 0) / samples.length;
+}
+
+function standardDeviation(samples: number[]) {
+    if (samples.length < 2) {
+        return 0;
+    }
+
+    const mean = average(samples);
+    const variance =
+        samples.reduce(
+            (sum, sample) => sum + (sample - mean) * (sample - mean),
+            0,
+        ) / samples.length;
+
+    return Math.sqrt(variance);
+}
+
+function recordLoopTick(roomCode: string, now: number) {
+    const previousTickAt = loopLastTickAtMap.get(roomCode);
+    if (typeof previousTickAt === "number" && now >= previousTickAt) {
+        const samples = loopIntervalSamplesMap.get(roomCode) ?? [];
+        pushSample(samples, now - previousTickAt);
+        loopIntervalSamplesMap.set(roomCode, samples);
+    }
+
+    loopLastTickAtMap.set(roomCode, now);
+}
+
+function buildServerLoopDiagnostics(roomCode: string) {
+    const samples = loopIntervalSamplesMap.get(roomCode);
+    if (!samples || samples.length === 0) {
+        return undefined;
+    }
+
+    return {
+        intervalMs: average(samples),
+        jitterMs: standardDeviation(samples),
+        sampleCount: samples.length,
+    };
+}
 
 function clearPendingGameOverReturn(roomCode: string) {
     const handle = pendingGameOverReturnMap.get(roomCode);
@@ -572,6 +629,7 @@ function buildGameStatePayload(
                   ),
         teamCount: room.teamCount,
         roundStartRemainingMs,
+        serverLoopDiagnostics: buildServerLoopDiagnostics(roomCode),
     };
 }
 
@@ -1022,6 +1080,7 @@ export function startGameLoop(roomCode: string, io: TypedServer) {
     roomTickCounterMap.set(roomCode, 0);
 
     const tick = () => {
+        recordLoopTick(roomCode, Date.now());
         const room = getRoom(roomCode);
         if (!room) return;
 
@@ -1402,5 +1461,7 @@ export function stopGameLoop(roomCode: string) {
     roundStartFreezeUntilMap.delete(roomCode);
     roomTickCounterMap.delete(roomCode);
     emittedGameStatePlayerMap.delete(roomCode);
+    loopLastTickAtMap.delete(roomCode);
+    loopIntervalSamplesMap.delete(roomCode);
     clearPendingGameOverReturn(roomCode);
 }

@@ -73,6 +73,12 @@ export interface GameStatePlayer extends Omit<Player, "trail"> {
     trailUpdate?: TrailUpdate;
 }
 
+export interface ServerLoopDiagnostics {
+    intervalMs: number;
+    jitterMs: number;
+    sampleCount: number;
+}
+
 export interface GameState {
     tick: number;
     arena: {
@@ -86,6 +92,7 @@ export interface GameState {
     targetScore?: number;
     teamCount?: number;
     roundStartRemainingMs?: number;
+    serverLoopDiagnostics?: ServerLoopDiagnostics;
 }
 
 export interface InputPayload {

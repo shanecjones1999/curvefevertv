@@ -307,8 +307,9 @@ export default function Host({ onLeave }: Props) {
 
         const serverLikelySlow =
             serverLagDiagnostics.updateIntervalMs > 70 ||
-            serverLagDiagnostics.tickDelta > 1.2 ||
-            serverLagDiagnostics.jitterMs > 25;
+            serverLagDiagnostics.jitterMs > 25 ||
+            (serverLagDiagnostics.serverLoopIntervalMs ?? 0) > 24 ||
+            (serverLagDiagnostics.serverLoopJitterMs ?? 0) > 8;
         const clientLikelySlow =
             clientLagDiagnostics.frameTimeMs > 22 ||
             clientLagDiagnostics.slowFramePercent > 20;
@@ -938,7 +939,7 @@ export default function Host({ onLeave }: Props) {
                                 {lagDiagnosticsSummary}
                             </p>
                             <dl className={styles["lag-diagnostics-grid"]}>
-                                <dt>Server update</dt>
+                                <dt>State arrival</dt>
                                 <dd>
                                     {serverLagDiagnostics
                                         ? `${serverLagDiagnostics.updateIntervalMs.toFixed(
@@ -948,16 +949,34 @@ export default function Host({ onLeave }: Props) {
                                           )} Hz)`
                                         : "--"}
                                 </dd>
-                                <dt>Server jitter</dt>
+                                <dt>Arrival jitter</dt>
                                 <dd>
                                     {serverLagDiagnostics
                                         ? `${serverLagDiagnostics.jitterMs.toFixed(1)} ms`
                                         : "--"}
                                 </dd>
-                                <dt>Server tick delta</dt>
+                                <dt>State tick delta</dt>
                                 <dd>
                                     {serverLagDiagnostics
-                                        ? serverLagDiagnostics.tickDelta.toFixed(2)
+                                        ? `${serverLagDiagnostics.tickDelta.toFixed(1)} ms`
+                                        : "--"}
+                                </dd>
+                                <dt>Server loop</dt>
+                                <dd>
+                                    {serverLagDiagnostics?.serverLoopIntervalMs !==
+                                    undefined
+                                        ? `${serverLagDiagnostics.serverLoopIntervalMs.toFixed(
+                                              1,
+                                          )} ms`
+                                        : "--"}
+                                </dd>
+                                <dt>Server loop jitter</dt>
+                                <dd>
+                                    {serverLagDiagnostics?.serverLoopJitterMs !==
+                                    undefined
+                                        ? `${serverLagDiagnostics.serverLoopJitterMs.toFixed(
+                                              1,
+                                          )} ms`
                                         : "--"}
                                 </dd>
                                 <dt>Trail points/update</dt>

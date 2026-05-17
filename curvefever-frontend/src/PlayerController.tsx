@@ -2,7 +2,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import socket from "./socket";
 import { EVENTS } from "./events";
 import { PLAYER_SESSION_KEY } from "./constants/storage";
-import type { GameMode, Player, RoomState } from "./types";
+import type {
+    ControllerPlayer,
+    ControllerState,
+    GameMode,
+    Player,
+    RoomState,
+} from "./types";
 import { ROOM_CODE_REGEX, sanitizeRoomCodeInput } from "./utils/roomCode";
 import { getStoredPlayerSession } from "./utils/playerSession";
 import { clearJoinUrlParams, getRequestedRoomCodeFromUrl } from "./utils/joinLink";
@@ -40,6 +46,23 @@ type PopupDialogState = {
     confirmTone?: "default" | "danger";
 };
 
+type ControllerPlayerSource = Pick<
+    Player,
+    "id" | "name" | "score" | "socketId" | "color" | "teamId" | "alive"
+>;
+
+function toControllerPlayer(player: ControllerPlayerSource): ControllerPlayer {
+    return {
+        id: player.id,
+        name: player.name,
+        score: player.score,
+        socketId: player.socketId,
+        color: player.color,
+        teamId: player.teamId,
+        alive: player.alive,
+    };
+}
+
 export default function PlayerController({ onLeave }: Props) {
     const storedSession = useMemo(() => getStoredPlayerSession(), []);
     const requestedRoomCode = useMemo(() => getRequestedRoomCodeFromUrl(), []);
@@ -57,7 +80,7 @@ export default function PlayerController({ onLeave }: Props) {
     const [roomState, setRoomState] = useState<RoomState>("lobby");
     const [gameMode, setGameMode] = useState<GameMode>("classic");
     const [teamCount, setTeamCount] = useState(DEFAULT_TEAM_COUNT);
-    const [players, setPlayers] = useState<Player[]>([]);
+    const [players, setPlayers] = useState<ControllerPlayer[]>([]);
     const [dialogState, setDialogState] = useState<PopupDialogState | null>(null);
     const playerIdRef = useRef<string | null>(rejoinSession?.playerId ?? null);
     const [playerId, setPlayerId] = useState<string | null>(
@@ -175,13 +198,16 @@ export default function PlayerController({ onLeave }: Props) {
 
     const applyRoomSnapshot = useCallback(
         (snapshot?: {
-            players?: Player[];
+            players?: ControllerPlayerSource[];
             state?: RoomState;
             gameMode?: GameMode;
             teamCount?: number;
         }) => {
-            const nextCurrentPlayer = Array.isArray(snapshot?.players)
-                ? snapshot.players.find(
+            const nextPlayers = Array.isArray(snapshot?.players)
+                ? snapshot.players.map((player) => toControllerPlayer(player))
+                : null;
+            const nextCurrentPlayer = nextPlayers
+                ? nextPlayers.find(
                       (player) => player.id === playerIdRef.current,
                   ) ?? null
                 : null;
@@ -192,8 +218,8 @@ export default function PlayerController({ onLeave }: Props) {
                 resetInputState();
             }
 
-            if (Array.isArray(snapshot?.players)) {
-                setPlayers(snapshot.players);
+            if (nextPlayers) {
+                setPlayers(nextPlayers);
             }
             if (snapshot?.state) {
                 setRoomState(snapshot.state);
@@ -370,14 +396,10 @@ export default function PlayerController({ onLeave }: Props) {
             });
         };
 
-        const handleGameState = (state?: {
-            players?: Player[];
-            gameMode?: GameMode;
-            teamCount?: number;
-        }) => {
+        const handleControllerState = (state?: ControllerState) => {
             applyRoomSnapshot({
                 players: state?.players,
-                state: "playing",
+                state: state?.state ?? "playing",
                 gameMode: state?.gameMode,
                 teamCount: state?.teamCount,
             });
@@ -400,7 +422,7 @@ export default function PlayerController({ onLeave }: Props) {
 
         socket.on(EVENTS.LOBBY_UPDATE, handleLobbyUpdate);
         socket.on(EVENTS.START_GAME, handleStartGame);
-        socket.on(EVENTS.GAME_STATE, handleGameState);
+        socket.on(EVENTS.CONTROLLER_STATE, handleControllerState);
         socket.on(EVENTS.GAME_OVER, handleGameOver);
         socket.on("connect", handleConnect);
         requestRoomState(roomCode);
@@ -408,7 +430,7 @@ export default function PlayerController({ onLeave }: Props) {
         return () => {
             socket.off(EVENTS.LOBBY_UPDATE, handleLobbyUpdate);
             socket.off(EVENTS.START_GAME, handleStartGame);
-            socket.off(EVENTS.GAME_STATE, handleGameState);
+            socket.off(EVENTS.CONTROLLER_STATE, handleControllerState);
             socket.off(EVENTS.GAME_OVER, handleGameOver);
             socket.off("connect", handleConnect);
         };

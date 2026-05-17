@@ -32,9 +32,31 @@ interface PhaserGameProps {
     ) => void;
 }
 
+const PLAYER_MOTION_INTERPOLATION_MIN_MS = 24;
+const PLAYER_MOTION_INTERPOLATION_MAX_MS = 90;
+const PLAYER_MOTION_PREDICTION_FACTOR = 0.35;
+const PLAYER_MOTION_PREDICTION_MAX_MS = 40;
+const PLAYER_MOTION_TELEPORT_DISTANCE = 120;
+
+type PlayerMotionState = {
+    renderedX: number;
+    renderedY: number;
+    startX: number;
+    startY: number;
+    targetX: number;
+    targetY: number;
+    lastSnapshotX: number;
+    lastSnapshotY: number;
+    lastSnapshotAt: number;
+    interpolationStartAt: number;
+    interpolationDurationMs: number;
+};
+
 class CurvefeverScene extends Phaser.Scene {
     players: Player[] = [];
     playerSprites: Map<string, Phaser.GameObjects.Graphics> = new Map();
+    trailLayer: Phaser.GameObjects.RenderTexture | null = null;
+    trailStamp: Phaser.GameObjects.Graphics | null = null;
     teamMode = false;
     showTeamLabels = false;
     markerTexts: Map<string, Phaser.GameObjects.Text> = new Map();
@@ -47,6 +69,7 @@ class CurvefeverScene extends Phaser.Scene {
         string,
         { segmentLengths: number[]; color: string }
     > = new Map();
+    playerMotionStates: Map<string, PlayerMotionState> = new Map();
     livePlayersSourceRef: React.MutableRefObject<Player[]> | null = null;
     fallbackPlayersSourceRef: React.MutableRefObject<Player[]> | null = null;
     lastRenderedPlayers: Player[] | null = null;
@@ -69,12 +92,15 @@ class CurvefeverScene extends Phaser.Scene {
 
     drawPlayerHead(
         graphic: Phaser.GameObjects.Graphics,
-        player: Player,
+        position: { x: number; y: number },
         playerId: string,
         colorValue: number,
     ) {
         const previousRenderState = this.playerHeadRenderStates.get(playerId);
-        if (!previousRenderState) {
+        if (
+            !previousRenderState ||
+            previousRenderState.colorValue !== colorValue
+        ) {
             graphic.clear();
             graphic.fillStyle(colorValue, PLAYER_HEAD_GLOW_ALPHA);
             graphic.fillCircle(0, 0, PLAYER_HEAD_GLOW_RADIUS);
@@ -85,9 +111,131 @@ class CurvefeverScene extends Phaser.Scene {
             });
         }
 
-        graphic.x = player.x;
-        graphic.y = player.y;
+        graphic.x = position.x;
+        graphic.y = position.y;
         graphic.setVisible(true);
+    }
+
+    updatePlayerTextPositions(player: Player, x: number, y: number) {
+        const markerText = this.markerTexts.get(player.id);
+        if (markerText) {
+            markerText.setPosition(x, y - 14);
+        }
+
+        const playerLabel = this.playerLabels.get(player.id);
+        if (playerLabel) {
+            playerLabel.setPosition(x, y - 34);
+        }
+    }
+
+    ensurePlayerMotionState(player: Player, now: number) {
+        const existingState = this.playerMotionStates.get(player.id);
+        if (existingState) {
+            return existingState;
+        }
+
+        const nextState: PlayerMotionState = {
+            renderedX: player.x,
+            renderedY: player.y,
+            startX: player.x,
+            startY: player.y,
+            targetX: player.x,
+            targetY: player.y,
+            lastSnapshotX: player.x,
+            lastSnapshotY: player.y,
+            lastSnapshotAt: now,
+            interpolationStartAt: now,
+            interpolationDurationMs: 0,
+        };
+        this.playerMotionStates.set(player.id, nextState);
+        return nextState;
+    }
+
+    updatePlayerMotionState(player: Player, now: number) {
+        const motionState = this.ensurePlayerMotionState(player, now);
+        const snapshotDeltaMs = Math.max(1, now - motionState.lastSnapshotAt);
+        const velocityX = (player.x - motionState.lastSnapshotX) / snapshotDeltaMs;
+        const velocityY = (player.y - motionState.lastSnapshotY) / snapshotDeltaMs;
+        const predictionMs = Phaser.Math.Clamp(
+            snapshotDeltaMs * PLAYER_MOTION_PREDICTION_FACTOR,
+            0,
+            PLAYER_MOTION_PREDICTION_MAX_MS,
+        );
+        const targetX = player.x + velocityX * predictionMs;
+        const targetY = player.y + velocityY * predictionMs;
+        const distanceToSnapshot = Phaser.Math.Distance.Between(
+            motionState.renderedX,
+            motionState.renderedY,
+            player.x,
+            player.y,
+        );
+
+        if (
+            !player.alive ||
+            distanceToSnapshot > PLAYER_MOTION_TELEPORT_DISTANCE
+        ) {
+            motionState.renderedX = player.x;
+            motionState.renderedY = player.y;
+            motionState.startX = player.x;
+            motionState.startY = player.y;
+            motionState.targetX = player.x;
+            motionState.targetY = player.y;
+            motionState.interpolationStartAt = now;
+            motionState.interpolationDurationMs = 0;
+        } else {
+            motionState.startX = motionState.renderedX;
+            motionState.startY = motionState.renderedY;
+            motionState.targetX = targetX;
+            motionState.targetY = targetY;
+            motionState.interpolationStartAt = now;
+            motionState.interpolationDurationMs = Phaser.Math.Clamp(
+                snapshotDeltaMs,
+                PLAYER_MOTION_INTERPOLATION_MIN_MS,
+                PLAYER_MOTION_INTERPOLATION_MAX_MS,
+            );
+        }
+
+        motionState.lastSnapshotX = player.x;
+        motionState.lastSnapshotY = player.y;
+        motionState.lastSnapshotAt = now;
+
+        return motionState;
+    }
+
+    animatePlayers(now: number) {
+        for (const player of this.players) {
+            const motionState = this.playerMotionStates.get(player.id);
+            const graphic = this.playerSprites.get(player.id);
+            if (!motionState || !graphic || !player.alive) {
+                continue;
+            }
+
+            const interpolationDuration =
+                motionState.interpolationDurationMs > 0
+                    ? motionState.interpolationDurationMs
+                    : 1;
+            const progress = Phaser.Math.Clamp(
+                (now - motionState.interpolationStartAt) / interpolationDuration,
+                0,
+                1,
+            );
+            motionState.renderedX = Phaser.Math.Linear(
+                motionState.startX,
+                motionState.targetX,
+                progress,
+            );
+            motionState.renderedY = Phaser.Math.Linear(
+                motionState.startY,
+                motionState.targetY,
+                progress,
+            );
+            graphic.setPosition(motionState.renderedX, motionState.renderedY);
+            this.updatePlayerTextPositions(
+                player,
+                motionState.renderedX,
+                motionState.renderedY,
+            );
+        }
     }
 
     getColorValue(playerId: string, color: string) {
@@ -105,12 +253,7 @@ class CurvefeverScene extends Phaser.Scene {
     }
 
     getHeadColorValue(playerId: string, color: string) {
-        const previousHeadRenderState = this.playerHeadRenderStates.get(playerId);
-        if (previousHeadRenderState) {
-            return previousHeadRenderState.colorValue;
-        }
-
-        return Phaser.Display.Color.HexStringToColor(color).color;
+        return this.getColorValue(playerId, color);
     }
 
     create() {
@@ -121,108 +264,99 @@ class CurvefeverScene extends Phaser.Scene {
         this.playerHeadRenderStates.clear();
         this.playerColorValueCache.clear();
         this.trailRenderStates.clear();
+        this.playerMotionStates.clear();
         this.lastRenderedPlayers = null;
         this.frameDurationSamples = [];
         this.lastFrameAt = null;
         this.lastClientLagEmitAt = 0;
         this.cameras.main.setBackgroundColor("#222");
+        this.trailLayer = this.add.renderTexture(
+            0,
+            0,
+            this.scale.gameSize.width,
+            this.scale.gameSize.height,
+        );
+        this.trailLayer.setOrigin(0, 0);
+        this.trailLayer.setDepth(0);
+        this.trailLayer.clear();
+        this.trailStamp = this.make.graphics(undefined, false);
+        this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+            this.trailLayer?.destroy();
+            this.trailLayer = null;
+            this.trailStamp?.destroy();
+            this.trailStamp = null;
+        });
         // Defensive: always use array
         const players = Array.isArray(this.players) ? this.players : [];
         players.forEach((p, i) => {
             const g = this.add.graphics();
+            g.setDepth(1);
             const color = this.getPlayerColor(p, i);
             const headColorValue = this.getHeadColorValue(p.id, color);
-            this.drawPlayerHead(g, p, p.id, headColorValue);
+            this.ensurePlayerMotionState(p, performance.now());
+            this.drawPlayerHead(g, { x: p.x, y: p.y }, p.id, headColorValue);
             this.playerSprites.set(p.id, g);
         });
     }
 
-    drawFullTrail(
-        graphic: Phaser.GameObjects.Graphics,
+    drawTrailSegments(
         trail: Player["trail"],
         colorValue: number,
+        previousSegmentLengths?: number[],
     ) {
-        graphic.clear();
-        graphic.setVisible(true);
-        graphic.lineStyle(PLAYER_TRAIL_WIDTH, colorValue, 1);
+        if (!this.trailLayer || !this.trailStamp) return;
+
+        this.trailStamp.clear();
+        this.trailStamp.lineStyle(PLAYER_TRAIL_WIDTH, colorValue, 1);
 
         const segments = Array.isArray(trail) ? trail : [];
-        for (const segment of segments) {
-            if (!Array.isArray(segment) || segment.length < 2) continue;
-            graphic.beginPath();
-            graphic.moveTo(segment[0].x, segment[0].y);
-            for (let index = 1; index < segment.length; index += 1) {
-                graphic.lineTo(segment[index].x, segment[index].y);
-            }
-            graphic.strokePath();
-        }
-    }
-
-    appendTrailSegments(
-        graphic: Phaser.GameObjects.Graphics,
-        trail: Player["trail"],
-        colorValue: number,
-        previousSegmentLengths: number[],
-    ) {
-        graphic.setVisible(true);
-        graphic.lineStyle(PLAYER_TRAIL_WIDTH, colorValue, 1);
-
-        const segments = Array.isArray(trail) ? trail : [];
+        let drewSegment = false;
         for (let segmentIndex = 0; segmentIndex < segments.length; segmentIndex += 1) {
             const segment = segments[segmentIndex];
             if (!Array.isArray(segment) || segment.length < 2) continue;
+            const previousLength = previousSegmentLengths?.[segmentIndex] ?? 0;
+            const startIndex =
+                previousSegmentLengths === undefined
+                    ? 1
+                    : Math.max(1, previousLength);
+            if (segment.length <= startIndex) continue;
 
-            const previousLength = previousSegmentLengths[segmentIndex] ?? 0;
-            if (segment.length <= previousLength) continue;
-
-            const startIndex = Math.max(1, previousLength);
-            graphic.beginPath();
-            graphic.moveTo(
+            this.trailStamp.beginPath();
+            this.trailStamp.moveTo(
                 segment[startIndex - 1].x,
                 segment[startIndex - 1].y,
             );
             for (let pointIndex = startIndex; pointIndex < segment.length; pointIndex += 1) {
-                graphic.lineTo(segment[pointIndex].x, segment[pointIndex].y);
+                this.trailStamp.lineTo(segment[pointIndex].x, segment[pointIndex].y);
             }
-            graphic.strokePath();
+            this.trailStamp.strokePath();
+            drewSegment = true;
         }
+
+        if (drewSegment) {
+            this.trailLayer.draw(this.trailStamp, 0, 0);
+        }
+
+        this.trailStamp.clear();
     }
 
-    syncTrail(
-        player: Player,
-        trailGraphic: Phaser.GameObjects.Graphics,
-        color: string,
-        colorValue: number,
+    redrawTrailLayer(
+        trailPlans: Array<{
+            player: Player;
+            color: string;
+            colorValue: number;
+            nextSegmentLengths: number[];
+            previousTrailState?: { segmentLengths: number[]; color: string };
+        }>,
     ) {
-        const segments = Array.isArray(player.trail) ? player.trail : [];
-        const nextSegmentLengths = segments.map((segment) =>
-            Array.isArray(segment) ? segment.length : 0,
-        );
-        const previousTrailState = this.trailRenderStates.get(player.id);
-        const shouldRedrawFullTrail =
-            !previousTrailState ||
-            previousTrailState.color !== color ||
-            nextSegmentLengths.length < previousTrailState.segmentLengths.length ||
-            nextSegmentLengths.some(
-                (length, index) =>
-                    length < (previousTrailState.segmentLengths[index] ?? 0),
-            );
-
-        if (shouldRedrawFullTrail) {
-            this.drawFullTrail(trailGraphic, segments, colorValue);
-        } else {
-            this.appendTrailSegments(
-                trailGraphic,
-                segments,
-                colorValue,
-                previousTrailState.segmentLengths,
-            );
+        this.trailLayer?.clear();
+        for (const trailPlan of trailPlans) {
+            this.drawTrailSegments(trailPlan.player.trail, trailPlan.colorValue);
+            this.trailRenderStates.set(trailPlan.player.id, {
+                segmentLengths: trailPlan.nextSegmentLengths,
+                color: trailPlan.color,
+            });
         }
-
-        this.trailRenderStates.set(player.id, {
-            segmentLengths: nextSegmentLengths,
-            color,
-        });
     }
 
     playEliminationEffect(player: Player, colorValue: number) {
@@ -398,21 +532,31 @@ class CurvefeverScene extends Phaser.Scene {
     updatePlayers(players: Player[] = []) {
         if (!this.add) return;
         this.players = Array.isArray(players) ? players : [];
+        const now = performance.now();
         const previousAliveStates = new Map(this.playerAliveStates);
+        let shouldRedrawAllTrails = false;
+        const trailPlans: Array<{
+            player: Player;
+            color: string;
+            colorValue: number;
+            nextSegmentLengths: number[];
+            previousTrailState?: { segmentLengths: number[]; color: string };
+        }> = [];
 
         const incomingPlayerIds = new Set(
             this.players.map((player) => player.id),
         );
 
-        for (const [key, graphic] of this.playerSprites.entries()) {
-            const playerId = key.replace(/_trail$/, "");
+        for (const [playerId, graphic] of this.playerSprites.entries()) {
             if (!incomingPlayerIds.has(playerId)) {
                 graphic.destroy();
-                this.playerSprites.delete(key);
+                this.playerSprites.delete(playerId);
                 this.playerAliveStates.delete(playerId);
                 this.playerHeadRenderStates.delete(playerId);
                 this.playerColorValueCache.delete(playerId);
                 this.trailRenderStates.delete(playerId);
+                this.playerMotionStates.delete(playerId);
+                shouldRedrawAllTrails = true;
             }
         }
         for (const [playerId, markerText] of this.markerTexts.entries()) {
@@ -429,26 +573,52 @@ class CurvefeverScene extends Phaser.Scene {
         }
 
         this.players.forEach((p, i) => {
-            let trailG = this.playerSprites.get(p.id + "_trail");
-            if (!trailG) {
-                trailG = this.add.graphics();
-                this.playerSprites.set(p.id + "_trail", trailG);
-            }
             const color = this.getPlayerColor(p, i);
             const colorValue = this.getColorValue(p.id, color);
             const headColorValue = this.getHeadColorValue(p.id, color);
+            const segments = Array.isArray(p.trail) ? p.trail : [];
+            const nextSegmentLengths = segments.map((segment) =>
+                Array.isArray(segment) ? segment.length : 0,
+            );
+            const previousTrailState = this.trailRenderStates.get(p.id);
+            if (
+                previousTrailState &&
+                (previousTrailState.color !== color ||
+                    nextSegmentLengths.length <
+                        previousTrailState.segmentLengths.length ||
+                    nextSegmentLengths.some(
+                        (length, index) =>
+                            length <
+                            (previousTrailState.segmentLengths[index] ?? 0),
+                    ))
+            ) {
+                shouldRedrawAllTrails = true;
+            }
+            trailPlans.push({
+                player: p,
+                color,
+                colorValue,
+                nextSegmentLengths,
+                previousTrailState,
+            });
             const becameEliminated =
                 previousAliveStates.get(p.id) === true && !p.alive;
-            this.syncTrail(p, trailG, color, colorValue);
+            const motionState = this.updatePlayerMotionState(p, now);
 
             // Draw player
             let g = this.playerSprites.get(p.id);
             if (!g) {
                 g = this.add.graphics();
+                g.setDepth(1);
                 this.playerSprites.set(p.id, g);
             }
             if (p.alive) {
-                this.drawPlayerHead(g, p, p.id, headColorValue);
+                this.drawPlayerHead(
+                    g,
+                    { x: motionState.renderedX, y: motionState.renderedY },
+                    p.id,
+                    headColorValue,
+                );
             } else {
                 g.setVisible(false);
             }
@@ -466,6 +636,7 @@ class CurvefeverScene extends Phaser.Scene {
                         strokeThickness: 4,
                     });
                     markerText.setOrigin(0.5, 1);
+                    markerText.setDepth(2);
                     this.markerTexts.set(p.id, markerText);
                 }
                 const teamSymbol = getTeamSymbol(p.teamId);
@@ -473,7 +644,7 @@ class CurvefeverScene extends Phaser.Scene {
                     markerText.setText(teamSymbol);
                 }
                 markerText.setColor(getTeamColor(p.teamId));
-                markerText.setPosition(p.x, p.y - 14);
+                markerText.setPosition(motionState.renderedX, motionState.renderedY - 14);
                 markerText.setVisible(true);
 
                 let playerLabel = this.playerLabels.get(p.id);
@@ -489,6 +660,7 @@ class CurvefeverScene extends Phaser.Scene {
                         strokeThickness: 4,
                     });
                     playerLabel.setOrigin(0.5, 1);
+                    playerLabel.setDepth(3);
                     this.playerLabels.set(p.id, playerLabel);
                 }
                 const playerLabelText = `${p.name} ${getTeamSymbol(
@@ -497,7 +669,7 @@ class CurvefeverScene extends Phaser.Scene {
                 if (playerLabel.text !== playerLabelText) {
                     playerLabel.setText(playerLabelText);
                 }
-                playerLabel.setPosition(p.x, p.y - 34);
+                playerLabel.setPosition(motionState.renderedX, motionState.renderedY - 34);
                 playerLabel.setVisible(this.showTeamLabels);
             } else {
                 this.markerTexts.get(p.id)?.setVisible(false);
@@ -510,6 +682,23 @@ class CurvefeverScene extends Phaser.Scene {
 
             this.playerAliveStates.set(p.id, p.alive);
         });
+
+        if (shouldRedrawAllTrails) {
+            this.redrawTrailLayer(trailPlans);
+            return;
+        }
+
+        for (const trailPlan of trailPlans) {
+            this.drawTrailSegments(
+                trailPlan.player.trail,
+                trailPlan.colorValue,
+                trailPlan.previousTrailState?.segmentLengths,
+            );
+            this.trailRenderStates.set(trailPlan.player.id, {
+                segmentLengths: trailPlan.nextSegmentLengths,
+                color: trailPlan.color,
+            });
+        }
     }
 
     update() {
@@ -552,12 +741,12 @@ class CurvefeverScene extends Phaser.Scene {
             this.livePlayersSourceRef?.current ??
             this.fallbackPlayersSourceRef?.current ??
             [];
-        if (nextPlayers === this.lastRenderedPlayers) {
-            return;
+        if (nextPlayers !== this.lastRenderedPlayers) {
+            this.updatePlayers(nextPlayers);
+            this.lastRenderedPlayers = nextPlayers;
         }
 
-        this.updatePlayers(nextPlayers);
-        this.lastRenderedPlayers = nextPlayers;
+        this.animatePlayers(now);
     }
 }
 

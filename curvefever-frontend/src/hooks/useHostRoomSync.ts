@@ -6,6 +6,7 @@ import type {
     GameMode,
     GameState,
     GameStatePlayer,
+    HostMotionState,
     LeaderboardEntry,
     Player,
     ServerLagDiagnostics,
@@ -220,6 +221,15 @@ export function useHostRoomSync({
         const clonePlayers = (players: Player[]) =>
             players.map((player) => clonePlayer(player));
 
+        const stripTrailForUi = (player: Player): Player => {
+            const { trail, ...rest } = player;
+            void trail;
+            return rest;
+        };
+
+        const buildUiPlayers = (players: Player[]) =>
+            players.map((player) => stripTrailForUi(player));
+
         const toPlayerFromGameState = (player: GameStatePlayer): Player => {
             const { trailUpdate, ...rest } = player;
             void trailUpdate;
@@ -234,10 +244,8 @@ export function useHostRoomSync({
             playerUpdate: GameStatePlayer,
         ): Player => {
             const { trailUpdate, trail, ...rest } = playerUpdate;
-            const nextPlayer: Player = {
-                ...(existingPlayer ?? (rest as Player)),
-                ...rest,
-            };
+            const nextPlayer: Player = existingPlayer ?? { ...rest, trail: [] };
+            Object.assign(nextPlayer, rest);
 
             if (trail) {
                 nextPlayer.trail = cloneTrail(trail);
@@ -251,14 +259,14 @@ export function useHostRoomSync({
                 return nextPlayer;
             }
 
-            const nextTrail = [...(existingPlayer?.trail ?? [])];
+            const nextTrail = nextPlayer.trail ?? [];
             for (const segmentUpdate of trailUpdate.segments) {
-                const previousSegment = nextTrail[segmentUpdate.index] ?? [];
-                const nextSegment = previousSegment.slice();
+                const nextSegment =
+                    nextTrail[segmentUpdate.index] ??
+                    (nextTrail[segmentUpdate.index] = []);
                 nextSegment.push(
                     ...segmentUpdate.points.map((point) => ({ ...point })),
                 );
-                nextTrail[segmentUpdate.index] = nextSegment;
             }
             nextPlayer.trail = nextTrail;
             return nextPlayer;
@@ -279,7 +287,7 @@ export function useHostRoomSync({
                 return;
             }
 
-            setPlayers(pendingUiPlayersRef.current);
+            setPlayers(buildUiPlayers(pendingUiPlayersRef.current));
             pendingUiPlayersRef.current = null;
         };
 
@@ -295,7 +303,7 @@ export function useHostRoomSync({
             if (options?.immediateUi || !isPlayingRef.current) {
                 pendingUiPlayersRef.current = null;
                 clearScheduledUiPlayerSync();
-                setPlayers(nextPlayers);
+                setPlayers(buildUiPlayers(nextPlayers));
                 return nextPlayers;
             }
 
@@ -356,6 +364,49 @@ export function useHostRoomSync({
             }
 
             commitPlayers(nextPlayers);
+        };
+
+        const applyHostMotionState = (state: HostMotionState) => {
+            const previousPlayers = latestPlayersRef.current;
+            if (previousPlayers.length === 0 || !livePlayersRef) {
+                return;
+            }
+
+            const nextPlayers = previousPlayers.map((player) => player);
+            const playerIndexById = new Map(
+                nextPlayers.map((player, index) => [player.id, index]),
+            );
+
+            for (const playerMotion of state.players) {
+                const existingIndex = playerIndexById.get(playerMotion.id);
+                const existingPlayer =
+                    typeof existingIndex === "number"
+                        ? nextPlayers[existingIndex]
+                        : undefined;
+
+                if (!existingPlayer) {
+                    playerIndexById.set(playerMotion.id, nextPlayers.length);
+                    nextPlayers.push({
+                        ...playerMotion,
+                        trail: [],
+                    });
+                    continue;
+                }
+
+                existingPlayer.name = playerMotion.name;
+                existingPlayer.score = playerMotion.score;
+                existingPlayer.socketId = playerMotion.socketId;
+                existingPlayer.color = playerMotion.color;
+                existingPlayer.teamId = playerMotion.teamId;
+                existingPlayer.alive = playerMotion.alive;
+                existingPlayer.x = playerMotion.x;
+                existingPlayer.y = playerMotion.y;
+                existingPlayer.direction = playerMotion.direction;
+                existingPlayer.speed = playerMotion.speed;
+            }
+
+            latestPlayersRef.current = nextPlayers;
+            livePlayersRef.current = nextPlayers;
         };
 
         const applyGameConfig = (incoming?: GameConfig) => {
@@ -632,6 +683,11 @@ export function useHostRoomSync({
             },
         );
 
+        socket.on(EVENTS.HOST_MOTION_STATE, (state?: HostMotionState) => {
+            if (!state) return;
+            applyHostMotionState(state);
+        });
+
         socket.on(
             EVENTS.ROUND_OVER,
             (data?: RoundOverPayload) => {
@@ -671,6 +727,7 @@ export function useHostRoomSync({
             socket.off("lobbyUpdate");
             socket.off("startGame");
             socket.off(EVENTS.GAME_STATE);
+            socket.off(EVENTS.HOST_MOTION_STATE);
             socket.off(EVENTS.ROUND_OVER);
             socket.off(EVENTS.GAME_OVER);
             socket.off(EVENTS.ROUND_RESTART);

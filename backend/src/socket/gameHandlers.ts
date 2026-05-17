@@ -9,7 +9,7 @@ import {
     buildTeamLeaderboard,
     rebalancePlayersForTeamMode,
 } from "../domain/teamMode";
-import { buildGameState, restartRound, startGameLoop } from "../gameLoop";
+import { emitGameState, restartRound, startGameLoop } from "../gameLoop";
 import { getRoom } from "../rooms";
 import { GameMode, InputPayload } from "../types";
 import { TypedServer, TypedSocket } from "./events";
@@ -132,10 +132,7 @@ export function registerGameHandlers(io: TypedServer, socket: TypedSocket) {
                     height: GAME_HEIGHT,
                 },
             });
-            const state = buildGameState(room.code);
-            if (state) {
-                io.to(room.code).emit("gameState", state);
-            }
+            emitGameState(room.code, io, { forceFullSnapshot: true });
             cb?.({
                 ok: true,
                 gameMode,

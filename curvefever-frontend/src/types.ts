@@ -88,6 +88,42 @@ export interface GameState {
     serverLoopDiagnostics?: ServerLoopDiagnostics;
 }
 
+export interface ControllerPlayer {
+    id: string;
+    name: string;
+    score: number;
+    socketId: string | null;
+    color?: string;
+    teamId?: number;
+    alive: boolean;
+}
+
+export interface ControllerState {
+    players: ControllerPlayer[];
+    gameMode: GameMode;
+    teamCount?: number;
+    state: RoomState;
+}
+
+export interface HostMotionPlayer {
+    id: string;
+    name: string;
+    score: number;
+    socketId: string | null;
+    color?: string;
+    teamId?: number;
+    alive: boolean;
+    x: number;
+    y: number;
+    direction: number;
+    speed?: number;
+}
+
+export interface HostMotionState {
+    tick: number;
+    players: HostMotionPlayer[];
+}
+
 export interface ServerLagDiagnostics {
     updateIntervalMs: number;
     updateRateHz: number;

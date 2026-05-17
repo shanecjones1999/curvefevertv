@@ -6,6 +6,8 @@ import {
     GameMode,
     GameState,
     GameStatePlayer,
+    HostMotionPlayer,
+    HostMotionState,
     LeaderboardEntry,
     Player,
     Trail,
@@ -489,6 +491,18 @@ function buildControllerStatePayload(roomCode: string): ControllerState | null {
     };
 }
 
+function buildHostMotionStatePayload(roomCode: string): HostMotionState | null {
+    const room = getRoom(roomCode);
+    if (!room) {
+        return null;
+    }
+
+    return {
+        tick: Date.now(),
+        players: Array.from(room.players.values(), buildHostMotionPlayer),
+    };
+}
+
 function cloneTrailPoint(point: TrailPoint): TrailPoint {
     return { x: point.x, y: point.y };
 }
@@ -539,6 +553,22 @@ function buildControllerStatePlayer(player: Player): ControllerStatePlayer {
         color: player.color,
         teamId: player.teamId,
         alive: player.alive,
+    };
+}
+
+function buildHostMotionPlayer(player: Player): HostMotionPlayer {
+    return {
+        id: player.id,
+        name: player.name,
+        score: player.score ?? 0,
+        socketId: player.socketId,
+        color: player.color,
+        teamId: player.teamId,
+        alive: player.alive,
+        x: player.x,
+        y: player.y,
+        direction: player.direction,
+        speed: player.speed,
     };
 }
 
@@ -771,6 +801,18 @@ export function emitGameState(
     const controllerState = buildControllerStatePayload(roomCode);
     if (controllerState) {
         io.to(roomCode).emit("controllerState", controllerState);
+    }
+}
+
+function emitHostMotionState(roomCode: string, io: TypedServer) {
+    const room = getRoom(roomCode);
+    if (!room?.hostSocketId) {
+        return;
+    }
+
+    const state = buildHostMotionStatePayload(roomCode);
+    if (state) {
+        io.to(room.hostSocketId).emit("hostMotionState", state);
     }
 }
 
@@ -1393,6 +1435,8 @@ export function startGameLoop(roomCode: string, io: TypedServer) {
                 }
             }
         }
+
+        emitHostMotionState(roomCode, io);
 
         if (roundRestartPending) {
             if (room.gameMode === "battle-royale" && deadPlayerIds.size > 0) {

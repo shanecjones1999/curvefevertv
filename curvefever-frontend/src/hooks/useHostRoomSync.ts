@@ -6,6 +6,7 @@ import type {
     GameMode,
     GameState,
     GameStatePlayer,
+    HostMotionState,
     LeaderboardEntry,
     Player,
     ServerLagDiagnostics,
@@ -365,6 +366,49 @@ export function useHostRoomSync({
             commitPlayers(nextPlayers);
         };
 
+        const applyHostMotionState = (state: HostMotionState) => {
+            const previousPlayers = latestPlayersRef.current;
+            if (previousPlayers.length === 0 || !livePlayersRef) {
+                return;
+            }
+
+            const nextPlayers = previousPlayers.map((player) => player);
+            const playerIndexById = new Map(
+                nextPlayers.map((player, index) => [player.id, index]),
+            );
+
+            for (const playerMotion of state.players) {
+                const existingIndex = playerIndexById.get(playerMotion.id);
+                const existingPlayer =
+                    typeof existingIndex === "number"
+                        ? nextPlayers[existingIndex]
+                        : undefined;
+
+                if (!existingPlayer) {
+                    playerIndexById.set(playerMotion.id, nextPlayers.length);
+                    nextPlayers.push({
+                        ...playerMotion,
+                        trail: [],
+                    });
+                    continue;
+                }
+
+                existingPlayer.name = playerMotion.name;
+                existingPlayer.score = playerMotion.score;
+                existingPlayer.socketId = playerMotion.socketId;
+                existingPlayer.color = playerMotion.color;
+                existingPlayer.teamId = playerMotion.teamId;
+                existingPlayer.alive = playerMotion.alive;
+                existingPlayer.x = playerMotion.x;
+                existingPlayer.y = playerMotion.y;
+                existingPlayer.direction = playerMotion.direction;
+                existingPlayer.speed = playerMotion.speed;
+            }
+
+            latestPlayersRef.current = nextPlayers;
+            livePlayersRef.current = nextPlayers;
+        };
+
         const applyGameConfig = (incoming?: GameConfig) => {
             if (!incoming) return;
             if (incoming.width <= 0 || incoming.height <= 0) return;
@@ -639,6 +683,11 @@ export function useHostRoomSync({
             },
         );
 
+        socket.on(EVENTS.HOST_MOTION_STATE, (state?: HostMotionState) => {
+            if (!state) return;
+            applyHostMotionState(state);
+        });
+
         socket.on(
             EVENTS.ROUND_OVER,
             (data?: RoundOverPayload) => {
@@ -678,6 +727,7 @@ export function useHostRoomSync({
             socket.off("lobbyUpdate");
             socket.off("startGame");
             socket.off(EVENTS.GAME_STATE);
+            socket.off(EVENTS.HOST_MOTION_STATE);
             socket.off(EVENTS.ROUND_OVER);
             socket.off(EVENTS.GAME_OVER);
             socket.off(EVENTS.ROUND_RESTART);

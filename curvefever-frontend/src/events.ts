@@ -14,6 +14,7 @@ export const EVENTS = {
     PLAYER_JOINED: "playerJoined",
     LOBBY_UPDATE: "lobbyUpdate",
     GAME_STATE: "gameState",
+    CONTROLLER_STATE: "controllerState",
     PLAYER_DIED: "playerDied",
     ROUND_OVER: "roundOver",
     GAME_OVER: "gameOver",

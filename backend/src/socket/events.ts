@@ -1,5 +1,6 @@
 import { Server, Socket } from "socket.io";
 import {
+    ControllerState,
     GameMode,
     GameState,
     InputPayload,
@@ -130,6 +131,7 @@ export interface ServerToClientEvents {
         gameConfig: GameConfigPayload;
     }) => void;
     gameState: (payload: GameState) => void;
+    controllerState: (payload: ControllerState) => void;
     roundOver: (payload: {
         winnerId: string | null;
         gameMode?: GameMode;

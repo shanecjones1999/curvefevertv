@@ -1,11 +1,24 @@
-import { useEffect, useState } from "react";
-import Host from "./Host";
-import PlayerController from "./PlayerController";
+import { Suspense, lazy, useEffect, useState } from "react";
 import styles from "./ui.module.css";
 import { cx } from "./utils/cx";
 import { getRequestedRoleFromUrl } from "./utils/joinLink";
 
 const ROLE_KEY = "curvefever:role";
+const Host = lazy(() => import("./Host"));
+const PlayerController = lazy(() => import("./PlayerController"));
+
+function RoleLoadingScreen({ role }: { role: "host" | "phone" }) {
+    return (
+        <main className={cx(styles["page-shell"], styles["page-shell-landing"])}>
+            <section className={cx(styles.panel, styles["role-panel"])}>
+                <p className={styles.eyebrow}>
+                    {role === "host" ? "Loading host" : "Loading controller"}
+                </p>
+                <h1 className={styles.title}>Loading...</h1>
+            </section>
+        </main>
+    );
+}
 
 function App() {
     const [role, setRole] = useState<"none" | "host" | "phone">(() => {
@@ -34,8 +47,20 @@ function App() {
         setRole("none");
     }
 
-    if (role === "host") return <Host onLeave={clearRole} />;
-    if (role === "phone") return <PlayerController onLeave={clearRole} />;
+    if (role === "host") {
+        return (
+            <Suspense fallback={<RoleLoadingScreen role="host" />}>
+                <Host onLeave={clearRole} />
+            </Suspense>
+        );
+    }
+    if (role === "phone") {
+        return (
+            <Suspense fallback={<RoleLoadingScreen role="phone" />}>
+                <PlayerController onLeave={clearRole} />
+            </Suspense>
+        );
+    }
 
     return (
         <main className={cx(styles["page-shell"], styles["page-shell-landing"])}>

@@ -95,6 +95,23 @@ export interface GameState {
     serverLoopDiagnostics?: ServerLoopDiagnostics;
 }
 
+export interface ControllerStatePlayer {
+    id: string;
+    name: string;
+    score: number;
+    socketId: string | null;
+    color?: string;
+    teamId?: number;
+    alive: boolean;
+}
+
+export interface ControllerState {
+    players: ControllerStatePlayer[];
+    gameMode: GameMode;
+    teamCount?: number;
+    state: RoomState;
+}
+
 export interface InputPayload {
     turnLeft: boolean;
     turnRight: boolean;

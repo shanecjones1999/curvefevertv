@@ -32,6 +32,26 @@ interface PhaserGameProps {
     ) => void;
 }
 
+const PLAYER_MOTION_INTERPOLATION_MIN_MS = 24;
+const PLAYER_MOTION_INTERPOLATION_MAX_MS = 90;
+const PLAYER_MOTION_PREDICTION_FACTOR = 0.35;
+const PLAYER_MOTION_PREDICTION_MAX_MS = 40;
+const PLAYER_MOTION_TELEPORT_DISTANCE = 120;
+
+type PlayerMotionState = {
+    renderedX: number;
+    renderedY: number;
+    startX: number;
+    startY: number;
+    targetX: number;
+    targetY: number;
+    lastSnapshotX: number;
+    lastSnapshotY: number;
+    lastSnapshotAt: number;
+    interpolationStartAt: number;
+    interpolationDurationMs: number;
+};
+
 class CurvefeverScene extends Phaser.Scene {
     players: Player[] = [];
     playerSprites: Map<string, Phaser.GameObjects.Graphics> = new Map();
@@ -49,6 +69,7 @@ class CurvefeverScene extends Phaser.Scene {
         string,
         { segmentLengths: number[]; color: string }
     > = new Map();
+    playerMotionStates: Map<string, PlayerMotionState> = new Map();
     livePlayersSourceRef: React.MutableRefObject<Player[]> | null = null;
     fallbackPlayersSourceRef: React.MutableRefObject<Player[]> | null = null;
     lastRenderedPlayers: Player[] | null = null;
@@ -71,7 +92,7 @@ class CurvefeverScene extends Phaser.Scene {
 
     drawPlayerHead(
         graphic: Phaser.GameObjects.Graphics,
-        player: Player,
+        position: { x: number; y: number },
         playerId: string,
         colorValue: number,
     ) {
@@ -90,9 +111,131 @@ class CurvefeverScene extends Phaser.Scene {
             });
         }
 
-        graphic.x = player.x;
-        graphic.y = player.y;
+        graphic.x = position.x;
+        graphic.y = position.y;
         graphic.setVisible(true);
+    }
+
+    updatePlayerTextPositions(player: Player, x: number, y: number) {
+        const markerText = this.markerTexts.get(player.id);
+        if (markerText) {
+            markerText.setPosition(x, y - 14);
+        }
+
+        const playerLabel = this.playerLabels.get(player.id);
+        if (playerLabel) {
+            playerLabel.setPosition(x, y - 34);
+        }
+    }
+
+    ensurePlayerMotionState(player: Player, now: number) {
+        const existingState = this.playerMotionStates.get(player.id);
+        if (existingState) {
+            return existingState;
+        }
+
+        const nextState: PlayerMotionState = {
+            renderedX: player.x,
+            renderedY: player.y,
+            startX: player.x,
+            startY: player.y,
+            targetX: player.x,
+            targetY: player.y,
+            lastSnapshotX: player.x,
+            lastSnapshotY: player.y,
+            lastSnapshotAt: now,
+            interpolationStartAt: now,
+            interpolationDurationMs: 0,
+        };
+        this.playerMotionStates.set(player.id, nextState);
+        return nextState;
+    }
+
+    updatePlayerMotionState(player: Player, now: number) {
+        const motionState = this.ensurePlayerMotionState(player, now);
+        const snapshotDeltaMs = Math.max(1, now - motionState.lastSnapshotAt);
+        const velocityX = (player.x - motionState.lastSnapshotX) / snapshotDeltaMs;
+        const velocityY = (player.y - motionState.lastSnapshotY) / snapshotDeltaMs;
+        const predictionMs = Phaser.Math.Clamp(
+            snapshotDeltaMs * PLAYER_MOTION_PREDICTION_FACTOR,
+            0,
+            PLAYER_MOTION_PREDICTION_MAX_MS,
+        );
+        const targetX = player.x + velocityX * predictionMs;
+        const targetY = player.y + velocityY * predictionMs;
+        const distanceToSnapshot = Phaser.Math.Distance.Between(
+            motionState.renderedX,
+            motionState.renderedY,
+            player.x,
+            player.y,
+        );
+
+        if (
+            !player.alive ||
+            distanceToSnapshot > PLAYER_MOTION_TELEPORT_DISTANCE
+        ) {
+            motionState.renderedX = player.x;
+            motionState.renderedY = player.y;
+            motionState.startX = player.x;
+            motionState.startY = player.y;
+            motionState.targetX = player.x;
+            motionState.targetY = player.y;
+            motionState.interpolationStartAt = now;
+            motionState.interpolationDurationMs = 0;
+        } else {
+            motionState.startX = motionState.renderedX;
+            motionState.startY = motionState.renderedY;
+            motionState.targetX = targetX;
+            motionState.targetY = targetY;
+            motionState.interpolationStartAt = now;
+            motionState.interpolationDurationMs = Phaser.Math.Clamp(
+                snapshotDeltaMs,
+                PLAYER_MOTION_INTERPOLATION_MIN_MS,
+                PLAYER_MOTION_INTERPOLATION_MAX_MS,
+            );
+        }
+
+        motionState.lastSnapshotX = player.x;
+        motionState.lastSnapshotY = player.y;
+        motionState.lastSnapshotAt = now;
+
+        return motionState;
+    }
+
+    animatePlayers(now: number) {
+        for (const player of this.players) {
+            const motionState = this.playerMotionStates.get(player.id);
+            const graphic = this.playerSprites.get(player.id);
+            if (!motionState || !graphic || !player.alive) {
+                continue;
+            }
+
+            const interpolationDuration =
+                motionState.interpolationDurationMs > 0
+                    ? motionState.interpolationDurationMs
+                    : 1;
+            const progress = Phaser.Math.Clamp(
+                (now - motionState.interpolationStartAt) / interpolationDuration,
+                0,
+                1,
+            );
+            motionState.renderedX = Phaser.Math.Linear(
+                motionState.startX,
+                motionState.targetX,
+                progress,
+            );
+            motionState.renderedY = Phaser.Math.Linear(
+                motionState.startY,
+                motionState.targetY,
+                progress,
+            );
+            graphic.setPosition(motionState.renderedX, motionState.renderedY);
+            this.updatePlayerTextPositions(
+                player,
+                motionState.renderedX,
+                motionState.renderedY,
+            );
+        }
     }
 
     getColorValue(playerId: string, color: string) {
@@ -121,6 +264,7 @@ class CurvefeverScene extends Phaser.Scene {
         this.playerHeadRenderStates.clear();
         this.playerColorValueCache.clear();
         this.trailRenderStates.clear();
+        this.playerMotionStates.clear();
         this.lastRenderedPlayers = null;
         this.frameDurationSamples = [];
         this.lastFrameAt = null;
@@ -149,7 +293,8 @@ class CurvefeverScene extends Phaser.Scene {
             g.setDepth(1);
             const color = this.getPlayerColor(p, i);
             const headColorValue = this.getHeadColorValue(p.id, color);
-            this.drawPlayerHead(g, p, p.id, headColorValue);
+            this.ensurePlayerMotionState(p, performance.now());
+            this.drawPlayerHead(g, { x: p.x, y: p.y }, p.id, headColorValue);
             this.playerSprites.set(p.id, g);
         });
     }
@@ -387,6 +532,7 @@ class CurvefeverScene extends Phaser.Scene {
     updatePlayers(players: Player[] = []) {
         if (!this.add) return;
         this.players = Array.isArray(players) ? players : [];
+        const now = performance.now();
         const previousAliveStates = new Map(this.playerAliveStates);
         let shouldRedrawAllTrails = false;
         const trailPlans: Array<{
@@ -409,6 +555,7 @@ class CurvefeverScene extends Phaser.Scene {
                 this.playerHeadRenderStates.delete(playerId);
                 this.playerColorValueCache.delete(playerId);
                 this.trailRenderStates.delete(playerId);
+                this.playerMotionStates.delete(playerId);
                 shouldRedrawAllTrails = true;
             }
         }
@@ -456,6 +603,7 @@ class CurvefeverScene extends Phaser.Scene {
             });
             const becameEliminated =
                 previousAliveStates.get(p.id) === true && !p.alive;
+            const motionState = this.updatePlayerMotionState(p, now);
 
             // Draw player
             let g = this.playerSprites.get(p.id);
@@ -465,7 +613,12 @@ class CurvefeverScene extends Phaser.Scene {
                 this.playerSprites.set(p.id, g);
             }
             if (p.alive) {
-                this.drawPlayerHead(g, p, p.id, headColorValue);
+                this.drawPlayerHead(
+                    g,
+                    { x: motionState.renderedX, y: motionState.renderedY },
+                    p.id,
+                    headColorValue,
+                );
             } else {
                 g.setVisible(false);
             }
@@ -491,7 +644,7 @@ class CurvefeverScene extends Phaser.Scene {
                     markerText.setText(teamSymbol);
                 }
                 markerText.setColor(getTeamColor(p.teamId));
-                markerText.setPosition(p.x, p.y - 14);
+                markerText.setPosition(motionState.renderedX, motionState.renderedY - 14);
                 markerText.setVisible(true);
 
                 let playerLabel = this.playerLabels.get(p.id);
@@ -516,7 +669,7 @@ class CurvefeverScene extends Phaser.Scene {
                 if (playerLabel.text !== playerLabelText) {
                     playerLabel.setText(playerLabelText);
                 }
-                playerLabel.setPosition(p.x, p.y - 34);
+                playerLabel.setPosition(motionState.renderedX, motionState.renderedY - 34);
                 playerLabel.setVisible(this.showTeamLabels);
             } else {
                 this.markerTexts.get(p.id)?.setVisible(false);
@@ -588,12 +741,12 @@ class CurvefeverScene extends Phaser.Scene {
             this.livePlayersSourceRef?.current ??
             this.fallbackPlayersSourceRef?.current ??
             [];
-        if (nextPlayers === this.lastRenderedPlayers) {
-            return;
+        if (nextPlayers !== this.lastRenderedPlayers) {
+            this.updatePlayers(nextPlayers);
+            this.lastRenderedPlayers = nextPlayers;
         }
 
-        this.updatePlayers(nextPlayers);
-        this.lastRenderedPlayers = nextPlayers;
+        this.animatePlayers(now);
     }
 }
 

@@ -1,6 +1,8 @@
 import { getRoom } from "./rooms";
 import { TypedServer } from "./socket/events";
 import {
+    ControllerState,
+    ControllerStatePlayer,
     GameMode,
     GameState,
     GameStatePlayer,
@@ -43,6 +45,7 @@ const GAME_OVER_RETURN_DELAY_MS = 10000;
 const pendingRoundRestartMap = new Map<string, NodeJS.Timeout>();
 const pendingGameOverReturnMap = new Map<string, NodeJS.Timeout>();
 const MAX_SPAWN_ATTEMPTS = 40;
+const PLAYER_COLLISION_HASH_CELL_SIZE = 16;
 const TRAIL_SPATIAL_HASH_CELL_SIZE = 64;
 const emittedGameStatePlayerMap = new Map<string, Map<string, EmittedGameStatePlayer>>();
 const loopLastTickAtMap = new Map<string, number>();
@@ -224,6 +227,38 @@ function distanceSquared(
     const dx = first.x - second.x;
     const dy = first.y - second.y;
     return dx * dx + dy * dy;
+}
+
+function getPlayerCollisionHashCell(value: number) {
+    return Math.floor(value / PLAYER_COLLISION_HASH_CELL_SIZE);
+}
+
+function getPlayerCollisionHashKey(cellX: number, cellY: number) {
+    return `${cellX},${cellY}`;
+}
+
+function buildPlayerCollisionBuckets(players: Player[]) {
+    const buckets = new Map<string, Player[]>();
+
+    for (const player of players) {
+        if (!player.alive) {
+            continue;
+        }
+
+        const key = getPlayerCollisionHashKey(
+            getPlayerCollisionHashCell(player.x),
+            getPlayerCollisionHashCell(player.y),
+        );
+        const bucket = buckets.get(key);
+        if (bucket) {
+            bucket.push(player);
+            continue;
+        }
+
+        buckets.set(key, [player]);
+    }
+
+    return buckets;
 }
 
 function getClosestSpawnDistanceSquared(
@@ -440,6 +475,20 @@ export function buildGameState(roomCode: string): GameState | null {
     return buildGameStatePayload(roomCode, true);
 }
 
+function buildControllerStatePayload(roomCode: string): ControllerState | null {
+    const room = getRoom(roomCode);
+    if (!room) {
+        return null;
+    }
+
+    return {
+        players: Array.from(room.players.values(), buildControllerStatePlayer),
+        gameMode: room.gameMode,
+        teamCount: room.teamCount,
+        state: room.state,
+    };
+}
+
 function cloneTrailPoint(point: TrailPoint): TrailPoint {
     return { x: point.x, y: point.y };
 }
@@ -478,6 +527,18 @@ function buildGameStatePlayer(player: Player, trail?: Trail): GameStatePlayer {
         gapLength: player.gapLength,
         inGap: player.inGap,
         gapStartDistance: player.gapStartDistance,
+    };
+}
+
+function buildControllerStatePlayer(player: Player): ControllerStatePlayer {
+    return {
+        id: player.id,
+        name: player.name,
+        score: player.score ?? 0,
+        socketId: player.socketId,
+        color: player.color,
+        teamId: player.teamId,
+        alive: player.alive,
     };
 }
 
@@ -694,14 +755,22 @@ function buildGameStatePayload(
     };
 }
 
-function emitGameState(
+export function emitGameState(
     roomCode: string,
     io: TypedServer,
     options?: { forceFullSnapshot?: boolean },
 ) {
     const state = buildGameStatePayload(roomCode, options?.forceFullSnapshot);
     if (state) {
-        io.to(roomCode).emit("gameState", state);
+        const room = getRoom(roomCode);
+        if (room?.hostSocketId) {
+            io.to(room.hostSocketId).emit("gameState", state);
+        }
+    }
+
+    const controllerState = buildControllerStatePayload(roomCode);
+    if (controllerState) {
+        io.to(roomCode).emit("controllerState", controllerState);
     }
 }
 
@@ -1074,6 +1143,10 @@ function detectCollisions(
     const deadPlayers = new Set<string>();
     const deathReasonSets = new Map<string, Set<string>>();
     const trailCollisionIndexState = syncTrailSpatialHash(roomCode, players);
+    const playerIndexById = new Map(
+        players.map((player, index) => [player.id, index]),
+    );
+    const playerCollisionBuckets = buildPlayerCollisionBuckets(players);
 
     const markDead = (playerId: string, reason: string) => {
         deadPlayers.add(playerId);
@@ -1096,22 +1169,47 @@ function detectCollisions(
             continue;
         }
 
-        // Check player-to-player collision
-        for (
-            let otherPlayerIndex = playerIndex + 1;
-            otherPlayerIndex < players.length;
-            otherPlayerIndex++
-        ) {
-            const other = players[otherPlayerIndex];
-            if (!other.alive) continue;
-            if (playerIsFloating || isPlayerFloating(other)) continue;
-            const dx = p.x - other.x;
-            const dy = p.y - other.y;
-            const distSq = dx * dx + dy * dy;
-            // Players collide if they're within 10px of each other
-            if (distSq < 100) {
-                markDead(p.id, `player:${other.id}`);
-                markDead(other.id, `player:${p.id}`);
+        if (!playerIsFloating) {
+            const playerCellX = getPlayerCollisionHashCell(p.x);
+            const playerCellY = getPlayerCollisionHashCell(p.y);
+            for (
+                let cellX = playerCellX - 1;
+                cellX <= playerCellX + 1;
+                cellX += 1
+            ) {
+                for (
+                    let cellY = playerCellY - 1;
+                    cellY <= playerCellY + 1;
+                    cellY += 1
+                ) {
+                    const nearbyPlayers = playerCollisionBuckets.get(
+                        getPlayerCollisionHashKey(cellX, cellY),
+                    );
+                    if (!nearbyPlayers) {
+                        continue;
+                    }
+
+                    for (const other of nearbyPlayers) {
+                        const otherPlayerIndex = playerIndexById.get(other.id);
+                        if (
+                            typeof otherPlayerIndex !== "number" ||
+                            otherPlayerIndex <= playerIndex ||
+                            !other.alive ||
+                            isPlayerFloating(other)
+                        ) {
+                            continue;
+                        }
+
+                        const dx = p.x - other.x;
+                        const dy = p.y - other.y;
+                        const distSq = dx * dx + dy * dy;
+                        // Players collide if they're within 10px of each other
+                        if (distSq < 100) {
+                            markDead(p.id, `player:${other.id}`);
+                            markDead(other.id, `player:${p.id}`);
+                        }
+                    }
+                }
             }
         }
 

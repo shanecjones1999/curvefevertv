@@ -33,6 +33,8 @@ const MS_PER_TICK = 1000 / TICK_RATE;
 const STATE_BROADCAST_EVERY_N_TICKS = 3;
 const PLAYER_TURN_RATE_PER_TICK = 0.045;
 const LOOP_METRIC_SAMPLE_SIZE = 45;
+// Temporary perf test: disable the most expensive collision path on Render.
+const ENABLE_TRAIL_COLLISION_CHECKS = false;
 
 const runningLoops = new Map<string, NodeJS.Timeout>();
 const restartGracePeriod = 30; // ticks to prevent immediate re-collision after restart
@@ -1184,7 +1186,9 @@ function detectCollisions(
     const selfCollisionIgnoreDistance = 60;
     const deadPlayers = new Set<string>();
     const deathReasonSets = new Map<string, Set<string>>();
-    const trailCollisionIndexState = syncTrailSpatialHash(roomCode, players);
+    const trailCollisionIndexState = ENABLE_TRAIL_COLLISION_CHECKS
+        ? syncTrailSpatialHash(roomCode, players)
+        : null;
     const playerIndexById = new Map(
         players.map((player, index) => [player.id, index]),
     );
@@ -1256,6 +1260,10 @@ function detectCollisions(
         }
 
         if (playerIsFloating) {
+            continue;
+        }
+
+        if (!ENABLE_TRAIL_COLLISION_CHECKS || !trailCollisionIndexState) {
             continue;
         }
 

@@ -220,6 +220,15 @@ export function useHostRoomSync({
         const clonePlayers = (players: Player[]) =>
             players.map((player) => clonePlayer(player));
 
+        const stripTrailForUi = (player: Player): Player => {
+            const { trail, ...rest } = player;
+            void trail;
+            return rest;
+        };
+
+        const buildUiPlayers = (players: Player[]) =>
+            players.map((player) => stripTrailForUi(player));
+
         const toPlayerFromGameState = (player: GameStatePlayer): Player => {
             const { trailUpdate, ...rest } = player;
             void trailUpdate;
@@ -234,10 +243,8 @@ export function useHostRoomSync({
             playerUpdate: GameStatePlayer,
         ): Player => {
             const { trailUpdate, trail, ...rest } = playerUpdate;
-            const nextPlayer: Player = {
-                ...(existingPlayer ?? (rest as Player)),
-                ...rest,
-            };
+            const nextPlayer: Player = existingPlayer ?? { ...rest, trail: [] };
+            Object.assign(nextPlayer, rest);
 
             if (trail) {
                 nextPlayer.trail = cloneTrail(trail);
@@ -251,14 +258,14 @@ export function useHostRoomSync({
                 return nextPlayer;
             }
 
-            const nextTrail = [...(existingPlayer?.trail ?? [])];
+            const nextTrail = nextPlayer.trail ?? [];
             for (const segmentUpdate of trailUpdate.segments) {
-                const previousSegment = nextTrail[segmentUpdate.index] ?? [];
-                const nextSegment = previousSegment.slice();
+                const nextSegment =
+                    nextTrail[segmentUpdate.index] ??
+                    (nextTrail[segmentUpdate.index] = []);
                 nextSegment.push(
                     ...segmentUpdate.points.map((point) => ({ ...point })),
                 );
-                nextTrail[segmentUpdate.index] = nextSegment;
             }
             nextPlayer.trail = nextTrail;
             return nextPlayer;
@@ -279,7 +286,7 @@ export function useHostRoomSync({
                 return;
             }
 
-            setPlayers(pendingUiPlayersRef.current);
+            setPlayers(buildUiPlayers(pendingUiPlayersRef.current));
             pendingUiPlayersRef.current = null;
         };
 
@@ -295,7 +302,7 @@ export function useHostRoomSync({
             if (options?.immediateUi || !isPlayingRef.current) {
                 pendingUiPlayersRef.current = null;
                 clearScheduledUiPlayerSync();
-                setPlayers(nextPlayers);
+                setPlayers(buildUiPlayers(nextPlayers));
                 return nextPlayers;
             }
 
